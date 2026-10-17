@@ -41,6 +41,17 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(ebullets.mesh);
+  // Player bolts: HDR cyan so they cross the bloom threshold.
+  const pbullets = createBulletInstances({
+    data: bridge.channels.pbullets,
+    capacity: manifest.channels.pbullets.cap,
+    size: 3,
+    color: [0.6, 2.4, 4.0],
+    name: 'pbullets',
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(pbullets.mesh);
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
   rig.prewarm();
@@ -110,6 +121,7 @@ async function main() {
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
+      pbullets.update(header[slots.PBULLET_N]);
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz.
       rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);

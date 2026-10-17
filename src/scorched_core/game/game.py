@@ -2,6 +2,7 @@
 
 import random
 from array import array
+from typing import Final
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.entities.player_ship import PlayerShip
@@ -38,6 +39,9 @@ from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import HITBOX_RADIUS, SCROLL_SPEED
 from scorched_core.weapons.twin_shot import TwinShot
+
+# Bolts are culled once they are this far outside the playfield.
+_MARGIN: Final = 16.0
 
 _HEADER_SLOTS: dict[str, int] = {
     "STEPS": H_STEPS,
@@ -143,15 +147,20 @@ class Game:
         header[H_SHIP_Y] = self.ship.y
         header[H_FLAGS] = FLAG_FIRING if self._firing else 0
         header[H_TICK_COUNT] = self.tick_count
+        header[H_PBULLET_N] = self.pbullets.n
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
         if steps > 0:
+            self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
             self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 
     def _step(self) -> None:
         self.terrain.step()
         self.ship.step(self._move_x, self._move_y)
+        self.twin.step(self._firing, self.ship.x, self.ship.y, self.pbullets)
+        self.pbullets.integrate()
+        self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1

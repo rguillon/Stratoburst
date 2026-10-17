@@ -6,6 +6,7 @@ export function createBulletInstances({
   data,
   capacity,
   size = 4,
+  name = 'ebullets',
   color = [4.0, 1.6, 0.4], // HDR (>1) so only bullets cross the bloom threshold
   playfieldW,
   playfieldH,
@@ -48,7 +49,7 @@ void main() {
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'ebullets';
+  mesh.name = name;
   mesh.frustumCulled = false;
 
   function update(n) {
