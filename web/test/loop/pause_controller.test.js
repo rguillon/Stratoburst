@@ -165,6 +165,16 @@ describe('createPauseController.sync (header FLAGS drive the overlay)', () => {
     expect(t.overlayEl.hidden).toBe(true);
   });
 
+  it('does the same resume bookkeeping as a tap when Python resumes (clock and warm-up reset)', () => {
+    const t = setup();
+    t.pause.sync(PAUSED);
+    t.loop.resetClock.mockClear();
+    t.pause.sync(0);
+    expect(t.loop.resetClock).toHaveBeenCalledTimes(1);
+    expect(t.controller.resetWarmup).toHaveBeenCalledWith(1234);
+    expect(t.game.set_paused).not.toHaveBeenCalled(); // Python already unpaused itself
+  });
+
   it('does nothing on steady frames and ignores unrelated flag bits', () => {
     const t = setup();
     t.pause.sync(2);

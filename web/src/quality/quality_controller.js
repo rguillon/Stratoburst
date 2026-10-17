@@ -79,6 +79,8 @@ export function createQualityController({ initialTier, locked = false, nowMs = 0
       warmupUntil = now + WARMUP_MS;
       samples = 0;
       strikes = 0;
+      // A pending verification compared against a pre-reset median would be meaningless.
+      medianBefore = null;
     },
     // Pins a tier for good (for example when bloom cannot be created).
     lock(name, why) {

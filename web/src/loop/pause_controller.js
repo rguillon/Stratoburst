@@ -51,13 +51,19 @@ export function createPauseController({
     show(why);
   }
 
-  function resume() {
-    if (!shown) return;
-    bridge.game.set_paused(false); // zeroes the accumulator and refresh history in Python
+  // Everything the JS side owes after play restarts, however the unpause was triggered: the first
+  // frame must pass dt 0, and the quality controller must not judge the cheap paused frames.
+  function afterResume() {
     loop.resetClock();
     controller.resetWarmup(now());
     shown = false;
     overlayEl.hidden = true;
+  }
+
+  function resume() {
+    if (!shown) return;
+    bridge.game.set_paused(false); // zeroes the accumulator and refresh history in Python
+    afterResume();
   }
 
   // Called every frame with the header FLAGS value. Escape/P pause and resume inside Python;
@@ -69,8 +75,7 @@ export function createPauseController({
       clearInputs();
       show('key');
     } else {
-      shown = false;
-      overlayEl.hidden = true;
+      afterResume(); // Python already unpaused itself (Escape/P)
     }
   }
 

@@ -187,6 +187,16 @@ describe('verify-and-lock', () => {
     expect(controller.tier).toBe('mid');
   });
 
+  it('drops a pending verification when the warm-up is reset (a pause must not skew it)', () => {
+    const controller = steppedDown(); // pre-change median 40
+    controller.resetWarmup(4000);
+    // Without the reset this 38 ms window would be judged against 40 ms and lock the tier.
+    const results = feed(controller, WINDOW, 38, 6000);
+    expect(firstChange(results)).toBe(-1);
+    expect(results[WINDOW - 1].locked).toBe(false);
+    expect(controller.tier).toBe('mid');
+  });
+
   it('makes no verify decision before a full 90-sample window exists', () => {
     const controller = steppedDown();
     const results = feed(controller, WINDOW - 1, 40, 4000);
