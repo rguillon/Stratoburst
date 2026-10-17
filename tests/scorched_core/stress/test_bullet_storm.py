@@ -11,7 +11,7 @@ FAR = (-1000.0, -1000.0, 1.0)  # a target nothing can touch
 
 
 def make_storm(count: int, seed: int = 1) -> tuple[BulletStorm, BulletPool]:
-    pool = BulletPool(max(count, 1))
+    pool = BulletPool(max(count, 8))
     return BulletStorm(pool, count, random.Random(seed)), pool  # noqa: S311
 
 

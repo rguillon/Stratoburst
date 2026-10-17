@@ -6,6 +6,7 @@ import { createFrameLoop } from './loop/frame_loop.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
 import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel } from './render/ship_model.js';
+import { createBulletInstances } from './render/bullet_instances.js';
 import * as THREE from 'three';
 
 const PLAYFIELD_W = 240;
@@ -23,7 +24,14 @@ async function main() {
 
   const pyodide = await loadRuntime();
   const bridge = await startGame(pyodide, { seed: 1, stress: flags.stress });
-  const { tick, header, slots } = bridge;
+  const { tick, header, slots, manifest } = bridge;
+  const ebullets = createBulletInstances({
+    data: bridge.channels.ebullets,
+    capacity: manifest.channels.ebullets.cap,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(ebullets.mesh);
   const keyboard = createKeyboardInput();
   const world = new THREE.Vector3();
 
@@ -33,6 +41,7 @@ async function main() {
       tick(dt, input.buttons, input.moveX, input.moveY, 0, 0);
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
+      ebullets.update(header[slots.EBULLET_N]);
       rig.render();
     },
     onError(error) {

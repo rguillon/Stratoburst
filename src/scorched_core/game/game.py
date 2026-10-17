@@ -5,6 +5,7 @@ from array import array
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.entities.player_ship import PlayerShip
+from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
     DRONE_CAP,
     DRONE_STRIDE,
@@ -32,6 +33,8 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
     PROTOCOL_VERSION,
 )
+from scorched_core.stress.bullet_storm import BulletStorm
+from scorched_core.tuning import HITBOX_RADIUS
 
 _HEADER_SLOTS: dict[str, int] = {
     "STEPS": H_STEPS,
@@ -58,8 +61,11 @@ class Game:
         "_runner",
         "buffers",
         "ebullet_cap",
+        "ebullets",
         "rng",
         "ship",
+        "storm",
+        "storm_hits",
         "stress",
         "tick_count",
     )
@@ -69,6 +75,9 @@ class Game:
         self.stress = min(max(stress, 0), EBULLET_MAX_CAP)
         self.ebullet_cap = min(EBULLET_MAX_CAP, max(EBULLET_MIN_CAP, self.stress))
         self.ship = PlayerShip()
+        self.ebullets = BulletPool(self.ebullet_cap)
+        self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
+        self.storm_hits = 0
         self.tick_count = 0
         self._move_x = 0.0
         self._move_y = 0.0
@@ -113,8 +122,14 @@ class Game:
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
         header[H_TICK_COUNT] = self.tick_count
+        header[H_EBULLET_N] = self.ebullets.n
+        header[H_STORM_HITS] = self.storm_hits
+        if steps > 0:
+            self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 
     def _step(self) -> None:
         self.ship.step(self._move_x, self._move_y)
+        if self.storm is not None:
+            self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1
