@@ -1,6 +1,6 @@
 import { installErrorPanel } from './boot/error_panel.js';
 import { parseUrlFlags } from './boot/url_flags.js';
-import { loadRuntime } from './boot/runtime_loader.js';
+import { PYODIDE_VERSION, loadRuntime } from './boot/runtime_loader.js';
 import { startGame } from './python/python_bridge.js';
 import { createFrameLoop } from './loop/frame_loop.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
@@ -9,6 +9,7 @@ import { createShipModel } from './render/ship_model.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
+import { createDebugSession } from './debug/debug_session.js';
 import * as THREE from 'three';
 
 const PLAYFIELD_W = 240;
@@ -56,6 +57,21 @@ async function main() {
     }
     currentTier = 'low';
   }
+  // Timing, overlay and report exist only under ?debug; nothing is created otherwise.
+  const debug = flags.debug
+    ? createDebugSession({
+        rig,
+        pyodide,
+        header,
+        slots,
+        flags,
+        tierLog,
+        getTier: () => currentTier,
+        getLockReason: () => (controller.locked ? controller.reason : null),
+        versions: { build: __BUILD_HASH__, pyodide: PYODIDE_VERSION, three: __THREE_VERSION__ },
+        startMs: performance.now(),
+      })
+    : null;
   const keyboard = createKeyboardInput();
   const world = new THREE.Vector3();
 
@@ -68,11 +84,22 @@ async function main() {
         currentTier = q.tier;
       }
       const input = keyboard.sample();
+      const tickStart = debug ? performance.now() : 0;
       tick(dt, input.buttons, input.moveX, input.moveY, 0, 0);
+      const tickEnd = debug ? performance.now() : 0;
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       rig.render();
+      if (debug) {
+        const renderEnd = performance.now();
+        debug.record({
+          frameMs: dt,
+          tickMs: tickEnd - tickStart,
+          renderMs: renderEnd - tickEnd,
+          nowMs: ts,
+        });
+      }
     },
     onError(error) {
       panel.show(error, 'frame');
@@ -87,13 +114,14 @@ async function main() {
   controller.resetWarmup(performance.now());
   loop.start();
 
-  if (flags.debug) {
+  if (debug) {
     globalThis.__scorched = {
       ready: true,
       header,
       slots,
       flags,
       tierLog,
+      ...debug.hooks,
       get tier() {
         return currentTier;
       },
