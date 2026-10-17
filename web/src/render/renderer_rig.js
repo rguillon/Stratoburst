@@ -3,6 +3,7 @@ import { createPostPipeline } from './post_pipeline.js';
 import { TIERS, effectiveDpr, renderSize } from '../quality/tiers.js';
 import { CAMERA_FOV_DEG, CAMERA_TILT_DEG, applyCameraFit, fitCamera } from './camera_fit.js';
 import { createPlayfieldMask } from './playfield_mask.js';
+import { createTerrainRing } from './terrain_ring.js';
 
 export { CAMERA_FOV_DEG, CAMERA_TILT_DEG };
 
@@ -22,15 +23,10 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   sun.position.set(-120, 300, 160);
   scene.add(sun);
 
-  // Stand-in ground; the terrain ring replaces it in the next task. Albedo stays far below 1.0 so only
-  // HDR emitters (bullets) cross the bloom threshold.
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(playfieldW, playfieldH),
-    new THREE.MeshLambertMaterial({ color: 0x3a352c }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -1;
-  scene.add(ground);
+  // Procedural terrain below the gameplay plane; Python's scroll drives it from main.js.
+  // Albedo stays far below 1.0 so only HDR emitters (bullets) cross the bloom threshold.
+  const terrain = createTerrainRing({ seed: 1 });
+  scene.add(terrain.group);
 
   // Fixed orientation (D-08, D-09); resize refits only the distance and the look-at target.
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, 1, 10, 4000);
@@ -48,6 +44,7 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
     scene,
     camera,
     pipeline,
+    terrain,
     toWorld,
     bloomAvailable: true,
     tier: TIERS.high,

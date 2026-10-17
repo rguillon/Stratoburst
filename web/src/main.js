@@ -91,6 +91,9 @@ async function main() {
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
+      // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
+      // while the simulation stays at 60 Hz.
+      rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);
       rig.render();
       if (debug) {
         const renderEnd = performance.now();

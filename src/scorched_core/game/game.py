@@ -33,8 +33,9 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
     PROTOCOL_VERSION,
 )
+from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
-from scorched_core.tuning import HITBOX_RADIUS
+from scorched_core.tuning import HITBOX_RADIUS, SCROLL_SPEED
 
 _HEADER_SLOTS: dict[str, int] = {
     "STEPS": H_STEPS,
@@ -67,6 +68,7 @@ class Game:
         "storm",
         "storm_hits",
         "stress",
+        "terrain",
         "tick_count",
     )
 
@@ -78,6 +80,7 @@ class Game:
         self.ebullets = BulletPool(self.ebullet_cap)
         self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
         self.storm_hits = 0
+        self.terrain = TerrainScroll()
         self.tick_count = 0
         self._move_x = 0.0
         self._move_y = 0.0
@@ -101,6 +104,7 @@ class Game:
                 "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
+            "tuning": {"scroll_speed": SCROLL_SPEED, "hitbox_radius": HITBOX_RADIUS},
         }
 
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature (RESEARCH Pattern 2)
@@ -119,6 +123,7 @@ class Game:
         header = self.buffers["header"]
         header[H_STEPS] = steps
         header[H_ALPHA] = self._runner.alpha
+        header[H_SCROLL_Y] = self.terrain.distance
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
         header[H_TICK_COUNT] = self.tick_count
@@ -129,6 +134,7 @@ class Game:
         return steps
 
     def _step(self) -> None:
+        self.terrain.step()
         self.ship.step(self._move_x, self._move_y)
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { bootGame, readSlot } from './helpers.js';
+import { bootGame } from './helpers.js';
 
 const VIEWPORTS = [
   { name: 'portrait phone', width: 390, height: 844 },
@@ -37,11 +37,23 @@ for (const { name, width, height } of VIEWPORTS) {
 }
 
 test('python-driven terrain scroll advances 0.8 units per 60 Hz step', async ({ page }) => {
-  await bootGame(page, '?debug');
-  const before = await readSlot(page, 'SCROLL_Y');
+  // The low tier keeps software-GL frames short so the fixed-step catch-up cap (3 steps per
+  // frame) never throttles the simulation; tiers are presentation-only, so scroll is unaffected.
+  await bootGame(page, '?debug&tier=low');
+  await page.waitForTimeout(1500);
+  // Both slots are read in one evaluate so the pair is consistent (same JS task).
+  const sample = () =>
+    page.evaluate(() => {
+      const { header, slots } = globalThis.__scorched;
+      return { scroll: header[slots.SCROLL_Y], ticks: header[slots.TICK_COUNT] };
+    });
+  const start = await sample();
   await page.waitForTimeout(1000);
-  const after = await readSlot(page, 'SCROLL_Y');
-  expect(after - before).toBeGreaterThan(42);
-  expect(after - before).toBeLessThan(54);
+  const end = await sample();
+  const scroll = end.scroll - start.scroll;
+  const ticks = end.ticks - start.ticks;
+  expect(scroll).toBeGreaterThan(42);
+  expect(scroll).toBeLessThan(54);
+  expect(scroll).toBeCloseTo(ticks * 0.8, 1); // exactly SCROLL_SPEED per simulation step
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
