@@ -1,18 +1,42 @@
-// Keyboard reduction. Plan 01-06 extends KEY_BINDINGS with the full D-11 table.
+// Keyboard reduction (D-11). Keys are identified by event.code, the PHYSICAL key position, so
+// the same cluster works on QWERTY, AZERTY and QWERTZ layouts. The typed character is never read.
 
 export const KEY_BINDINGS = new Map([
   ['ArrowUp', 'up'],
+  ['KeyW', 'up'],
   ['ArrowDown', 'down'],
+  ['KeyS', 'down'],
   ['ArrowLeft', 'left'],
+  ['KeyA', 'left'],
   ['ArrowRight', 'right'],
+  ['KeyD', 'right'],
+  ['Space', 'fire'],
+  ['KeyJ', 'fire'],
+  ['ShiftLeft', 'bomb'],
+  ['ShiftRight', 'bomb'],
+  ['KeyK', 'bomb'],
+  ['Escape', 'pause'],
+  ['KeyP', 'pause'],
 ]);
 
-// Pure: applies one key event to the held set; returns whether the code is bound.
-export function reduceKey(held, type, code) {
+// Action name -> manifest.buttons key. The bit values come from Python, never from JS.
+const BUTTON_ACTIONS = [
+  ['fire', 'FIRE'],
+  ['bomb', 'BOMB'],
+  ['pause', 'PAUSE'],
+];
+
+// Pure: applies one key event to the held set; returns whether the code is bound. A keydown
+// also records the press edge in `pressed` (when given) so a tap shorter than a frame survives.
+export function reduceKey(held, type, code, pressed = null) {
   if (!KEY_BINDINGS.has(code)) return false;
   const action = KEY_BINDINGS.get(code);
-  if (type === 'keydown') held.add(action);
-  else if (type === 'keyup') held.delete(action);
+  if (type === 'keydown') {
+    held.add(action);
+    pressed?.add(action);
+  } else if (type === 'keyup') {
+    held.delete(action);
+  }
   return true;
 }
 
@@ -20,29 +44,39 @@ function axis(held, negative, positive) {
   return (held.has(positive) ? 1 : 0) - (held.has(negative) ? 1 : 0);
 }
 
-export function createKeyboardInput(target = window) {
+export function createKeyboardInput(target = window, { onKeyDown } = {}) {
   const held = new Set();
+  const pressedSinceSample = new Set();
 
   function onKey(event) {
-    if (reduceKey(held, event.type, event.code)) event.preventDefault();
+    if (event.type === 'keydown') onKeyDown?.(event);
+    if (reduceKey(held, event.type, event.code, pressedSinceSample)) event.preventDefault();
   }
-  const onBlur = () => held.clear();
+  const clear = () => {
+    held.clear();
+    pressedSinceSample.clear();
+  };
 
   target.addEventListener('keydown', onKey);
   target.addEventListener('keyup', onKey);
-  target.addEventListener('blur', onBlur);
+  target.addEventListener('blur', clear);
 
   return {
-    sample() {
-      return { buttons: 0, moveX: axis(held, 'left', 'right'), moveY: axis(held, 'up', 'down') };
+    // A button bit is set when its action is held OR was pressed since the previous sample;
+    // Python derives the edges from consecutive samples.
+    sample(buttonBits) {
+      let buttons = 0;
+      for (const [action, name] of BUTTON_ACTIONS) {
+        if (held.has(action) || pressedSinceSample.has(action)) buttons |= buttonBits[name];
+      }
+      pressedSinceSample.clear();
+      return { buttons, moveX: axis(held, 'left', 'right'), moveY: axis(held, 'up', 'down') };
     },
-    clear() {
-      held.clear();
-    },
+    clear,
     dispose() {
       target.removeEventListener('keydown', onKey);
       target.removeEventListener('keyup', onKey);
-      target.removeEventListener('blur', onBlur);
+      target.removeEventListener('blur', clear);
     },
   };
 }

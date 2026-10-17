@@ -25,13 +25,13 @@ async function main() {
   const touchPrimary = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
   const tier0 = initialTier({ forced: flags.tier, touchPrimary });
   rig.applyTier(TIERS[tier0]);
-  const ship = createShipModel();
-  rig.scene.add(ship);
   rig.render();
 
   const pyodide = await loadRuntime();
   const bridge = await startGame(pyodide, { seed: 1, stress: flags.stress });
   const { tick, header, slots, manifest } = bridge;
+  const ship = createShipModel({ hitboxRadius: manifest.tuning.hitbox_radius });
+  rig.scene.add(ship);
   const ebullets = createBulletInstances({
     data: bridge.channels.ebullets,
     capacity: manifest.channels.ebullets.cap,
@@ -84,7 +84,7 @@ async function main() {
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }
-      const input = keyboard.sample();
+      const input = keyboard.sample(manifest.buttons);
       const tickStart = debug ? performance.now() : 0;
       tick(dt, input.buttons, input.moveX, input.moveY, 0, 0);
       const tickEnd = debug ? performance.now() : 0;
@@ -123,6 +123,7 @@ async function main() {
       ready: true,
       header,
       slots,
+      manifest,
       flags,
       tierLog,
       ...debug.hooks,

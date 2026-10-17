@@ -5,6 +5,7 @@ from array import array
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.entities.player_ship import PlayerShip
+from scorched_core.input.button import Button
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
     DRONE_CAP,
@@ -57,6 +58,7 @@ class Game:
     """Pure simulation core; knows nothing about JS."""
 
     __slots__ = (
+        "_firing",
         "_move_x",
         "_move_y",
         "_runner",
@@ -82,6 +84,7 @@ class Game:
         self.storm_hits = 0
         self.terrain = TerrainScroll()
         self.tick_count = 0
+        self._firing = False
         self._move_x = 0.0
         self._move_y = 0.0
         self._runner = FixedStepRunner(self._step)
@@ -104,13 +107,14 @@ class Game:
                 "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
+            "buttons": {b.name: b.value for b in Button},
             "tuning": {"scroll_speed": SCROLL_SPEED, "hitbox_radius": HITBOX_RADIUS},
         }
 
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature (RESEARCH Pattern 2)
         self,
         dt_ms: float,
-        buttons: int,  # noqa: ARG002 - consumed by plans 01-06 and 01-08
+        buttons: int,
         move_x: float,
         move_y: float,
         drag_x: float,  # noqa: ARG002 - consumed by plans 01-06 and 01-08
@@ -119,6 +123,8 @@ class Game:
         """Advance the simulation by ``dt_ms`` and pack the header; return steps run."""
         self._move_x = move_x
         self._move_y = move_y
+        # BOMB is accepted and unused in Phase 1 (D-11 reserves the key); PAUSE arrives in 01-08.
+        self._firing = bool(buttons & Button.FIRE)
         steps = self._runner.advance(dt_ms)
         header = self.buffers["header"]
         header[H_STEPS] = steps
@@ -126,6 +132,7 @@ class Game:
         header[H_SCROLL_Y] = self.terrain.distance
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
+        header[H_FLAGS] = FLAG_FIRING if self._firing else 0
         header[H_TICK_COUNT] = self.tick_count
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
