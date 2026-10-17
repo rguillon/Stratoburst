@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createPostPipeline } from './post_pipeline.js';
+import { TIERS, effectiveDpr, renderSize } from '../quality/tiers.js';
 
 export const CAMERA_TILT_DEG = 25; // from vertical, camera on the near (+Z) side (D-08)
 export const CAMERA_FOV_DEG = 30;
@@ -36,29 +37,88 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   camera.position.set(0, Math.cos(tilt) * CAMERA_DISTANCE, Math.sin(tilt) * CAMERA_DISTANCE);
   camera.lookAt(0, 0, 0);
 
-  // Bloom pipeline; plan 01-04 adds tier-driven bypass and scaling through rig.pipeline.
+  // Bloom pipeline; the quality tier scales or bypasses it through rig.applyTier.
   const pipeline = createPostPipeline(renderer, scene, camera);
 
   function toWorld(x, y, out) {
     return out.set(x - playfieldW / 2, 0, y - playfieldH / 2);
   }
 
-  function resize() {
-    const w = Math.max(1, canvas.clientWidth);
-    const h = Math.max(1, canvas.clientHeight);
-    renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 2));
-    renderer.setSize(w, h, false);
-    pipeline.setSize(w, h);
-    camera.aspect = w / h;
+  const rig = {
+    renderer,
+    scene,
+    camera,
+    pipeline,
+    toWorld,
+    bloomAvailable: true,
+    tier: TIERS.high,
+    dpr: 1,
+    pixels: { width: 1, height: 1 },
+  };
+  let applied = { dpr: 0, width: 0, height: 0 };
+  let resizeQueued = false;
+
+  // Reallocates only when the integer backing size or the DPR changes (Pitfall 10).
+  function applyTier(tier) {
+    rig.tier = tier;
+    const cssW = Math.max(1, canvas.clientWidth);
+    const cssH = Math.max(1, canvas.clientHeight);
+    const dpr = effectiveDpr(globalThis.devicePixelRatio, tier, cssW, cssH);
+    const target = renderSize(cssW, cssH, dpr);
+    if (dpr !== applied.dpr || target.width !== applied.width || target.height !== applied.height) {
+      renderer.setPixelRatio(dpr);
+      renderer.setSize(cssW, cssH, false);
+      pipeline.setPixelRatio(dpr);
+      pipeline.setSize(cssW, cssH);
+      applied = { dpr, width: target.width, height: target.height };
+      rig.dpr = dpr;
+      rig.pixels = target;
+    }
+    camera.aspect = cssW / cssH;
     camera.updateProjectionMatrix();
+    pipeline.setTier(tier);
+  }
+
+  function resize() {
+    applyTier(rig.tier);
+  }
+
+  // Coalesces resize storms (window and visualViewport) into one reallocation per frame.
+  function queueResize() {
+    if (resizeQueued) return;
+    resizeQueued = true;
+    requestAnimationFrame(() => {
+      resizeQueued = false;
+      resize();
+    });
   }
 
   function render() {
-    pipeline.render();
+    if (pipeline.enabled) pipeline.render();
+    else renderer.render(scene, camera);
   }
 
-  window.addEventListener('resize', resize);
-  resize();
+  // Compiles shaders and pushes one frame through both render paths at load, so a tier
+  // switch never pays a first-use compile. Without half-float render targets the bloom
+  // chain cannot work: report it and let the caller degrade to the low tier (Assumption A12).
+  function prewarm() {
+    renderer.compile(scene, camera);
+    renderer.render(scene, camera);
+    try {
+      const halfFloat =
+        renderer.extensions.has('EXT_color_buffer_float') ||
+        renderer.extensions.has('EXT_color_buffer_half_float');
+      if (!halfFloat) throw new Error('half-float render targets unsupported');
+      pipeline.render();
+    } catch {
+      rig.bloomAvailable = false;
+    }
+  }
 
-  return { renderer, scene, camera, pipeline, toWorld, resize, render };
+  window.addEventListener('resize', queueResize);
+  window.visualViewport?.addEventListener('resize', queueResize);
+
+  Object.assign(rig, { resize, applyTier, render, prewarm });
+  applyTier(rig.tier);
+  return rig;
 }

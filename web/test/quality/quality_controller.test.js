@@ -250,6 +250,13 @@ describe('forced and locked controllers', () => {
     expect(controller.tier).toBe('mid');
   });
 
+  it('exposes the locked state and reason as getters', () => {
+    const forced = createQualityController({ initialTier: 'mid', locked: true, nowMs: 0 });
+    expect([forced.locked, forced.reason]).toEqual([true, 'forced']);
+    const auto = createQualityController({ initialTier: 'high', nowMs: 0 });
+    expect([auto.locked, auto.reason]).toEqual([false, null]);
+  });
+
   it('lock() pins a tier with a recorded reason', () => {
     const controller = createQualityController({ initialTier: 'high', nowMs: 0 });
     controller.lock('low', 'bloom-unavailable');
