@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from scorched_core.clock.fixed_step_runner import STEP_MS
@@ -7,9 +9,11 @@ from scorched_core.protocol import (
     DRONE_STRIDE,
     EBULLET_STRIDE,
     H_ALPHA,
+    H_EBULLET_N,
     H_SHIP_X,
     H_SHIP_Y,
     H_STEPS,
+    H_STORM_HITS,
     H_TICK_COUNT,
     HEADER_LEN,
     PBULLET_CAP,
@@ -82,3 +86,74 @@ def test_zero_step_tick_still_packs_header() -> None:
     assert header[H_ALPHA] == pytest.approx(0.5, rel=1e-6)
     assert header[H_SHIP_X] == pytest.approx(SHIP_START_X)
     assert header[H_TICK_COUNT] == 0
+
+
+def test_no_stress_means_an_empty_storm() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.storm is None
+    assert game.ebullets.n == 0
+    assert game.buffers["header"][H_EBULLET_N] == 0
+
+
+def test_tick_with_no_stress_still_packs_without_error() -> None:
+    game = Game()
+    for _ in range(5):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert all(v == 0.0 for v in game.buffers["ebullets"])
+
+
+@pytest.mark.parametrize(("stress", "count"), [(1, 1), (500, 500), (99999, 5000)])
+def test_stress_spawns_the_clamped_bullet_count(stress: int, count: int) -> None:
+    game = Game(stress=stress)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.ebullets.n == count
+    assert game.buffers["header"][H_EBULLET_N] == count
+
+
+def test_stress_bullets_are_packed_with_kind_one() -> None:
+    game = Game(stress=3)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    ebullets = game.buffers["ebullets"]
+    assert [ebullets[3], ebullets[7], ebullets[11], ebullets[15]] == [1.0, 1.0, 1.0, 0.0]
+    assert ebullets[0] == game.ebullets.x[0]
+
+
+def test_storm_hits_accumulate_in_the_header_and_do_nothing_else() -> None:
+    game = Game(stress=1)
+    game.ebullets.x[0] = game.ship.x
+    game.ebullets.y[0] = game.ship.y
+    game.ebullets.vx[0] = 0.0
+    game.ebullets.vy[0] = 0.0
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.storm_hits == 2
+    assert game.buffers["header"][H_STORM_HITS] == 2.0
+
+
+def test_zero_step_tick_leaves_the_ebullet_buffer_alone() -> None:
+    game = Game(stress=2)
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    assert all(v == 0.0 for v in game.buffers["ebullets"])
+    assert game.buffers["header"][H_EBULLET_N] == 2
+
+
+def test_same_seed_is_deterministic_and_another_seed_differs() -> None:
+    def run(seed: int) -> bytes:
+        game = Game(seed=seed, stress=500)
+        for _ in range(300):
+            game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        return game.buffers["ebullets"].tobytes()
+
+    assert run(7) == run(7)
+    assert run(7) != run(8)
+
+
+def test_tick_does_not_grow_allocated_blocks() -> None:
+    game = Game(stress=500)
+    for _ in range(300):  # warm up pools and caches
+        game.tick(STEP_MS, 0b1, 0.0, 0.0, 0.0, 0.0)
+    before = sys.getallocatedblocks()
+    for _ in range(600):
+        game.tick(STEP_MS, 0b1, 0.0, 0.0, 0.0, 0.0)
+    assert sys.getallocatedblocks() - before < 50
