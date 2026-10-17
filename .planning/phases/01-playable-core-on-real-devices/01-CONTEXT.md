@@ -41,6 +41,12 @@ Not in this phase: weapon pickups, bombs (the key is reserved only), death/respa
 ### Debug & stress tooling
 - **D-15:** Debug features are enabled through **URL flags only**, invisible to normal players: `?debug` (frame/tick timing overlay), `?stress=N` (spawns N Python-driven bullets, default 500), `?tier=low|mid|high` (forces a quality tier instead of auto-selecting). Flags can be combined so a test link can be sent to a friend's phone.
 
+### Pause & resume (added in an update session, 2026-10-17)
+- **D-16:** Auto-pause leaves the game **frozen behind a PAUSED overlay until the player acts**. There is no auto-resume or countdown. Resuming adds no time jump (no catch-up steps). This confirms research assumption A1.
+- **D-17:** **Losing window focus (`blur`) pauses too**, in addition to `visibilitychange` (hidden) and `pagehide`. All held input state is cleared on pause.
+- **D-18:** The overlay is dismissed by **any tap/click, or Esc/P or the fire keys (Space/J)**. Movement keys (arrows/WASD) do **not** resume, so a held direction key can't unpause by accident. The input that resumes must not also count as a fire press or a movement delta on the first frame back.
+- **D-19:** **Manual pause in Phase 1 is keyboard-only (Esc/P toggles it).** The on-screen touch pause button stays in Phase 4 (INPT-04).
+
 ### Claude's Discretion
 - Exact camera angle and FOV within 20–30°, the terrain scroll speed, the player fire rate and shot pattern (a simple straight twin shot is fine), and drone HP and spawn rate.
 - The quality-tier ladder (DPR caps, bloom resolution or off) and the auto-step-down heuristic. Bloom must exist in Phase 1 because the stress test measures it.

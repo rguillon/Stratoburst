@@ -108,6 +108,36 @@
 
 ---
 
+---
+
+## Update session (2026-10-17): Pause & resume behavior
+
+Offered: Test devices & go/no-go, Pause & resume behavior, Repo & toolchain setup, Shooting & drone feel. Selected: Pause & resume behavior.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| PAUSED overlay, tap/key to resume | Frozen until player acts | ✓ |
+| Short countdown, then auto-resume | 3-2-1 then play | |
+| Instant auto-resume | | |
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Pause on focus loss too | Avoids stuck keys | ✓ |
+| Only when hidden | | |
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Any tap, or Esc/P/fire key | Movement keys don't resume | ✓ |
+| Any key or tap | | |
+| Only Esc/P or a Resume button | | |
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Esc/P only | Touch pause button stays in Phase 4 | ✓ |
+| Also a touch pause button now | Pulls INPT-04 forward | |
+
+---
+
 ## Claude's Discretion
 
 - Exact camera angle/FOV, scroll speed, fire rate/shot pattern, drone HP/spawn rate
