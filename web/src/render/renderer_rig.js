@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { createPostPipeline } from './post_pipeline.js';
 import { TIERS, effectiveDpr, renderSize } from '../quality/tiers.js';
+import { CAMERA_FOV_DEG, CAMERA_TILT_DEG, applyCameraFit, fitCamera } from './camera_fit.js';
+import { createPlayfieldMask } from './playfield_mask.js';
 
-export const CAMERA_TILT_DEG = 25; // from vertical, camera on the near (+Z) side (D-08)
-export const CAMERA_FOV_DEG = 30;
-const CAMERA_DISTANCE = 700; // fixed in the skeleton; plan 01-05 replaces this with a fit
+export { CAMERA_FOV_DEG, CAMERA_TILT_DEG };
 
 export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   const renderer = new THREE.WebGLRenderer({
@@ -22,7 +22,7 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   sun.position.set(-120, 300, 160);
   scene.add(sun);
 
-  // Stand-in ground; plan 01-05 replaces it with terrain. Albedo stays far below 1.0 so only
+  // Stand-in ground; the terrain ring replaces it in the next task. Albedo stays far below 1.0 so only
   // HDR emitters (bullets) cross the bloom threshold.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(playfieldW, playfieldH),
@@ -32,10 +32,9 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   ground.position.y = -1;
   scene.add(ground);
 
+  // Fixed orientation (D-08, D-09); resize refits only the distance and the look-at target.
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, 1, 10, 4000);
-  const tilt = THREE.MathUtils.degToRad(CAMERA_TILT_DEG);
-  camera.position.set(0, Math.cos(tilt) * CAMERA_DISTANCE, Math.sin(tilt) * CAMERA_DISTANCE);
-  camera.lookAt(0, 0, 0);
+  scene.add(createPlayfieldMask({ halfW: playfieldW / 2, halfH: playfieldH / 2 }));
 
   // Bloom pipeline; the quality tier scales or bypasses it through rig.applyTier.
   const pipeline = createPostPipeline(renderer, scene, camera);
@@ -56,6 +55,7 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
     pixels: { width: 1, height: 1 },
   };
   let applied = { dpr: 0, width: 0, height: 0 };
+  let fitted = { cssW: 0, cssH: 0 };
   let resizeQueued = false;
 
   // Reallocates only when the integer backing size or the DPR changes (Pitfall 10).
@@ -74,8 +74,13 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
       rig.dpr = dpr;
       rig.pixels = target;
     }
-    camera.aspect = cssW / cssH;
-    camera.updateProjectionMatrix();
+    // Refit only when the integer CSS size changed (a hiding address bar changes it; a tier
+    // change does not).
+    if (cssW !== fitted.cssW || cssH !== fitted.cssH) {
+      camera.aspect = cssW / cssH;
+      applyCameraFit(camera, fitCamera({ aspect: camera.aspect, halfW: playfieldW / 2, halfH: playfieldH / 2 }));
+      fitted = { cssW, cssH };
+    }
     pipeline.setTier(tier);
   }
 
@@ -117,6 +122,9 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
 
   window.addEventListener('resize', queueResize);
   window.visualViewport?.addEventListener('resize', queueResize);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(queueResize).observe(canvas.parentElement ?? canvas);
+  }
 
   Object.assign(rig, { resize, applyTier, render, prewarm });
   applyTier(rig.tier);

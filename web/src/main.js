@@ -6,6 +6,7 @@ import { createFrameLoop } from './loop/frame_loop.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
 import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel } from './render/ship_model.js';
+import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -122,6 +123,9 @@ async function main() {
       flags,
       tierLog,
       ...debug.hooks,
+      // The four playfield corners in CSS pixels (e2e checks the letterboxing with it).
+      projectPlayfield: () =>
+        projectCorners(rig.camera, canvas.clientWidth, canvas.clientHeight, PLAYFIELD_W / 2, PLAYFIELD_H / 2),
       get tier() {
         return currentTier;
       },
