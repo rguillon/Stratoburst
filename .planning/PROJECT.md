@@ -58,6 +58,9 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 - **Assets**: 3D models generated in code — no external modeling pipeline
 - **Input**: Keyboard (desktop) and touch (mobile) both required
 - **Performance**: Must remain responsive on mobile browsers — shmups are unplayable with frame drops or input lag
+- **Code style**: Clean, modern Python (3.14 idioms, type hints throughout, dataclasses/`__slots__`, enums, pattern matching where it helps; ruff for format and lint) — user requirement
+- **Code organization**: One class per file; files organized in consistent, domain-based subdirectories (e.g. `entities/`, `weapons/`, `stages/`, `collision/`) mirrored by the test tree — user requirement
+- **Testing**: pytest for all Python code, with 100% coverage (line + branch) enforced via `pytest-cov --cov-fail-under=100`; the Pyodide adapter layer is tested against a fake `js` module so coverage can be measured natively — user requirement
 
 ## Key Decisions
 
@@ -70,6 +73,8 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 | Fixed tilted top-down camera | User choice | — Pending |
 | Procedural/code-built models | User choice; no asset pipeline | — Pending |
 | 3D rendering stack | To be decided by research | — Pending |
+| One class per file, domain subdirectories | User coding standard | — Pending |
+| pytest with 100% line+branch coverage gate | User quality standard; pure core makes it achievable | — Pending |
 
 ## Evolution
 
