@@ -6,18 +6,31 @@
 PYTEST_GATE := uv run pytest --cov --cov-branch --cov-fail-under=100
 VITEST_FILES := $(wildcard web/test/*/*.test.js)
 
-.PHONY: help install browsers lint format test build dev preview e2e check clean
+.PHONY: help install install-python install-web browsers browsers-ci lint format test \
+	test-python test-web build perf dev preview e2e e2e-live live-url wait-deploy check clean
+
+# Inputs for the deploy-verification targets (override on the command line).
+SHA ?= $(shell git rev-parse HEAD)
+WORKFLOW ?= Deploy
+TIMEOUT_MIN ?= 20
 
 help: ## List the available targets
 	@echo "Scorched developer targets:"
-	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
-install: ## Install Python (uv sync) and Node (npm ci) dependencies from the lockfiles
+install: install-python install-web ## Install Python and Node dependencies from the lockfiles
+
+install-python: ## uv sync --locked (Python dependencies from uv.lock)
 	uv sync --locked
+
+install-web: ## npm ci (Node dependencies from package-lock.json)
 	npm ci
 
 browsers: ## Download the Playwright Chromium used by e2e
 	npx playwright install chromium
+
+browsers-ci: ## Download Playwright Chromium plus its system libraries (CI runners)
+	npx playwright install --with-deps chromium
 
 lint: ## ruff check + ruff format --check
 	uv run ruff check .
@@ -33,8 +46,17 @@ ifneq ($(strip $(VITEST_FILES)),)
 	npm test
 endif
 
+test-python: ## pytest with --cov-fail-under=100 only
+	$(PYTEST_GATE)
+
+test-web: ## vitest only
+	npm test
+
 build: ## Production build into dist/
 	npm run build
+
+perf: ## Python perf budget (npm run perf, when the script exists)
+	npm run perf --if-present
 
 dev: ## Vite dev server
 	npm run dev
@@ -44,6 +66,15 @@ preview: ## Serve the production build on http://localhost:4173/
 
 e2e: ## Playwright specs against the production build (run `make build` first)
 	npx playwright test
+
+e2e-live: ## Playwright smoke spec against the live GitHub Pages URL
+	BASE_URL="$$(node tools/live_url.mjs)" npx playwright test tools/e2e/smoke.spec.js
+
+live-url: ## Print the GitHub Pages URL derived from the origin remote
+	@node tools/live_url.mjs
+
+wait-deploy: ## Wait until the Deploy run for SHA succeeded and the live site serves it
+	node tools/wait_for_deploy.mjs --sha "$(SHA)" --workflow "$(WORKFLOW)" --timeout-min "$(TIMEOUT_MIN)"
 
 check: lint test build e2e ## Full local gate: lint + test + build + e2e
 

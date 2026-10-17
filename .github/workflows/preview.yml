@@ -1,0 +1,41 @@
+name: Preview
+
+# Plain pull_request only: fork PRs never receive a write token, and the jobs below
+# additionally skip any PR whose head repository is not this repository.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency: preview-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/gate.yml
+
+  preview:
+    needs: gate
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository && (github.event.action == 'closed' || needs.gate.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: github.event.action != 'closed'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - if: github.event.action != 'closed'
+        run: make install-web
+      - if: github.event.action != 'closed'
+        run: make build
+      - uses: rossjrw/pr-preview-action@ffa7509e91a3ec8dfc2e5536c4d5c1acdf7a6de9 # v1.8.1
+        with:
+          source-dir: ./dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
