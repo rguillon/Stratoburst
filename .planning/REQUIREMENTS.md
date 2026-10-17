@@ -142,12 +142,75 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| PLAT-01 | Phase 1 | Pending |
+| PLAT-02 | Phase 1 | Pending |
+| PLAT-03 | Phase 1 | Pending |
+| PLAT-04 | Phase 1 | Pending |
+| PLAT-05 | Phase 1 | Pending |
+| PLAT-06 | Phase 1 | Pending |
+| PLAT-07 | Phase 1 | Pending |
+| PLAT-08 | Phase 1 | Pending |
+| PLAT-09 | Phase 1 | Pending |
+| PLAT-10 | Phase 4 | Pending |
+| PLAT-11 | Phase 1 | Pending |
+| PLYR-01 | Phase 1 | Pending |
+| PLYR-02 | Phase 1 | Pending |
+| PLYR-03 | Phase 1 | Pending |
+| PLYR-04 | Phase 2 | Pending |
+| PLYR-05 | Phase 2 | Pending |
+| PLYR-06 | Phase 2 | Pending |
+| PLYR-07 | Phase 2 | Pending |
+| PLYR-08 | Phase 2 | Pending |
+| PLYR-09 | Phase 2 | Pending |
+| PLYR-10 | Phase 2 | Pending |
+| ENMY-01 | Phase 3 | Pending |
+| ENMY-02 | Phase 3 | Pending |
+| ENMY-03 | Phase 4 | Pending |
+| ENMY-04 | Phase 3 | Pending |
+| ENMY-05 | Phase 3 | Pending |
+| ENMY-06 | Phase 3 | Pending |
+| ENMY-07 | Phase 3 | Pending |
+| ENMY-08 | Phase 2 | Pending |
+| ENMY-09 | Phase 3 | Pending |
+| STGE-01 | Phase 4 | Pending |
+| STGE-02 | Phase 1 | Pending |
+| STGE-03 | Phase 3 | Pending |
+| STGE-04 | Phase 2 | Pending |
+| STGE-05 | Phase 4 | Pending |
+| STGE-06 | Phase 4 | Pending |
+| STGE-07 | Phase 4 | Pending |
+| SCOR-01 | Phase 3 | Pending |
+| SCOR-02 | Phase 3 | Pending |
+| SCOR-03 | Phase 3 | Pending |
+| SCOR-04 | Phase 3 | Pending |
+| SCOR-05 | Phase 3 | Pending |
+| SCOR-06 | Phase 4 | Pending |
+| SCOR-07 | Phase 4 | Pending |
+| SCOR-08 | Phase 3 | Pending |
+| VISL-01 | Phase 2 | Pending |
+| VISL-02 | Phase 2 | Pending |
+| VISL-03 | Phase 2 | Pending |
+| VISL-04 | Phase 2 | Pending |
+| VISL-05 | Phase 2 | Pending |
+| VISL-06 | Phase 2 | Pending |
+| INPT-01 | Phase 1 | Pending |
+| INPT-02 | Phase 1 | Pending |
+| INPT-03 | Phase 2 | Pending |
+| INPT-04 | Phase 4 | Pending |
+| INPT-05 | Phase 4 | Pending |
+| AUDI-01 | Phase 2 | Pending |
+| AUDI-02 | Phase 4 | Pending |
+| AUDI-03 | Phase 2 | Pending |
+| AUDI-04 | Phase 4 | Pending |
+| SCRN-01 | Phase 4 | Pending |
+| SCRN-02 | Phase 4 | Pending |
+| SCRN-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 63 total
-- Mapped to phases: 0
-- Unmapped: 63 ⚠️
+- Mapped to phases: 63
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-17*
-*Last updated: 2026-10-17 after initial definition*
+*Last updated: 2026-10-17 after roadmap creation (traceability mapped)*
