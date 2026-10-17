@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installErrorPanel } from '../../src/boot/error_panel.js';
 
 class FakeElement {
@@ -197,9 +197,68 @@ describe('error panel contents', () => {
     const env = fakeEnvironment();
     installErrorPanel(env.doc);
 
-    env.fire('error', { error: null, message: 'Script error.' });
+    env.fire('error', { error: null, message: 'ResizeObserver exploded' });
 
-    expect(panelEl(env).textContent).toContain('[window] Script error.');
+    expect(panelEl(env).textContent).toContain('[window] ResizeObserver exploded');
+  });
+
+  describe('errors that are not the game\'s own', () => {
+    beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}));
+    afterEach(() => vi.restoreAllMocks());
+
+    it('ignores the opaque cross-origin "Script error." and does not fire onFatal', () => {
+      const env = fakeEnvironment();
+      const panel = installErrorPanel(env.doc);
+      const fatal = vi.fn();
+      panel.onFatal(fatal);
+
+      env.fire('error', { error: null, message: 'Script error.' });
+
+      expect(panel.shown).toBe(false);
+      expect(fatal).not.toHaveBeenCalled();
+    });
+
+    it.each(['chrome-extension', 'moz-extension', 'safari-web-extension'])(
+      'ignores an error raised from a %s script',
+      (scheme) => {
+        const env = fakeEnvironment();
+        const panel = installErrorPanel(env.doc);
+
+        env.fire('error', {
+          error: new Error('injected'),
+          message: 'injected',
+          filename: `${scheme}://abc123/content.js`,
+        });
+
+        expect(panel.shown).toBe(false);
+      },
+    );
+
+    it('ignores a rejection whose stack comes from an extension', () => {
+      const env = fakeEnvironment();
+      const panel = installErrorPanel(env.doc);
+      const reason = new Error('extension rejection');
+      reason.stack = 'Error: extension rejection\n    at chrome-extension://abc/inject.js:1:1';
+
+      env.fire('unhandledrejection', { reason });
+
+      expect(panel.shown).toBe(false);
+    });
+
+    it('still escalates a same-origin error and a rejection with a plain reason', () => {
+      const env = fakeEnvironment();
+      const panel = installErrorPanel(env.doc);
+
+      env.fire('error', {
+        error: new Error('ours'),
+        message: 'ours',
+        filename: 'https://example.test/assets/index.js',
+      });
+      env.fire('unhandledrejection', { reason: null });
+
+      expect(panel.shown).toBe(true);
+      expect(panelEl(env).textContent).toContain('[window] ours');
+    });
   });
 });
 

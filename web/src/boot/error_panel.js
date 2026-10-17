@@ -8,6 +8,20 @@ const BUTTON_STYLE =
   'padding:12px 20px;margin-right:12px;font:600 15px system-ui,sans-serif;color:#1a0b08;' +
   'background:#ff9a5c;border:0;border-radius:4px;cursor:pointer;';
 
+// Errors that are not ours: browser extensions inject scripts into the page, and a cross-origin
+// script failure reaches window.onerror as an opaque "Script error." with no error object.
+// Neither says anything about the health of the game, so neither may end the session.
+const EXTENSION_URL = /(?:chrome|moz|safari|safari-web|ms-browser)-extension:\/\//;
+
+function isForeignError(event) {
+  if (event.error == null && event.message === 'Script error.') return true;
+  return EXTENSION_URL.test(String(event.filename ?? ''));
+}
+
+function isForeignRejection(event) {
+  return EXTENSION_URL.test(String(event.reason?.stack ?? ''));
+}
+
 export function installErrorPanel(doc = document) {
   const win = doc.defaultView ?? globalThis;
   const fatalCallbacks = [];
@@ -100,8 +114,20 @@ export function installErrorPanel(doc = document) {
     if (notice !== null) notice.hidden = true;
   }
 
-  win.addEventListener('error', (event) => show(event.error ?? event.message, 'window'));
-  win.addEventListener('unhandledrejection', (event) => show(event.reason, 'promise'));
+  win.addEventListener('error', (event) => {
+    if (isForeignError(event)) {
+      console.warn('[scorched] ignored a non-game page error:', event.message);
+      return;
+    }
+    show(event.error ?? event.message, 'window');
+  });
+  win.addEventListener('unhandledrejection', (event) => {
+    if (isForeignRejection(event)) {
+      console.warn('[scorched] ignored a non-game promise rejection:', event.reason);
+      return;
+    }
+    show(event.reason, 'promise');
+  });
 
   return {
     show,
