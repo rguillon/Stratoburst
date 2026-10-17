@@ -20,3 +20,6 @@ HITBOX_RADIUS: Final = 2.0
 
 # Terrain scroll in terrain units per 60 Hz step (about 48 units per second); STGE-02.
 SCROLL_SPEED: Final = 0.8
+
+# Touch drag catch-up: the most finger movement (in units) the ship may still owe (INPT-02).
+TOUCH_LAG_CAP: Final = 40.0

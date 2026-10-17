@@ -205,3 +205,40 @@ def test_tick_does_not_grow_allocated_blocks() -> None:
     for _ in range(600):
         game.tick(STEP_MS, 0b1, 0.0, 0.0, 0.0, 0.0)
     assert sys.getallocatedblocks() - before < 50
+
+
+def test_drag_is_queued_once_per_tick_and_caught_up_by_the_steps() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 10.0, 0.0)
+    assert game.ship.x == pytest.approx(SHIP_START_X + SHIP_SPEED)
+    assert game.ship.pending_x == pytest.approx(10.0 - SHIP_SPEED)
+
+
+def test_drag_is_added_once_per_tick_call_not_once_per_step() -> None:
+    game = Game()
+    game.tick(STEP_MS * 3, 0, 0.0, 0.0, 10.0, 0.0)
+    assert game.ship.x == pytest.approx(SHIP_START_X + 10.0)
+    assert game.ship.pending_x == 0.0
+
+
+def test_a_zero_step_tick_keeps_the_drag_for_the_next_tick() -> None:
+    game = Game()
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 10.0, 0.0)
+    assert game.ship.x == SHIP_START_X
+    assert game.ship.pending_x == 10.0
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.ship.x == pytest.approx(SHIP_START_X + SHIP_SPEED)
+
+
+def test_a_non_finite_drag_never_moves_the_ship() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, float("nan"), float("inf"))
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert (game.ship.pending_x, game.ship.pending_y) == (0.0, 0.0)
+
+
+def test_a_zero_drag_leaves_pending_alone() -> None:
+    game = Game()
+    game.ship.pending_x = 5.0
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.ship.pending_x == 5.0

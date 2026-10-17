@@ -19,6 +19,11 @@ class PlayerShip:
 
     x: float = SHIP_START_X
     y: float = SHIP_START_Y
+    pending_x: float = 0.0
+    pending_y: float = 0.0
+
+    def add_drag(self, dx: float, dy: float) -> None:
+        """Queue finger movement (skeleton)."""
 
     def step(self, move_x: float, move_y: float) -> None:
         """Advance one 60 Hz step from a move vector (each axis nominally -1..1)."""
