@@ -55,7 +55,7 @@ test-web: ## vitest only
 build: ## Production build into dist/
 	npm run build
 
-perf: ## Python perf budget (npm run perf, when the script exists)
+perf: ## Python tick budget: 500 stress bullets in Pyodide-on-Node, fails above 3 ms average
 	npm run perf --if-present
 
 dev: ## Vite dev server
