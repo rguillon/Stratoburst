@@ -4,10 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Scorched</title>
-    <style>html,body{background:#0b0a09;height:100%;margin:0;overflow:hidden}#app{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;height:100dvh;position:fixed;inset:0}canvas#view{width:100%;height:100%;display:block}</style>
-    <script type="module" crossorigin src="./assets/index-dym9FfkB.js"></script>
+    <style>html,body{background:#0b0a09;height:100%;margin:0;overflow:hidden}#app{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;height:100dvh;position:fixed;inset:0}canvas#view{width:100%;height:100%;display:block}#paused{z-index:10;color:#f2e8d5;text-align:center;-webkit-user-select:none;user-select:none;touch-action:none;cursor:pointer;background:#0b0a09b8;flex-direction:column;justify-content:center;align-items:center;gap:12px;font-family:system-ui,sans-serif;display:flex;position:fixed;inset:0}#paused[hidden]{display:none}#paused .title{letter-spacing:.2em;color:#ff8a3d;font-size:clamp(36px,10vmin,96px);font-weight:800}#paused .hint{opacity:.85;font-size:clamp(14px,3.2vmin,24px)}</style>
+    <script type="module" crossorigin src="./assets/index-DWtCuqKx.js"></script>
   </head>
   <body>
     <div id="app"><canvas id="view"></canvas></div>
+    <div id="paused" role="dialog" aria-label="Game paused" hidden>
+      <div class="title">PAUSED</div>
+      <div class="hint">tap or press any key to resume</div>
+    </div>
   </body>
 </html>
