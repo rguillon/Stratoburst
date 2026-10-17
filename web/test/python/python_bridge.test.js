@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { warmUp } from '../../src/python/python_bridge.js';
+import { PY_SOURCES, installSources, startGame, warmUp } from '../../src/python/python_bridge.js';
 
 const MANIFEST = {
   header: { len: 4 },
@@ -96,5 +96,142 @@ describe('warmUp', () => {
     expect(() => warmUp(failing.pyodide, { seed: 1 }, 5)).toThrow('python fault');
     expect(failing.calls.destroyed.sort()).toEqual(['entry', 'game', 'options']);
     expect(calls.destroyed).toEqual([]);
+  });
+});
+
+// A fake Pyodide FS and sys.path that record what installSources does to them.
+function fakeFilesystem() {
+  const log = { dirs: [], files: {}, sysPath: [] };
+  const pyodide = {
+    FS: {
+      mkdirTree: (dir) => log.dirs.push(dir),
+      writeFile: (path, text) => {
+        log.files[path] = text;
+      },
+    },
+    pyimport: (name) => {
+      expect(name).toBe('sys');
+      return { path: { insert: (index, value) => log.sysPath.push([index, value]) } };
+    },
+  };
+  return { pyodide, log };
+}
+
+describe('PY_SOURCES', () => {
+  it('bundles the game sources under /src, including both packages', () => {
+    const keys = Object.keys(PY_SOURCES);
+    expect(keys).toContain('/src/scorched_core/game/game.py');
+    expect(keys).toContain('/src/scorched_web/entrypoint.py');
+    expect(keys.every((key) => key.startsWith('/src/') && key.endsWith('.py'))).toBe(true);
+  });
+});
+
+describe('installSources', () => {
+  it('maps /src/<pkg>/... to /lib/<pkg>/... and creates the parent directory first', () => {
+    const { pyodide, log } = fakeFilesystem();
+
+    installSources(pyodide, {
+      '/src/scorched_core/game/game.py': 'GAME',
+      '/src/scorched_web/entrypoint.py': 'ENTRY',
+    });
+
+    expect(log.files).toEqual({
+      '/lib/scorched_core/game/game.py': 'GAME',
+      '/lib/scorched_web/entrypoint.py': 'ENTRY',
+    });
+    expect(log.dirs).toEqual(['/lib/scorched_core/game', '/lib/scorched_web']);
+  });
+
+  it('puts /lib at the front of sys.path exactly once', () => {
+    const { pyodide, log } = fakeFilesystem();
+
+    installSources(pyodide, { '/src/a/b.py': 'x', '/src/a/c.py': 'y' });
+
+    expect(log.sysPath).toEqual([[0, '/lib']]);
+  });
+
+  it('still prepares sys.path when there is nothing to write', () => {
+    const { pyodide, log } = fakeFilesystem();
+
+    installSources(pyodide, {});
+
+    expect(log.files).toEqual({});
+    expect(log.sysPath).toEqual([[0, '/lib']]);
+  });
+});
+
+describe('startGame', () => {
+  const GAME_MANIFEST = {
+    protocol: 1,
+    header: { len: 12, slots: { STEPS: 0, ALPHA: 2 } },
+    channels: { pbullets: { stride: 4, cap: 64 }, ebullets: { stride: 4, cap: 600 } },
+  };
+
+  function fakeGamePyodide(manifest = GAME_MANIFEST) {
+    const calls = { attached: [], destroyed: [], writes: 0 };
+    const tick = () => {};
+    const game = {
+      manifest: () => ({ destroy: () => calls.destroyed.push('manifest'), toJs: () => manifest }),
+      attach: (name, array) => calls.attached.push([name, array]),
+      tick,
+    };
+    const pyodide = {
+      FS: { mkdirTree() {}, writeFile: () => (calls.writes += 1) },
+      pyimport: (name) =>
+        name === 'sys' ? { path: { insert() {} } } : { create_game: () => game },
+      toPy: (options) => options,
+    };
+    return { pyodide, calls, game, tick };
+  }
+
+  it('installs the sources, then allocates one Float32Array per channel sized stride * cap', async () => {
+    const { pyodide, calls } = fakeGamePyodide();
+
+    const started = await startGame(pyodide, { seed: 1 });
+
+    expect(calls.writes).toBe(Object.keys(PY_SOURCES).length);
+    expect(started.header).toBeInstanceOf(Float32Array);
+    expect(started.header.length).toBe(12);
+    expect(started.channels.pbullets.length).toBe(4 * 64);
+    expect(started.channels.ebullets.length).toBe(4 * 600);
+  });
+
+  it('attaches the header first, then each channel in manifest order, with the same arrays', async () => {
+    const { pyodide, calls } = fakeGamePyodide();
+
+    const started = await startGame(pyodide, { seed: 1 });
+
+    expect(calls.attached.map(([name]) => name)).toEqual(['header', 'pbullets', 'ebullets']);
+    expect(calls.attached[0][1]).toBe(started.header);
+    expect(calls.attached[1][1]).toBe(started.channels.pbullets);
+    expect(calls.attached[2][1]).toBe(started.channels.ebullets);
+  });
+
+  it('returns the manifest, its header slots, the game and the held tick function', async () => {
+    const { pyodide, game, tick } = fakeGamePyodide();
+
+    const started = await startGame(pyodide, { seed: 1 });
+
+    expect(started.manifest).toBe(GAME_MANIFEST);
+    expect(started.slots).toBe(GAME_MANIFEST.header.slots);
+    expect(started.game).toBe(game);
+    expect(started.tick).toBe(tick);
+  });
+
+  it('destroys the manifest proxy once it has been converted', async () => {
+    const { pyodide, calls } = fakeGamePyodide();
+
+    await startGame(pyodide, { seed: 1 });
+
+    expect(calls.destroyed).toEqual(['manifest']);
+  });
+
+  it('rejects a protocol version it does not speak before allocating or attaching anything', async () => {
+    const { pyodide, calls } = fakeGamePyodide({ ...GAME_MANIFEST, protocol: 2 });
+
+    await expect(startGame(pyodide, { seed: 1 })).rejects.toThrow(
+      'Unsupported protocol version 2 (expected 1)',
+    );
+    expect(calls.attached).toEqual([]);
   });
 });
