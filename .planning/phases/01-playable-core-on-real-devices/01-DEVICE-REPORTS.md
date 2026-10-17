@@ -2,18 +2,29 @@
 
 Plan 01-10. Measurements come from real hardware against the real static host. WSL2 SwiftShader numbers do not count.
 
+**Status in one line: GO (desktop) — phone performance gate DEFERRED.** Desktop passed every bar. No phone was measured; the user chose to skip phone reports for now.
+
 ## Header
 
 | Field | Value |
 |-------|-------|
 | Date prepared | 2026-10-17 |
 | Code baseline (all of Phase 1 through plan 01-09) | `f52e3e2` (origin/main before this branch) |
-| Preview build hash | the PR branch head; the `?debug` overlay and the report print it as `build` |
+| PR branch head (what the PR contained) | `a09c57b` on `gsd/phase-01-device-gate` |
+| Build hash measured on device | `b807fd8`, the PR merge ref (see Preview build note below) |
 | Live URL | https://rguillon.github.io/Stratoburst/ |
 | Branch | `gsd/phase-01-device-gate` |
 | Compare link | https://github.com/rguillon/Stratoburst/compare/main...gsd/phase-01-device-gate?expand=1 |
-| Preview URL pattern | https://rguillon.github.io/Stratoburst/pr-preview/pr-N/ |
-| PR number | _pending (filled in Task 3 from the user's reply)_ |
+| PR number | 1 |
+| Preview URL | https://rguillon.github.io/Stratoburst/pr-preview/pr-1/ |
+
+### Preview build note
+
+The reports print `build: b807fd8`. That is not the PR head (`a09c57b`). GitHub's public API reports `merge_commit_sha = b807fd80c85e7d83e659a5e00d3fb6b54ee90a62` for PR #1, the synthetic merge of the PR head into main that `pull_request` workflows check out by default. So the preview was built from the PR merge ref, and `b807fd8` is that ref's short hash. The merge ref was main plus the PR branch, which is the same tree as the branch head because main had not diverged. This was verified through the public API (`gh` is not installed).
+
+### D-04 PR preview, first live exercise
+
+The Preview workflow ran for PR #1 at head `a09c57b` (run 39054200041, event `pull_request`) and concluded `success` per the public Actions API. The E2E workflow for the same head (run 39054200047) also concluded `success`. The user opened the resulting preview URL on a desktop and a phone. So D-04 PR previews work end to end on the real host (build, publish to `gh-pages/pr-preview/pr-1`, serve). The sticky comment and QR code were not separately confirmed by the user in the reply.
 
 ## Local gates before the push (Task 1)
 
@@ -40,60 +51,123 @@ Copied from the plan must_haves (truths 4 and 5) and RESEARCH Pattern 9.
 
 ## Desktop
 
-_Device model, browser, notes: pending._
+Snapdragon X laptop, Windows 11, Firefox 158. GPU per the report: Qualcomm Adreno X1-45 via ANGLE Direct3D11. Screen 3072x1728 at DPR 1.25. Reports pasted verbatim by the user (the pasted text includes the user agent, screen and GPU strings; the user was told beforehand that it would be committed to the public repo).
 
-### 5-minute auto tier
+### 5-minute auto tier (5.2 min)
 
-_pending_
+```
+Scorched device report
+ua: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0
+screen: 3072x1728 (css 3072x1643)
+dpr: 1.25 (effective 0.74)
+canvas: 2288x1223
+gl renderer: ANGLE (Qualcomm, Adreno (TM) X1-45 Direct3D11 vs_5_0 ps_5_0), or similar
+precision: highp (23 bits)
+pyodide: 314.0.7
+three: 0.186.1
+build: b807fd8
+flags: debug=on stress=500 tier=auto crash=none
+tier: high
+time to gate: 2.4 s
+elapsed: 5.2 min
+tier log: none
+minute 0: frames 3600, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.08 ms, p95 tick 2.00 ms
+minute 1: frames 3600, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.11 ms, p95 tick 2.00 ms
+minute 2: frames 3600, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.11 ms, p95 tick 2.00 ms
+minute 3: frames 3600, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.08 ms, p95 tick 2.00 ms
+minute 4: frames 3600, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.11 ms, p95 tick 2.00 ms
+minute 5: frames 628, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.12 ms, p95 tick 2.00 ms
+```
 
-### 2-minute `tier=low`
+### `tier=low` (1.3 min, shorter than the 2 min protocol)
 
-_pending_
+```
+Scorched device report
+ua: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0
+screen: 3072x1728 (css 3072x1643)
+dpr: 1.25 (effective 0.34)
+canvas: 1059x566
+gl renderer: ANGLE (Qualcomm, Adreno (TM) X1-45 Direct3D11 vs_5_0 ps_5_0), or similar
+precision: highp (23 bits)
+pyodide: 314.0.7
+three: 0.186.1
+build: b807fd8
+flags: debug=on stress=500 tier=low crash=none
+tier: low (locked: forced)
+time to gate: 2.4 s
+elapsed: 1.3 min
+tier log: none
+minute 0: frames 3598, avg fps 60.0, p95 frame 16.7 ms, avg tick 0.89 ms, p95 tick 2.00 ms
+minute 1: frames 1114, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.34 ms, p95 tick 2.00 ms
+```
 
-### 2-minute `tier=high`
+### `tier=high` (0.5 min, shorter than the 2 min protocol)
 
-_pending_
+```
+Scorched device report
+ua: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0
+screen: 3072x1728 (css 3072x1643)
+dpr: 1.25 (effective 0.74)
+canvas: 2288x1223
+gl renderer: ANGLE (Qualcomm, Adreno (TM) X1-45 Direct3D11 vs_5_0 ps_5_0), or similar
+precision: highp (23 bits)
+pyodide: 314.0.7
+three: 0.186.1
+build: b807fd8
+flags: debug=on stress=500 tier=high crash=none
+tier: high (locked: forced)
+time to gate: 2.4 s
+elapsed: 0.5 min
+tier log: none
+minute 0: frames 1864, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.08 ms, p95 tick 2.00 ms
+```
 
 ## Android
 
-_Device model, browser, power state: pending._
-
-### 5-minute auto tier
-
-_pending_
-
-### 2-minute `tier=low`
-
-_pending_
-
-### 2-minute `tier=high`
-
-_pending_
+**NOT MEASURED.** Deferred by user choice ("We will skip phone reports for now."). No model, browser, power state or reports exist. The user separately said the game looked smooth on their phone; that is a qualitative remark, not a measurement, and it does not identify the phone model or the browser. It is not counted against any bar.
 
 ## iPhone
 
-_Device model, Safari version, power state (Low Power Mode?): pending._
-
-### 5-minute auto tier
-
-_pending_
-
-### 2-minute `tier=low`
-
-_pending_
-
-### 2-minute `tier=high`
-
-_pending_
+**NOT MEASURED.** Deferred by user choice, as above. No Safari-version or Low Power Mode data, and A6 (Safari streaming compile through the progress wrapper, progress reaching 80%) remains unverified.
 
 ## Feel checklist
 
-_pending (result per numbered item from the checkpoint, "all passed" or the failing item numbers with notes)._
+The user's words: "I observed no problem, the animation with smoth on computer and phone." They did not go through the numbered items (5 to 12) one by one. Recorded as exactly that: no problem observed, and **no individual item is claimed as passed**. In particular these were not individually confirmed: letterbox in both orientations (6), 1:1 touch drag with auto-fire (8), auto-pause and resume without a jump (10), the `?crash=py` error panel (11), and the Network tab check for `content-encoding: br` from cdn.jsdelivr.net (12). The per-item checklist stays on the list for the verify-work UAT.
 
 ## Pass/fail table
 
-_pending (computed in Task 3 from the pasted reports)._
+Values are parsed from the report lines above. "Worst minute" excludes nothing; the final partial minute (628 frames) is 60.0 as well.
+
+| Device | Bar | Required | Measured | Result |
+|--------|-----|----------|----------|--------|
+| Desktop (auto, 5.2 min) | Average fps | >= 58 | 60.0 (every minute) | PASS |
+| Desktop (auto, 5.2 min) | p95 frame time | <= 20 ms | 16.7 ms (every minute) | PASS |
+| Desktop (auto, 5.2 min) | Final tier keeps bloom | high or mid | high | PASS |
+| Desktop (auto, 5.2 min) | Python tick average | <= 3 ms | 1.08 to 1.12 ms (p95 2.00 ms) | PASS |
+| Desktop `tier=low` (1.3 min) | recorded | n/a | 60.0 fps, p95 16.7 ms, tick 0.89 / 1.34 ms | recorded (shorter than protocol) |
+| Desktop `tier=high` (0.5 min) | recorded | n/a | 60.0 fps, p95 16.7 ms, tick 1.08 ms | recorded (shorter than protocol) |
+| Android | all phone bars | see Pass bars | none | NOT MEASURED |
+| iPhone | all phone bars | see Pass bars | none | NOT MEASURED |
+| All | Feel checklist items 5 to 12 | all passed | "no problem observed", not itemized | NOT ITEMIZED |
+
+Observations:
+
+- Desktop frame time is pinned at the 60 Hz vsync cap (16.7 ms p95 at every tier), so these runs prove headroom at 500 stress bullets but cannot rank the tiers against each other. No tier change was logged (`tier log: none`).
+- The in-browser Python tick (about 1.1 ms) is roughly 2x the Node perf harness figure (0.56 ms). Still well inside the 3 ms budget.
+- Time to gate was 2.4 s on a (presumably warm-cache) desktop. Open Question 5 is answered for desktop only.
+- The auto tier reported an effective scale of 0.74 (canvas 2288x1223 for a 3072x1643 CSS window), so the high tier rendered below native device resolution on this display and still held 60 fps.
 
 ## Verdict
 
-_pending (GO or NO-GO, with the recommended lever when NO-GO)._
+**GO (desktop) — phone performance gate DEFERRED.**
+
+- Desktop: GO. Every desktop bar passes with margin (60.0 fps vs >= 58, p95 16.7 ms vs <= 20 ms, tick ~1.1 ms vs <= 3 ms, final tier high with bloom on). This is one machine and one browser (Snapdragon X, Firefox 158), so Chromium and Safari desktop have not been measured. It is the evidence that PLAT-04's numeric bar holds, with `?stress=500` bullets standing in for the full stage load that does not exist yet.
+- Phones: not measured, so the phone half of the ROADMAP "After Phase 1 (go/no-go)" gate (PLAT-05, success criterion 3 on phones) is **not decided**. This is neither a GO nor a NO-GO for phones. No lever is recommended because there is no phone data to classify the bottleneck. The only phone evidence is the user's remark that animation looked smooth on a phone.
+- Consequence: the phone go/no-go must be closed before the Phase 2 content work is trusted on mobile. PLAT-05 stays pending.
+
+### Open follow-ups (route to UAT)
+
+1. **Phone protocol (Part B).** On a mid-range Android phone and a recent iPhone, open https://rguillon.github.io/Stratoburst/?debug&stress=500, run 5 continuous minutes on the auto tier, then 2 minutes each at `&tier=low` and `&tier=high`, press Copy report, and paste the reports into the Android and iPhone sections above. Note the model, browser and power state. Pass bars: avg fps >= 29, p95 frame <= 40 ms, no minute under 29 fps, final tier keeps bloom.
+2. **Per-item feel checklist (items 5 to 12)** from the plan's Task 2, itemized, especially the phone items 6, 8 and 10, the `?crash=py` panel (11), and the Network check (12).
+3. **A6**: confirm on Safari that the streaming compile reaches 80% progress through the progress wrapper, and record time-to-gate per phone (Open Question 5).
+4. Optional: repeat the desktop run in a Chromium browser, and re-run the forced `tier=low` and `tier=high` for the full 2 minutes if a comparison is wanted.
