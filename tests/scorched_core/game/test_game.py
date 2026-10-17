@@ -4,12 +4,15 @@ import pytest
 
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.game.game import Game
+from scorched_core.input.button import Button
 from scorched_core.protocol import (
     DRONE_CAP,
     DRONE_STRIDE,
     EBULLET_STRIDE,
+    FLAG_FIRING,
     H_ALPHA,
     H_EBULLET_N,
+    H_FLAGS,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
@@ -39,6 +42,31 @@ def test_manifest_contract() -> None:
         "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
     }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
+
+
+def test_manifest_publishes_the_button_bits_so_js_never_hardcodes_them() -> None:
+    assert Game().manifest()["buttons"] == {"FIRE": 1, "BOMB": 2, "PAUSE": 4}
+
+
+def test_fire_button_sets_the_firing_flag_and_releasing_clears_it() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert int(game.buffers["header"][H_FLAGS]) & FLAG_FIRING
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert int(game.buffers["header"][H_FLAGS]) & FLAG_FIRING == 0
+
+
+def test_firing_flag_is_set_on_a_zero_step_tick_too() -> None:
+    game = Game()
+    game.tick(STEP_MS / 2, 1, 0.0, 0.0, 0.0, 0.0)
+    assert int(game.buffers["header"][H_FLAGS]) == FLAG_FIRING
+
+
+def test_bomb_and_pause_bits_have_no_gameplay_effect_in_phase_one() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.BOMB | Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    assert int(game.buffers["header"][H_FLAGS]) == 0
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
 
 
 def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
