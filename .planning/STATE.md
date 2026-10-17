@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-10-17T16:33:11.438Z"
+stopped_at: Completed 01-08-PLAN.md
+last_updated: "2026-10-17T16:52:24.616Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: 03f3b3703dc24489ef11999e52d42726e66a7cc9
+state_head: 58244c44f266839f026f1b9183a78f607b5f2275
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P05 | 16 min | 2 tasks | 15 files |
 | Phase 01 P06 | 13 min | 2 tasks | 22 files |
 | Phase 01 P07 | 20 min | 2 tasks | 21 files |
+| Phase 01 P08 | 22 min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Hitbox marker is a depth-test-off core plus dark ring (renderOrder 20/21) built from manifest.tuning.hitbox_radius, never gated behind a focus mode
 - [Phase 01]: 01-07: resolve_shots_vs_drones visits bolts descending with immediate swap-remove (no consumed-flag array); drone order is the grid query order
 - [Phase 01]: 01-07: make perf holds fire and sweeps (--fire 1) so the 3 ms budget covers bolts, drones and the grid
+- [Phase 01]: 01-08: resume drops owed touch drag and app-switcher keys (Alt/Meta/Ctrl/Tab) do not count as the resume press
+- [Phase 01]: 01-08: scroll e2e checks per-frame sim progress against rAF dt (plus real-time rate when the 3-step cap is not engaged) instead of a wall-clock floor; gameplay timing unchanged
 
 ### Pending Todos
 
@@ -114,6 +117,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T16:33:11.407Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-10-17T16:52:24.588Z
+Stopped at: Completed 01-08-PLAN.md
 Resume file: None
