@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Completed 01-08-PLAN.md
-last_updated: "2026-10-17T16:52:24.616Z"
+stopped_at: Completed 01-09-PLAN.md
+last_updated: "2026-10-17T17:14:04.690Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: 58244c44f266839f026f1b9183a78f607b5f2275
+state_head: 6de86d5df5db72285fef2e4dd1ac4bdef5073e12
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P06 | 13 min | 2 tasks | 22 files |
 | Phase 01 P07 | 20 min | 2 tasks | 21 files |
 | Phase 01 P08 | 22 min | 2 tasks | 17 files |
+| Phase 01 P09 | 20 min | 2 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-07: make perf holds fire and sweeps (--fire 1) so the 3 ms budget covers bolts, drones and the grid
 - [Phase 01]: 01-08: resume drops owed touch drag and app-switcher keys (Alt/Meta/Ctrl/Tab) do not count as the resume press
 - [Phase 01]: 01-08: scroll e2e checks per-frame sim progress against rAF dt (plus real-time rate when the 3-step cap is not engaged) instead of a wall-clock floor; gameplay timing unchanged
+- [Phase 01]: 01-09: keyboard, touch, sampler and pause controller are created after the start gate, so the gate tap/key never reaches them; only pointerType decides touch mode
+- [Phase 01]: 01-09: __scorched.audioState is a live getter on AudioContext.state (resume() settles asynchronously)
+- [Phase 01]: 01-09: error panel Copy report appends the device report layout even without a debug session; text via textContent only; ?crash values are allow-listed on JS and Python sides
 
 ### Pending Todos
 
@@ -117,6 +121,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T16:52:24.588Z
-Stopped at: Completed 01-08-PLAN.md
+Last session: 2026-10-17T17:14:04.653Z
+Stopped at: Completed 01-09-PLAN.md
 Resume file: None
