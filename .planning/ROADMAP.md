@@ -36,11 +36,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Game speed is identical on 60 Hz and high-refresh displays. Hiding the tab or switching away auto-pauses the game, and returning resumes it without a time jump.
   5. A deliberately triggered runtime error shows an on-screen error panel instead of a frozen page, and the Python game core's test suite passes headlessly under pytest.
 
-**Plans:** 1/10 plans executed
+**Plans:** 2/10 plans executed
 
 Plans:
 - [x] 01-01-PLAN.md — Walking skeleton: approve deps; tracer moves a Python-driven ship in a production build; convention guards
-- [ ] 01-02-PLAN.md — Shareable link: gated CI/CD to GitHub Pages (gh-pages branch), PR-preview wiring, user creates repo (D-05), live smoke
+- [x] 01-02-PLAN.md — Shareable link: gated CI/CD to GitHub Pages (gh-pages branch), PR-preview wiring, user creates repo (D-05), live smoke
 - [ ] 01-03-PLAN.md — Stress mode: `?stress=N` Python bullets via one instanced draw, bloom pipeline, 3 ms Python budget check
 - [ ] 01-04-PLAN.md — Auto quality tiers with verify-and-lock step-down, `?tier=`, on-device `?debug` overlay and copyable report
 - [ ] 01-05-PLAN.md — Letterboxed portrait playfield with fixed tilted camera fit and dimmed margins; Python-driven scrolling 3D terrain
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Playable Core on Real Devices | 1/10 | In Progress | - |
+| 1. Playable Core on Real Devices | 2/10 | In Progress | - |
 | 2. Arcade Shooting Feel | 0/TBD | Not started | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

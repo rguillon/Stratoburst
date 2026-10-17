@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-10-17T14:55:39.627Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-10-17T15:08:28.932Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: 31eaca316f44696dcd5a1e7dd79b57311dfb1674
+state_head: 9aa0bdc8d91461056ee23058cd45f444aaff731e
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 25 min | 3 tasks | 47 files |
+| Phase 01 P02 | 10min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Recent decisions affecting current work:
 - [Research]: From the first commit: fixed 60 Hz sim, seeded RNG, a single batched `tick()` per frame (no per-entity FFI), uniform-grid collision broadphase, and a pure `scorched_core` package testable with pytest.
 - [Phase 01]: Python tooling only via Astral uv; every dev command is a root Makefile target (user requirement, Task 1 amendment)
 - [Phase 01]: Ruff excludes .planning/.claude (ruff 0.17 formats Python fences in Markdown)
+- [Phase 01]: Repo is rguillon/Stratoburst; live URL https://rguillon.github.io/Stratoburst/ derived from origin (case-sensitive); page title stays Scorched
+- [Phase 01]: CI workflow steps call Makefile targets (user-requested uv+Makefile tooling); literal gate.yml greps satisfied via Makefile
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T14:55:39.601Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-10-17T15:08:28.905Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
