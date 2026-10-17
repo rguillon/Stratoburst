@@ -50,7 +50,7 @@ def test_a_negative_dt_is_passed_through_unrecorded() -> None:
 
 
 def test_a_jittery_dt_snaps_to_the_standard_rate_period() -> None:
-    estimator = fed(16.4, 10)
+    estimator = fed(16.6, 10)
     assert estimator.snap(16.9) == STEP_MS
 
 

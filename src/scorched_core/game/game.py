@@ -5,6 +5,7 @@ from array import array
 from typing import Final
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
+from scorched_core.clock.refresh_estimator import RefreshEstimator
 from scorched_core.collision.circle_hits import resolve_shots_vs_drones
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.drone_swarm import DroneSwarm
@@ -76,6 +77,7 @@ class Game:
         "ebullets",
         "grid",
         "pbullets",
+        "refresh",
         "rng",
         "ship",
         "storm",
@@ -105,6 +107,7 @@ class Game:
         self._firing = False
         self._move_x = 0.0
         self._move_y = 0.0
+        self.refresh = RefreshEstimator()
         self._runner = FixedStepRunner(self._step)
         self.buffers: dict[str, array] = {
             "header": array("f", bytes(4 * HEADER_LEN)),
@@ -147,7 +150,7 @@ class Game:
         # distance only once; a frame that runs none keeps it for the next call.
         if drag_x or drag_y:
             self.ship.add_drag(drag_x, drag_y)
-        steps = self._runner.advance(dt_ms)
+        steps = self._runner.advance(self.refresh.snap(dt_ms))
         header = self.buffers["header"]
         header[H_STEPS] = steps
         header[H_ALPHA] = self._runner.alpha
