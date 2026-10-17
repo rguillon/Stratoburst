@@ -4,6 +4,8 @@ import { PYODIDE_VERSION, loadRuntime } from './boot/runtime_loader.js';
 import { startGame } from './python/python_bridge.js';
 import { createFrameLoop } from './loop/frame_loop.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
+import { createTouchInput } from './input/touch_input.js';
+import { createInputSampler } from './input/input_sampler.js';
 import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
@@ -73,7 +75,24 @@ async function main() {
         startMs: performance.now(),
       })
     : null;
-  const keyboard = createKeyboardInput();
+  // Touch mode is decided by the two devices themselves: a touch pointerdown turns it on (and
+  // with it auto-fire), any later keydown turns it off. The sampler owns the flag.
+  let sampler = null;
+  const keyboard = createKeyboardInput(window, { onKeyDown: () => sampler?.setTouchMode(false) });
+  const touch = createTouchInput(document.getElementById('app'), {
+    onTouchMode: () => sampler?.setTouchMode(true),
+  });
+  const mapperArgs = { camera: rig.camera, viewportW: 1, viewportH: 1, shipWorld: ship.position };
+  sampler = createInputSampler({
+    keyboard,
+    touch,
+    buttonBits: manifest.buttons,
+    getMapperArgs() {
+      mapperArgs.viewportW = canvas.clientWidth;
+      mapperArgs.viewportH = canvas.clientHeight;
+      return mapperArgs;
+    },
+  });
   const world = new THREE.Vector3();
 
   const loop = createFrameLoop({
@@ -84,9 +103,9 @@ async function main() {
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }
-      const input = keyboard.sample(manifest.buttons);
+      const input = sampler.sample();
       const tickStart = debug ? performance.now() : 0;
-      tick(dt, input.buttons, input.moveX, input.moveY, 0, 0);
+      tick(dt, input.buttons, input.moveX, input.moveY, input.dragX, input.dragY);
       const tickEnd = debug ? performance.now() : 0;
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
@@ -130,6 +149,14 @@ async function main() {
       // The four playfield corners in CSS pixels (e2e checks the letterboxing with it).
       projectPlayfield: () =>
         projectCorners(rig.camera, canvas.clientWidth, canvas.clientHeight, PLAYFIELD_W / 2, PLAYFIELD_H / 2),
+      // A playfield point (logical x, y) in CSS pixels, to assert 1:1 touch travel in e2e.
+      projectPoint(x, y) {
+        const p = rig.toWorld(x, y, new THREE.Vector3()).project(rig.camera);
+        return { x: ((p.x + 1) / 2) * canvas.clientWidth, y: ((1 - p.y) / 2) * canvas.clientHeight };
+      },
+      get touchMode() {
+        return sampler.touchMode;
+      },
       get tier() {
         return currentTier;
       },

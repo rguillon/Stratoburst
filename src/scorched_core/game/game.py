@@ -117,14 +117,18 @@ class Game:
         buttons: int,
         move_x: float,
         move_y: float,
-        drag_x: float,  # noqa: ARG002 - consumed by plans 01-06 and 01-08
-        drag_y: float,  # noqa: ARG002 - consumed by plans 01-06 and 01-08
+        drag_x: float,
+        drag_y: float,
     ) -> int:
         """Advance the simulation by ``dt_ms`` and pack the header; return steps run."""
         self._move_x = move_x
         self._move_y = move_y
         # BOMB is accepted and unused in Phase 1 (D-11 reserves the key); PAUSE arrives in 01-08.
         self._firing = bool(buttons & Button.FIRE)
+        # Queued once per call, so a frame that runs several steps still moves by the finger
+        # distance only once; a frame that runs none keeps it for the next call.
+        if drag_x or drag_y:
+            self.ship.add_drag(drag_x, drag_y)
         steps = self._runner.advance(dt_ms)
         header = self.buffers["header"]
         header[H_STEPS] = steps
