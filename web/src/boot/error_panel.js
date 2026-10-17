@@ -48,6 +48,10 @@ export function installErrorPanel(doc = document) {
     onFatal(cb) {
       fatalCallbacks.push(cb);
     },
+    // RED skeletons: implemented in the GREEN commit.
+    setReportProvider() {},
+    showNotice() {},
+    hideNotice() {},
     get shown() {
       return panel !== null;
     },

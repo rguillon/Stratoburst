@@ -10,6 +10,7 @@ from scorched_core.collision.circle_hits import resolve_shots_vs_drones
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.drone_swarm import DroneSwarm
 from scorched_core.entities.player_ship import PlayerShip
+from scorched_core.game.fault_mode import FaultMode
 from scorched_core.input.button import Button
 from scorched_core.input.input_frame import InputFrame
 from scorched_core.pools.bullet_pool import BulletPool
@@ -76,6 +77,7 @@ class Game:
         "buffers",
         "ebullet_cap",
         "ebullets",
+        "fault",
         "grid",
         "input",
         "paused",
@@ -92,7 +94,10 @@ class Game:
         "twin",
     )
 
-    def __init__(self, *, seed: int = 1, stress: int = 0) -> None:
+    def __init__(
+        self, *, seed: int = 1, stress: int = 0, fault: FaultMode = FaultMode.NONE
+    ) -> None:
+        self.fault = fault  # RED skeleton: stored, not acted on yet
         self.rng = random.Random(seed)  # noqa: S311 - gameplay randomness, not security
         self.stress = min(max(stress, 0), EBULLET_MAX_CAP)
         self.ebullet_cap = min(EBULLET_MAX_CAP, max(EBULLET_MIN_CAP, self.stress))

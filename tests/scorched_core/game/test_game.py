@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from scorched_core.clock.fixed_step_runner import STEP_MS
+from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
 from scorched_core.protocol import (
@@ -592,3 +593,28 @@ def test_pausing_from_js_while_pause_is_held_does_not_unpause_paused() -> None:
     game.set_paused(True)  # a blur while Escape is still down
     game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
     assert game.paused
+
+
+def _run_ticks(game: Game, count: int) -> None:
+    for _ in range(count):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_a_game_injects_no_fault_by_default() -> None:
+    assert Game().fault is FaultMode.NONE
+
+
+def test_the_python_fault_waits_for_step_120_and_not_119_fault() -> None:
+    game = Game(fault=FaultMode.PY)
+    _run_ticks(game, FAULT_TICK - 1)
+    assert game.tick_count == FAULT_TICK - 1
+    with pytest.raises(RuntimeError, match=r"Injected Python fault \(\?crash=py\) at tick 120"):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.tick_count == FAULT_TICK
+
+
+@pytest.mark.parametrize("fault", [FaultMode.NONE, FaultMode.JS])
+def test_only_the_python_fault_mode_raises_in_the_simulation_fault(fault: FaultMode) -> None:
+    game = Game(fault=fault)
+    _run_ticks(game, 300)
+    assert game.tick_count == 300
