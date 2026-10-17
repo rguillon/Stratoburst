@@ -5,6 +5,7 @@ from array import array
 from typing import Final
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
+from scorched_core.collision.circle_hits import resolve_shots_vs_drones
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.drone_swarm import DroneSwarm
 from scorched_core.entities.player_ship import PlayerShip
@@ -156,10 +157,13 @@ class Game:
         header[H_FLAGS] = FLAG_FIRING if self._firing else 0
         header[H_TICK_COUNT] = self.tick_count
         header[H_PBULLET_N] = self.pbullets.n
+        header[H_DRONE_N] = self.swarm.n
+        header[H_DRONES_DOWN] = self.swarm.destroyed
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
         if steps > 0:
             self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
+            self.swarm.pack_into(self.buffers["drones"])
             self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 
@@ -169,6 +173,8 @@ class Game:
         self.twin.step(self._firing, self.ship.x, self.ship.y, self.pbullets)
         self.pbullets.integrate()
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
+        self.swarm.step()
+        resolve_shots_vs_drones(self.pbullets, self.swarm, self.grid, self._scratch)
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1

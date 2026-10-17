@@ -1,6 +1,8 @@
 // Python tick cost in real Pyodide on Node: loads the repository's own scorched_core and
 // scorched_web sources, runs the stress storm headlessly and fails above the budget.
-// Usage: node tools/perf_node.mjs [--stress 500] [--ticks 600] [--budget-ms 3]
+// Usage: node tools/perf_node.mjs [--stress 500] [--ticks 600] [--budget-ms 3] [--fire 1]
+// --fire 1 holds the fire button and sweeps the ship, so twin-shot bolts, the drone swarm and
+// the grid broadphase are exercised on top of the stress storm.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,13 +13,13 @@ const WARMUP_TICKS = 120;
 const FRAME_MS = 16.667;
 
 function parseArgs(argv) {
-  const options = { stress: 500, ticks: 600, budgetMs: 3 };
-  const keys = { '--stress': 'stress', '--ticks': 'ticks', '--budget-ms': 'budgetMs' };
+  const options = { stress: 500, ticks: 600, budgetMs: 3, fire: 0 };
+  const keys = { '--stress': 'stress', '--ticks': 'ticks', '--budget-ms': 'budgetMs', '--fire': 'fire' };
   for (let i = 0; i < argv.length; i += 2) {
     const key = keys[argv[i]];
     const value = Number(argv[i + 1]);
     if (!key || !Number.isFinite(value)) {
-      throw new Error(`usage: perf_node.mjs [--stress N] [--ticks N] [--budget-ms N] (got ${argv[i]} ${argv[i + 1]})`);
+      throw new Error(`usage: perf_node.mjs [--stress N] [--ticks N] [--budget-ms N] [--fire 0|1] (got ${argv[i]} ${argv[i + 1]})`);
     }
     options[key] = value;
   }
@@ -63,12 +65,16 @@ for (const [name, { stride, cap }] of Object.entries(manifest.channels)) {
 }
 const tick = game.tick;
 
-for (let i = 0; i < WARMUP_TICKS; i++) tick(FRAME_MS, 0, 0, 0, 0, 0);
+const buttons = options.fire ? manifest.buttons.FIRE : 0;
+// Sweeping left and right 90 ticks at a time lets the bolts cross the drones' path.
+const sweep = (i) => (options.fire ? (Math.floor(i / 90) % 2 === 0 ? 1 : -1) : 0);
+
+for (let i = 0; i < WARMUP_TICKS; i++) tick(FRAME_MS, buttons, sweep(i), 0, 0, 0);
 
 const samples = new Float64Array(options.ticks);
 for (let i = 0; i < options.ticks; i++) {
   const start = performance.now();
-  tick(FRAME_MS, 0, 0, 0, 0, 0);
+  tick(FRAME_MS, buttons, sweep(WARMUP_TICKS + i), 0, 0, 0);
   samples[i] = performance.now() - start;
 }
 
@@ -77,6 +83,7 @@ const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
 const round = (v) => Math.round(v * 10000) / 10000;
 const result = {
   stress: options.stress,
+  fire: options.fire,
   ticks: options.ticks,
   avg_ms: round(avg),
   p95_ms: round(percentile(sorted, 0.95)),

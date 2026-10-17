@@ -366,7 +366,8 @@ def test_a_zero_step_tick_keeps_the_drone_buffer_but_reports_the_count() -> None
 def test_a_bolt_that_reaches_a_drone_costs_it_a_hit_through_the_game_step() -> None:
     game = Game()
     swarm = game.swarm
-    swarm.x[0], swarm.y[0], swarm.hp[0], swarm.n = game.ship.x, game.ship.y - 40.0, 3, 1
+    swarm.x[0] = swarm.base_x[0] = game.ship.x
+    swarm.y[0], swarm.hp[0], swarm.n = game.ship.y - 40.0, 3, 1
     game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert swarm.hp[0] == 2
@@ -376,7 +377,8 @@ def test_a_bolt_that_reaches_a_drone_costs_it_a_hit_through_the_game_step() -> N
 def test_drones_down_counts_destroyed_drones_in_the_header() -> None:
     game = Game()
     swarm = game.swarm
-    swarm.x[0], swarm.y[0], swarm.hp[0], swarm.n = game.ship.x, game.ship.y - 40.0, 1, 1
+    swarm.x[0] = swarm.base_x[0] = game.ship.x
+    swarm.y[0], swarm.hp[0], swarm.n = game.ship.y - 40.0, 1, 1
     game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_DRONE_N] == 0

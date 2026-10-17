@@ -8,14 +8,17 @@ test('holding Space fires', async ({ page }) => {
   await page.waitForTimeout(1000);
   expect(await readSlot(page, 'PBULLET_N')).toBeGreaterThan(0);
   await page.keyboard.up('Space');
-  // Bolts keep flying up and leave the screen within about 0.6 s.
-  await expect.poll(() => readSlot(page, 'PBULLET_N'), { timeout: 1500 }).toBe(0);
+  // Bolts keep flying up and leave the screen after about 36 steps (0.6 s of simulation); the
+  // wait is generous because a loaded software-GL runner steps slower than 60 Hz.
+  await expect.poll(() => readSlot(page, 'PBULLET_N'), { timeout: 10_000 }).toBe(0);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
 
 test('drones appear and can be shot down', async ({ page }) => {
   await bootGame(page, '?debug');
-  await expect.poll(() => readSlot(page, 'DRONE_N'), { timeout: 3000 }).toBeGreaterThanOrEqual(1);
+  // The first drone appears after 40 simulation steps; on a loaded software-GL runner that
+  // can take several wall-clock seconds, so the wait is generous (the timing is not under test).
+  await expect.poll(() => readSlot(page, 'DRONE_N'), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
 
   // Hold fire and sweep the ship left and right until something goes down.
   await page.keyboard.down('Space');

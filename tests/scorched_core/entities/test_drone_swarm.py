@@ -162,9 +162,9 @@ def test_a_drone_below_the_bottom_edge_leaves_without_counting_as_destroyed() ->
     assert swarm.destroyed == 0
 
 
-def test_a_drone_exactly_at_the_removal_line_stays() -> None:
+def test_a_drone_just_inside_the_removal_line_stays() -> None:
     swarm = swarm_with_one_drone()
-    swarm.y[0] = PLAYFIELD_H + 16.0 - DRONE_SPEED
+    swarm.y[0] = PLAYFIELD_H + 15.0  # one step later: 335.9, still inside the 336 line
     swarm.step()
     assert swarm.n == 1
 

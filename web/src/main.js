@@ -10,6 +10,7 @@ import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
+import { createDroneInstances } from './render/drone_instances.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createDebugSession } from './debug/debug_session.js';
@@ -52,6 +53,13 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(pbullets.mesh);
+  const drones = createDroneInstances({
+    data: bridge.channels.drones,
+    capacity: manifest.channels.drones.cap,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(drones.mesh);
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
   rig.prewarm();
@@ -122,6 +130,7 @@ async function main() {
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
+      drones.update(header[slots.DRONE_N]);
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz.
       rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);
