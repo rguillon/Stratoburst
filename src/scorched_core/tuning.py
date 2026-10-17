@@ -40,7 +40,8 @@ DRONE_SWAY_PERIOD: Final = 120  # steps per full sway cycle
 DRONE_SPAWN_INTERVAL: Final = 40  # steps between spawns
 DRONE_MAX_ALIVE: Final = 10
 DRONE_FLASH_TICKS: Final = 6
-DRONE_SPAWN_MARGIN_X: Final = 24.0
+# Derived so a drone at full sway still lies wholly inside the playfield.
+DRONE_SPAWN_MARGIN_X: Final = DRONE_SWAY + DRONE_RADIUS
 
 # Broadphase cell edge; must be at least DRONE_RADIUS + PBULLET_RADIUS so a 3x3 query suffices.
 GRID_CELL: Final = 32.0

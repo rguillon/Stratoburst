@@ -5,11 +5,12 @@ from array import array
 import pytest
 
 from scorched_core.entities.drone_swarm import DroneSwarm
-from scorched_core.protocol import DRONE_CAP, DRONE_STRIDE, PLAYFIELD_H
+from scorched_core.protocol import DRONE_CAP, DRONE_STRIDE, PLAYFIELD_H, PLAYFIELD_W
 from scorched_core.tuning import (
     DRONE_FLASH_TICKS,
     DRONE_HP,
     DRONE_MAX_ALIVE,
+    DRONE_RADIUS,
     DRONE_SPAWN_INTERVAL,
     DRONE_SPAWN_MARGIN_X,
     DRONE_SPEED,
@@ -43,7 +44,7 @@ def test_the_first_drone_appears_on_step_thirty_nine_above_the_top_edge() -> Non
         swarm.step()
     assert swarm.n == 1
     assert swarm.y[0] == pytest.approx(-12.0)
-    assert 24.0 <= swarm.x[0] <= 216.0
+    assert DRONE_SPAWN_MARGIN_X <= swarm.x[0] <= 240.0 - DRONE_SPAWN_MARGIN_X
     assert swarm.hp[0] == DRONE_HP
     assert swarm.flash[0] == 0
 
@@ -56,6 +57,16 @@ def test_spawn_x_stays_within_the_margins_for_many_spawns() -> None:
         seen.extend(swarm.base_x[i] for i in range(swarm.n))
     assert seen
     assert all(DRONE_SPAWN_MARGIN_X <= v <= 240.0 - DRONE_SPAWN_MARGIN_X for v in seen)
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 5, 99])
+def test_a_drone_stays_wholly_inside_the_playfield_for_its_whole_lifetime(seed: int) -> None:
+    swarm = make_swarm(seed)
+    tolerance = 1e-3  # positions are stored as float32
+    for _ in range(20_000):
+        swarm.step()
+        for i in range(swarm.n):
+            assert DRONE_RADIUS - tolerance <= swarm.x[i] <= PLAYFIELD_W - DRONE_RADIUS + tolerance
 
 
 def test_a_drone_spawns_every_forty_steps() -> None:
