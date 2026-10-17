@@ -210,6 +210,7 @@ Conventions not yet established. Will populate as patterns emerge during develop
 - **One class per file.** The file is named after the class in snake_case (`PlayerShip` → `player_ship.py`).
 - **Consistent subdirectories:** organize by domain (e.g. `entities/`, `weapons/`, `stages/`, `collision/`, `scoring/`, `bridge/`). The test tree mirrors the source tree (`tests/<same path>/test_<module>.py`).
 - **pytest, 100% coverage:** all Python code is tested with pytest at 100% line + branch coverage, enforced with `pytest --cov --cov-branch --cov-fail-under=100`. A task is not done until the gate passes. The Pyodide adapter is tested against a fake `js` module so it is measured natively. Avoid `# pragma: no cover` except for genuinely unreachable code, and justify each one.
+- **Tooling — uv + Makefile:** Python environments and dependencies are managed only with Astral `uv` (`uv sync`, `uv run …`, committed `uv.lock`; never pip/venv directly). Every developer and CI action is exposed as a target in a root `Makefile` (e.g. `install`, `lint`, `format`, `test`, `build`, `preview`, `e2e`, `perf`, `check` for the full gate, `clean`); CI workflows and docs invoke `make <target>` rather than raw commands. When a plan adds a new command, add a matching Makefile target. — user requirement
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 
