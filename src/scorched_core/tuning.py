@@ -30,3 +30,17 @@ PBULLET_SPEED: Final = 8.0
 PBULLET_RADIUS: Final = 2.0
 TWIN_OFFSET: Final = 5.0
 MUZZLE_AHEAD: Final = 10.0
+
+# Drifting air drones (D-14): plain block targets that sway down the screen.
+DRONE_RADIUS: Final = 8.0
+DRONE_HP: Final = 3
+DRONE_SPEED: Final = 0.9  # units per step, downward
+DRONE_SWAY: Final = 30.0  # sinusoidal sway amplitude in units
+DRONE_SWAY_PERIOD: Final = 120  # steps per full sway cycle
+DRONE_SPAWN_INTERVAL: Final = 40  # steps between spawns
+DRONE_MAX_ALIVE: Final = 10
+DRONE_FLASH_TICKS: Final = 6
+DRONE_SPAWN_MARGIN_X: Final = 24.0
+
+# Broadphase cell edge; must be at least DRONE_RADIUS + PBULLET_RADIUS so a 3x3 query suffices.
+GRID_CELL: Final = 32.0

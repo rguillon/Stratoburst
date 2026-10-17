@@ -11,6 +11,8 @@ from scorched_core.protocol import (
     EBULLET_STRIDE,
     FLAG_FIRING,
     H_ALPHA,
+    H_DRONE_N,
+    H_DRONES_DOWN,
     H_EBULLET_N,
     H_FLAGS,
     H_PBULLET_N,
@@ -310,3 +312,89 @@ def test_a_zero_step_tick_reports_the_bolt_count_but_keeps_the_buffer() -> None:
     game.tick(STEP_MS / 2, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_PBULLET_N] == 2
     assert game.buffers["pbullets"].tobytes() == before
+
+
+def _sweep_and_fire(game: Game, ticks: int) -> None:
+    """A scripted pilot: fire held, sweeping left and right 60 ticks at a time."""
+    for tick in range(ticks):
+        direction = 1.0 if (tick // 60) % 2 == 0 else -1.0
+        game.tick(STEP_MS, Button.FIRE, direction, 0.0, 0.0, 0.0)
+
+
+def _track_nearest_drone_and_fire(game: Game, ticks: int) -> None:
+    """A scripted pilot: steer under the lowest drone and keep fire held."""
+    swarm = game.swarm
+    for _ in range(ticks):
+        move_x = 0.0
+        if swarm.n:
+            lowest = max(range(swarm.n), key=lambda i: swarm.y[i])
+            dx = swarm.x[lowest] - game.ship.x
+            move_x = 0.0 if abs(dx) < 2.0 else (1.0 if dx > 0 else -1.0)
+        game.tick(STEP_MS, Button.FIRE, move_x, 0.0, 0.0, 0.0)
+
+
+def test_the_header_counts_drones_from_step_forty_on() -> None:
+    game = Game()
+    for _ in range(39):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_DRONE_N] == 0
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_DRONE_N] == 1
+    assert game.buffers["header"][H_DRONES_DOWN] == 0
+
+
+def test_drones_are_packed_into_the_drone_channel() -> None:
+    game = Game()
+    for _ in range(40):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    drones = game.buffers["drones"]
+    assert drones[0] == game.swarm.x[0]
+    assert drones[1] == game.swarm.y[0]
+    assert drones[5] == 1.0
+
+
+def test_a_zero_step_tick_keeps_the_drone_buffer_but_reports_the_count() -> None:
+    game = Game()
+    for _ in range(40):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    before = game.buffers["drones"].tobytes()
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["drones"].tobytes() == before
+    assert game.buffers["header"][H_DRONE_N] == 1
+
+
+def test_a_bolt_that_reaches_a_drone_costs_it_a_hit_through_the_game_step() -> None:
+    game = Game()
+    swarm = game.swarm
+    swarm.x[0], swarm.y[0], swarm.hp[0], swarm.n = game.ship.x, game.ship.y - 40.0, 3, 1
+    game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert swarm.hp[0] == 2
+    assert game.pbullets.n == 0
+
+
+def test_drones_down_counts_destroyed_drones_in_the_header() -> None:
+    game = Game()
+    swarm = game.swarm
+    swarm.x[0], swarm.y[0], swarm.hp[0], swarm.n = game.ship.x, game.ship.y - 40.0, 1, 1
+    game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_DRONE_N] == 0
+    assert game.buffers["header"][H_DRONES_DOWN] == 1
+
+
+def test_the_same_seed_and_inputs_give_byte_identical_buffers_determinism() -> None:
+    def run(seed: int) -> tuple[bytes, ...]:
+        game = Game(seed=seed)
+        _sweep_and_fire(game, 600)
+        return tuple(game.buffers[name].tobytes() for name in ("header", "pbullets", "drones"))
+
+    assert run(11) == run(11)
+    assert run(11) != run(12)
+
+
+def test_scripted_kill_ship_tracking_the_nearest_drone_downs_three_within_1200_ticks() -> None:
+    game = Game()
+    _track_nearest_drone_and_fire(game, 1200)
+    assert game.buffers["header"][H_DRONES_DOWN] >= 3
+    assert game.swarm.destroyed == game.buffers["header"][H_DRONES_DOWN]

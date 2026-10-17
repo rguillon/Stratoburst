@@ -5,6 +5,8 @@ from array import array
 from typing import Final
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
+from scorched_core.collision.uniform_grid import UniformGrid
+from scorched_core.entities.drone_swarm import DroneSwarm
 from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.input.button import Button
 from scorched_core.pools.bullet_pool import BulletPool
@@ -37,7 +39,7 @@ from scorched_core.protocol import (
 )
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
-from scorched_core.tuning import HITBOX_RADIUS, SCROLL_SPEED
+from scorched_core.tuning import GRID_CELL, HITBOX_RADIUS, SCROLL_SPEED
 from scorched_core.weapons.twin_shot import TwinShot
 
 # Bolts are culled once they are this far outside the playfield.
@@ -67,15 +69,18 @@ class Game:
         "_move_x",
         "_move_y",
         "_runner",
+        "_scratch",
         "buffers",
         "ebullet_cap",
         "ebullets",
+        "grid",
         "pbullets",
         "rng",
         "ship",
         "storm",
         "storm_hits",
         "stress",
+        "swarm",
         "terrain",
         "tick_count",
         "twin",
@@ -89,6 +94,9 @@ class Game:
         self.ebullets = BulletPool(self.ebullet_cap)
         self.pbullets = BulletPool(PBULLET_CAP)
         self.twin = TwinShot()
+        self.swarm = DroneSwarm(self.rng)
+        self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, DRONE_CAP)
+        self._scratch = array("i", bytes(4 * DRONE_CAP))
         self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
         self.storm_hits = 0
         self.terrain = TerrainScroll()
