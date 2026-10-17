@@ -70,6 +70,14 @@ describe('buildReport', () => {
     expect(text).toContain('refresh-capped-or-cpu-bound');
   });
 
+  it('reports the time to the start gate in seconds', () => {
+    expect(buildReport({ ...FULL, timeToGateMs: 4210 })).toContain('time to gate: 4.2 s');
+  });
+
+  it('shows n/a for the time to the start gate when it was not measured', () => {
+    expect(buildReport(FULL)).toContain('time to gate: n/a');
+  });
+
   it('renders missing optional fields as n/a, never undefined or NaN', () => {
     const text = buildReport({});
     expect(text).not.toMatch(/undefined|NaN|null/);
