@@ -23,8 +23,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Player & Weapons
 
-- [ ] **PLYR-01**: Player can move the ship in 8 directions within the playfield with responsive, consistent speed
-- [ ] **PLYR-02**: Player ship has a small hitbox core that is visibly marked on the ship
+- [x] **PLYR-01**: Player can move the ship in 8 directions within the playfield with responsive, consistent speed
+- [x] **PLYR-02**: Player ship has a small hitbox core that is visibly marked on the ship
 - [ ] **PLYR-03**: Player can fire a main weapon (hold to fire on keyboard; auto-fire on touch)
 - [ ] **PLYR-04**: Player can collect colored weapon pickups: red (vulcan spread), blue (laser), purple (homing)
 - [ ] **PLYR-05**: Collecting the same color as the current weapon raises its level (up to 5); a different color switches weapon type
@@ -78,8 +78,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Input
 
-- [ ] **INPT-01**: Player can control the game by keyboard: arrows and WASD (layout-independent via physical keys), fire, bomb, pause
-- [ ] **INPT-02**: Player can control the ship by relative touch drag (1:1, ship never hidden under the finger) with auto-fire
+- [x] **INPT-01**: Player can control the game by keyboard: arrows and WASD (layout-independent via physical keys), fire, bomb, pause
+- [x] **INPT-02**: Player can control the ship by relative touch drag (1:1, ship never hidden under the finger) with auto-fire
 - [ ] **INPT-03**: Player can trigger a bomb on touch via a large on-screen button
 - [ ] **INPT-04**: Player can pause and resume on touch via an on-screen button
 - [ ] **INPT-05**: Player can navigate all menus and enter initials by keyboard and by touch
@@ -153,8 +153,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-09 | Phase 1 | Pending |
 | PLAT-10 | Phase 4 | Pending |
 | PLAT-11 | Phase 1 | Complete |
-| PLYR-01 | Phase 1 | Pending |
-| PLYR-02 | Phase 1 | Pending |
+| PLYR-01 | Phase 1 | Complete |
+| PLYR-02 | Phase 1 | Complete |
 | PLYR-03 | Phase 1 | Pending |
 | PLYR-04 | Phase 2 | Pending |
 | PLYR-05 | Phase 2 | Pending |
@@ -193,8 +193,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VISL-04 | Phase 2 | Pending |
 | VISL-05 | Phase 2 | Pending |
 | VISL-06 | Phase 2 | Pending |
-| INPT-01 | Phase 1 | Pending |
-| INPT-02 | Phase 1 | Pending |
+| INPT-01 | Phase 1 | Complete |
+| INPT-02 | Phase 1 | Complete |
 | INPT-03 | Phase 2 | Pending |
 | INPT-04 | Phase 4 | Pending |
 | INPT-05 | Phase 4 | Pending |

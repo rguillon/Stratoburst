@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-10-17T15:57:12.631Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-10-17T16:11:32.744Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: ac371a07e969750608637a315f2ff5b8bee9ed16
+state_head: 41bdfb0bcfecbfc78e5071b0722872241e27d94a
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P03 | 15 min | 2 tasks | 20 files |
 | Phase 01 P04 | 8min | 2 tasks | 20 files |
 | Phase 01 P05 | 16 min | 2 tasks | 15 files |
+| Phase 01 P06 | 13 min | 2 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Camera orientation fixed (25 deg tilt, 30 deg FOV); the fit varies only distance and look-at Z, and the playfield is letterboxed by a world-space dimming mask with a hole instead of CSS bars
 - [Phase 01]: Terrain is a 4-slot ring (slot = chunkIndex mod 4) rewritten only on chunk-index change, positions relative to the base chunk; scroll rendered as SCROLL_Y + ALPHA * tuning.scroll_speed
 - [Phase 01]: Scroll e2e runs at ?tier=low and checks scroll == 0.8 x ticks, since the fixed-step runner caps catch-up at 3 steps per frame and software GL is slow
+- [Phase 01]: Button bit values live in Python (Button IntFlag) and reach JS only via manifest.buttons; JS latches press edges and Python derives edges
+- [Phase 01]: Touch drag is a pending queue drained at SHIP_SPEED inside the fixed step, capped at TOUCH_LAG_CAP 40, with the wall rule zeroing a blocked axis
+- [Phase 01]: Hitbox marker is a depth-test-off core plus dark ring (renderOrder 20/21) built from manifest.tuning.hitbox_radius, never gated behind a focus mode
 
 ### Pending Todos
 
@@ -107,6 +111,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T15:57:12.604Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-10-17T16:11:23.961Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None
