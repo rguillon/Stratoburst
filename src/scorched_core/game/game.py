@@ -37,6 +37,7 @@ from scorched_core.protocol import (
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import HITBOX_RADIUS, SCROLL_SPEED
+from scorched_core.weapons.twin_shot import TwinShot
 
 _HEADER_SLOTS: dict[str, int] = {
     "STEPS": H_STEPS,
@@ -65,6 +66,7 @@ class Game:
         "buffers",
         "ebullet_cap",
         "ebullets",
+        "pbullets",
         "rng",
         "ship",
         "storm",
@@ -72,6 +74,7 @@ class Game:
         "stress",
         "terrain",
         "tick_count",
+        "twin",
     )
 
     def __init__(self, *, seed: int = 1, stress: int = 0) -> None:
@@ -80,6 +83,8 @@ class Game:
         self.ebullet_cap = min(EBULLET_MAX_CAP, max(EBULLET_MIN_CAP, self.stress))
         self.ship = PlayerShip()
         self.ebullets = BulletPool(self.ebullet_cap)
+        self.pbullets = BulletPool(PBULLET_CAP)
+        self.twin = TwinShot()
         self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
         self.storm_hits = 0
         self.terrain = TerrainScroll()

@@ -23,3 +23,10 @@ SCROLL_SPEED: Final = 0.8
 
 # Touch drag catch-up: the most finger movement (in units) the ship may still owe (INPT-02).
 TOUCH_LAG_CAP: Final = 40.0
+
+# Twin shot (PLYR-03): one volley every 5 steps, bolts travelling 8 units per step.
+FIRE_INTERVAL_TICKS: Final = 5
+PBULLET_SPEED: Final = 8.0
+PBULLET_RADIUS: Final = 2.0
+TWIN_OFFSET: Final = 5.0
+MUZZLE_AHEAD: Final = 10.0

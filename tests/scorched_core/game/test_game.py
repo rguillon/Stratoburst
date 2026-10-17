@@ -13,6 +13,7 @@ from scorched_core.protocol import (
     H_ALPHA,
     H_EBULLET_N,
     H_FLAGS,
+    H_PBULLET_N,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
@@ -242,3 +243,70 @@ def test_a_zero_drag_leaves_pending_alone() -> None:
     game.ship.pending_x = 5.0
     game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.ship.pending_x == 5.0
+
+
+def _hold_fire(game: Game, ticks: int) -> None:
+    for _ in range(ticks):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_holding_fire_adds_a_volley_every_five_steps() -> None:
+    game = Game()
+    _hold_fire(game, 30)  # volleys at steps 0, 5, ..., 25; none has left the screen yet
+    assert game.pbullets.n == 12
+    assert game.buffers["header"][H_PBULLET_N] == 12
+
+
+def test_the_first_tick_with_fire_spawns_the_pair_and_moves_it_one_step() -> None:
+    game = Game()
+    _hold_fire(game, 1)
+    ship = game.ship
+    xs = sorted((game.pbullets.x[0], game.pbullets.x[1]))
+    assert xs == [ship.x - 5.0, ship.x + 5.0]
+    assert game.pbullets.y[0] == pytest.approx(ship.y - 10.0 - 8.0)
+    packed = game.buffers["pbullets"]
+    assert (packed[0], packed[1], packed[2], packed[3]) == (
+        game.pbullets.x[0],
+        game.pbullets.y[0],
+        0.0,
+        0.0,
+    )
+    assert packed[4] == game.pbullets.x[1]
+
+
+def test_releasing_and_pressing_again_cannot_beat_the_fire_interval() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)  # step 0: volley
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)  # step 3
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)  # step 4
+    assert game.pbullets.n == 2
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)  # step 5
+    assert game.pbullets.n == 4
+
+
+def test_bolts_that_leave_the_playfield_are_culled() -> None:
+    game = Game()
+    _hold_fire(game, 1)
+    for _ in range(60):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.pbullets.n == 0
+    assert game.buffers["header"][H_PBULLET_N] == 0
+
+
+def test_a_full_player_pool_drops_the_volley() -> None:
+    game = Game()
+    for _ in range(PBULLET_CAP):
+        game.pbullets.spawn(10.0, 100.0, 0.0, 0.0)
+    _hold_fire(game, 1)
+    assert game.pbullets.n == PBULLET_CAP
+
+
+def test_a_zero_step_tick_reports_the_bolt_count_but_keeps_the_buffer() -> None:
+    game = Game()
+    _hold_fire(game, 1)
+    before = game.buffers["pbullets"].tobytes()
+    game.tick(STEP_MS / 2, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_PBULLET_N] == 2
+    assert game.buffers["pbullets"].tobytes() == before
