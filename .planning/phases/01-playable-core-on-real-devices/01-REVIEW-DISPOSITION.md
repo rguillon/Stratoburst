@@ -9,7 +9,7 @@ findings:
     title: "Non-finite or negative `dt_ms` is not validated at the Python boundary"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Drone sway amplitude is larger than the spawn margin, so drones leave the playfield"
   - id: WR-03
     severity: warning
@@ -21,7 +21,7 @@ findings:
     title: "Every `window` error or unhandled rejection is treated as fatal"
   - id: WR-05
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Deploy and preview jobs run `npm ci` and the build with a write token and persisted checkout credentials"
   - id: WR-06
     severity: warning
@@ -29,7 +29,7 @@ findings:
     title: "Ship, bullets and drones are rendered at discrete 60 Hz positions; only the terrain uses `ALPHA`"
   - id: WR-07
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Large parts of the JS runtime have no unit tests and there is no JS coverage gate"
   - id: WR-08
     severity: warning
@@ -71,9 +71,9 @@ findings:
     severity: info
     disposition: open
     title: "`_HEADER_SLOTS` is a mutable hand-maintained copy of the protocol constants"
-open: 12
+open: 9
 total: 17
-recorded: 2026-10-17T18:31:23.805Z
+recorded: 2026-10-17T18:41:44.473Z
 ---
 
 # Phase 01: Code Review Disposition
@@ -81,12 +81,12 @@ recorded: 2026-10-17T18:31:23.805Z
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
 | WR-01 | warning | fixed | 01-REVIEW-FIX.md |
-| WR-02 | warning | open | - |
+| WR-02 | warning | fixed | 01-REVIEW-FIX.md |
 | WR-03 | warning | fixed | 01-REVIEW-FIX.md |
 | WR-04 | warning | fixed | 01-REVIEW-FIX.md |
-| WR-05 | warning | open | - |
+| WR-05 | warning | fixed | 01-REVIEW-FIX.md |
 | WR-06 | warning | skipped | 01-REVIEW-FIX.md |
-| WR-07 | warning | open | - |
+| WR-07 | warning | fixed | 01-REVIEW-FIX.md |
 | WR-08 | warning | fixed | 01-REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
