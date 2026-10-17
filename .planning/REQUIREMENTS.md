@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Platform & Tech
 
-- [ ] **PLAT-01**: Player can open a single shareable URL (static hosting, no backend) and play in a desktop or mobile browser
+- [x] **PLAT-01**: Player can open a single shareable URL (static hosting, no backend) and play in a desktop or mobile browser
 - [x] **PLAT-02**: Game logic runs in Python (Pyodide) in the browser; rendering is three.js WebGL2
 - [x] **PLAT-03**: Player sees a loading screen with progress, then a "tap/click to start" gate (also unlocks audio)
-- [ ] **PLAT-04**: Game holds 60fps on a mid-range desktop browser with a full stage load (≈400+ bullets, effects on)
+- [x] **PLAT-04**: Game holds 60fps on a mid-range desktop browser with a full stage load (≈400+ bullets, effects on)
 - [ ] **PLAT-05**: Game stays playable (≥30fps steady, no input lag spikes) on a mid-range Android phone and a recent iPhone, using automatic quality tiers (DPR cap, reduced bloom)
 - [x] **PLAT-06**: Simulation runs on a fixed 60 Hz timestep, independent of display refresh rate
 - [x] **PLAT-07**: Gameplay runs in a fixed logical playfield (portrait arcade aspect) letterboxed to any screen size/orientation
@@ -142,10 +142,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAT-01 | Phase 1 | Pending |
+| PLAT-01 | Phase 1 | Complete |
 | PLAT-02 | Phase 1 | Complete |
 | PLAT-03 | Phase 1 | Complete |
-| PLAT-04 | Phase 1 | Pending |
+| PLAT-04 | Phase 1 | Complete |
 | PLAT-05 | Phase 1 | Pending |
 | PLAT-06 | Phase 1 | Complete |
 | PLAT-07 | Phase 1 | Complete |

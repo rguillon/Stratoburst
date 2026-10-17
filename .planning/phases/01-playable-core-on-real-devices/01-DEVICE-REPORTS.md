@@ -134,6 +134,16 @@ minute 0: frames 1864, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.08 ms, p95 ti
 
 The user's words: "I observed no problem, the animation with smoth on computer and phone." They did not go through the numbered items (5 to 12) one by one. Recorded as exactly that: no problem observed, and **no individual item is claimed as passed**. In particular these were not individually confirmed: letterbox in both orientations (6), 1:1 touch drag with auto-fire (8), auto-pause and resume without a jump (10), the `?crash=py` error panel (11), and the Network tab check for `content-encoding: br` from cdn.jsdelivr.net (12). The per-item checklist stays on the list for the verify-work UAT.
 
+## Ship and live verification (Task 3)
+
+| Check | Result |
+|-------|--------|
+| `git push origin main` (fast-forward `f52e3e2..060161b`, no force) | done; PR #1 state `closed`, `merged: true` (merged_at 2026-10-17T17:55:28Z) |
+| Deploy run for `060161b` | success (run 39055857002) |
+| `make e2e-live` (Playwright smoke against https://rguillon.github.io/Stratoburst/) | 1 passed |
+| Live `?debug` page, `__scorched.build` after the start gate | `060161b`, equals `git rev-parse --short HEAD` |
+| Preview cleanup (`pr-preview/pr-1`) | The closed-PR Preview run (39055858288) succeeded and the gh-pages commit `aea4958` "Remove preview for PR 1" deleted all preview files. The later Deploy commit `6d6a71d` did not restore them. `https://rguillon.github.io/Stratoburst/pr-preview/pr-1/` now returns HTTP 404. A single empty `pr-preview/pr-1/.nojekyll` file remains on gh-pages (cosmetic). |
+
 ## Pass/fail table
 
 Values are parsed from the report lines above. "Worst minute" excludes nothing; the final partial minute (628 frames) is 60.0 as well.
