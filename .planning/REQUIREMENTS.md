@@ -15,7 +15,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PLAT-04**: Game holds 60fps on a mid-range desktop browser with a full stage load (≈400+ bullets, effects on)
 - [ ] **PLAT-05**: Game stays playable (≥30fps steady, no input lag spikes) on a mid-range Android phone and a recent iPhone, using automatic quality tiers (DPR cap, reduced bloom)
 - [ ] **PLAT-06**: Simulation runs on a fixed 60 Hz timestep, independent of display refresh rate
-- [ ] **PLAT-07**: Gameplay runs in a fixed logical playfield (portrait arcade aspect) letterboxed to any screen size/orientation
+- [x] **PLAT-07**: Gameplay runs in a fixed logical playfield (portrait arcade aspect) letterboxed to any screen size/orientation
 - [ ] **PLAT-08**: Game auto-pauses when the tab loses focus or is hidden
 - [ ] **PLAT-09**: If a runtime error occurs, player sees an on-screen error panel instead of a frozen page
 - [ ] **PLAT-10**: Player can install the game to a phone home screen (PWA) and launch it fullscreen
@@ -49,7 +49,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Stages & Campaign
 
 - [ ] **STGE-01**: Player can play a campaign of at least 3 stages, each with distinct terrain/setting (e.g. burning city, desert, coast/fleet)
-- [ ] **STGE-02**: 3D terrain scrolls continuously beneath the gameplay plane, seen through a fixed tilted top-down camera
+- [x] **STGE-02**: 3D terrain scrolls continuously beneath the gameplay plane, seen through a fixed tilted top-down camera
 - [ ] **STGE-03**: Ground scenery (buildings, props) can be destroyed by the player's fire
 - [ ] **STGE-04**: Explosions and destroyed units leave persistent scorch marks and burning wrecks on the terrain
 - [ ] **STGE-05**: Player can choose a difficulty (Easy / Normal / Hard) that changes enemy bullet speed/density and lives
@@ -148,7 +148,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-04 | Phase 1 | Pending |
 | PLAT-05 | Phase 1 | Pending |
 | PLAT-06 | Phase 1 | Pending |
-| PLAT-07 | Phase 1 | Pending |
+| PLAT-07 | Phase 1 | Complete |
 | PLAT-08 | Phase 1 | Pending |
 | PLAT-09 | Phase 1 | Pending |
 | PLAT-10 | Phase 4 | Pending |
@@ -173,7 +173,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENMY-08 | Phase 2 | Pending |
 | ENMY-09 | Phase 3 | Pending |
 | STGE-01 | Phase 4 | Pending |
-| STGE-02 | Phase 1 | Pending |
+| STGE-02 | Phase 1 | Complete |
 | STGE-03 | Phase 3 | Pending |
 | STGE-04 | Phase 2 | Pending |
 | STGE-05 | Phase 4 | Pending |

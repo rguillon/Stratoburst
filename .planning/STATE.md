@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-10-17T15:31:58.502Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-10-17T15:57:12.631Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: 7cd348514f421f2eee38a62cdea6dc17f2107628
+state_head: ac371a07e969750608637a315f2ff5b8bee9ed16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P02 | 10min | 3 tasks | 10 files |
 | Phase 01 P03 | 15 min | 2 tasks | 20 files |
 | Phase 01 P04 | 8min | 2 tasks | 20 files |
+| Phase 01 P05 | 16 min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-04: tier controller strikes need three consecutive evaluations (earliest step-down at the 150th post-warm-up sample); deferred steps keep their strikes; verify-and-lock at <10% gain
 - [Phase 01]: 01-04: under ?debug renderer.info.autoReset is off and read/reset once per frame so draw calls cover all composer passes
 - [Phase 01]: 01-04: half-float render targets are checked up front; missing support forces and locks the low tier with reason bloom-unavailable
+- [Phase 01]: Camera orientation fixed (25 deg tilt, 30 deg FOV); the fit varies only distance and look-at Z, and the playfield is letterboxed by a world-space dimming mask with a hole instead of CSS bars
+- [Phase 01]: Terrain is a 4-slot ring (slot = chunkIndex mod 4) rewritten only on chunk-index change, positions relative to the base chunk; scroll rendered as SCROLL_Y + ALPHA * tuning.scroll_speed
+- [Phase 01]: Scroll e2e runs at ?tier=low and checks scroll == 0.8 x ticks, since the fixed-step runner caps catch-up at 3 steps per frame and software GL is slow
 
 ### Pending Todos
 
@@ -103,6 +107,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T15:31:58.476Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-10-17T15:57:12.604Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None
