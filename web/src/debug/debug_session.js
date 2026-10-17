@@ -21,6 +21,7 @@ export function createDebugSession({
   getLockReason,
   versions,
   startMs,
+  timeToGateMs,
 }) {
   const stats = createFrameStats(120);
   const minutes = createMinuteAggregator(startMs);
@@ -69,6 +70,7 @@ export function createDebugSession({
       flags,
       tier: getTier(),
       lockReason: getLockReason(),
+      timeToGateMs,
       elapsedMin: (nowMs - startMs) / 60_000,
       tierLog,
       minutes: minutes.minutes(),

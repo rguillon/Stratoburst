@@ -6,36 +6,42 @@ import { expect, test } from '@playwright/test';
 const GATE_READY = '#loading[data-gate-ready="true"]';
 
 test('loading shows progress then a start gate', async ({ page }) => {
-  await page.goto('./?debug', { waitUntil: 'commit' });
+  // Record every progress change from the first paint on, so a fast load cannot hide the bar.
+  await page.addInitScript(() => {
+    globalThis.__progressSeen = [];
+    globalThis.__sawIndeterminate = false;
+    document.addEventListener('DOMContentLoaded', () => {
+      const bar = document.getElementById('progress');
+      const record = () => {
+        const now = bar.getAttribute('aria-valuenow');
+        if (now !== null) globalThis.__progressSeen.push(Number(now));
+        if (bar.classList.contains('indeterminate')) globalThis.__sawIndeterminate = true;
+      };
+      record();
+      new MutationObserver(record).observe(bar, {
+        attributes: true,
+        attributeFilter: ['aria-valuenow', 'class'],
+      });
+    });
+  });
+  await page.goto('./?debug');
 
   // The static loading screen exists from first paint, before any module has run.
   await expect(page.locator('#progress')).toHaveAttribute('role', 'progressbar');
   await expect(page.locator('#loading-status')).not.toHaveText('');
 
-  const seen = [];
-  let indeterminate = false;
-  const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    const state = await page.evaluate((gate) => {
-      const bar = document.querySelector('#progress');
-      return {
-        now: bar?.getAttribute('aria-valuenow') ?? null,
-        indeterminate: bar?.classList.contains('indeterminate') ?? false,
-        ready: document.querySelector(gate) !== null,
-      };
-    }, GATE_READY);
-    if (state.now !== null) seen.push(Number(state.now));
-    indeterminate ||= state.indeterminate;
-    if (state.ready) break;
-    await page.waitForTimeout(50);
-  }
-  await page.locator(GATE_READY).waitFor({ timeout: 1_000 });
+  await page.locator(GATE_READY).waitFor({ timeout: 45_000 });
+  const { seen, indeterminate } = await page.evaluate(() => ({
+    seen: globalThis.__progressSeen,
+    indeterminate: globalThis.__sawIndeterminate,
+  }));
   const final = Number(await page.locator('#progress').getAttribute('aria-valuenow'));
-  seen.push(final);
 
   expect(seen.some((v) => v < 80) || indeterminate).toBe(true);
   expect(seen.some((v) => v >= 80) || indeterminate).toBe(true);
   expect(final).toBe(100);
+  // The bar never goes backwards.
+  expect(seen).toEqual([...seen].sort((a, b) => a - b));
 
   const gate = page.locator('#start-gate');
   await expect(gate).toBeVisible();

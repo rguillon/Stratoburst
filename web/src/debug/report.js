@@ -49,6 +49,7 @@ export function buildReport(info) {
     `build: ${text(info.build)}`,
     `flags: ${flagsLine(info.flags)}`,
     `tier: ${tier}`,
+    `time to gate: ${Number.isFinite(info.timeToGateMs) ? `${num(info.timeToGateMs / 1000, 1)} s` : NA}`,
     `elapsed: ${num(info.elapsedMin, 1)} min`,
     ...tierLines(info),
     ...(minutes.length === 0 ? ['minutes: none'] : minutes.map(minuteLine)),

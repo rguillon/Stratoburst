@@ -1,7 +1,9 @@
 import { installErrorPanel } from './boot/error_panel.js';
 import { parseUrlFlags } from './boot/url_flags.js';
 import { PYODIDE_VERSION, loadRuntime } from './boot/runtime_loader.js';
-import { startGame } from './python/python_bridge.js';
+import { createLoadingScreen } from './boot/loading_screen.js';
+import { waitForStartGesture } from './boot/start_gate.js';
+import { startGame, warmUp } from './python/python_bridge.js';
 import { createFrameLoop } from './loop/frame_loop.js';
 import { createPauseController } from './loop/pause_controller.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
@@ -19,20 +21,39 @@ import * as THREE from 'three';
 
 const PLAYFIELD_W = 240;
 const PLAYFIELD_H = 320;
+const LOAD_TIMEOUT_MS = 60_000;
 
 const panel = installErrorPanel();
 
 async function main() {
+  const t0 = performance.now();
   const flags = parseUrlFlags(globalThis.location.search);
+  const loading = createLoadingScreen();
+  // Before the gate, a debug page already answers "has the game started?" (e2e reads it).
+  if (flags.debug) globalThis.__scorched = { ready: false, started: false };
+
+  // The download is the long pole: start it first, then build the GPU side while it runs. A
+  // rejection is handled where it is awaited; this no-op keeps it from also surfacing as an
+  // unhandled rejection if the synchronous setup below throws first.
+  const runtimeP = loadRuntime({ onProgress: loading.setProgress, timeoutMs: LOAD_TIMEOUT_MS });
+  runtimeP.catch(() => {});
+
   const canvas = document.getElementById('view');
   const rig = createRendererRig(canvas, { playfieldW: PLAYFIELD_W, playfieldH: PLAYFIELD_H });
   const touchPrimary = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
   const tier0 = initialTier({ forced: flags.tier, touchPrimary });
   rig.applyTier(TIERS[tier0]);
+  rig.prewarm(); // terrain and both render paths compile while the runtime downloads
   rig.render();
 
-  const pyodide = await loadRuntime();
-  const bridge = await startGame(pyodide, { seed: 1, stress: flags.stress });
+  const pyodide = await runtimeP;
+  loading.setStatus('Starting Python…');
+  loading.setProgress(0.8);
+  const bridge = await startGame(pyodide, { seed: 1, stress: flags.stress, crash: flags.crash });
+  // The throwaway game never carries the injected fault: it must not fire before the gate.
+  warmUp(pyodide, { seed: 1, stress: flags.stress, crash: null });
+  loading.setProgress(0.9);
+  loading.setStatus('Warming up graphics…');
   const { tick, header, slots, manifest } = bridge;
   const ship = createShipModel({ hitboxRadius: manifest.tuning.hitbox_radius });
   rig.scene.add(ship);
@@ -80,7 +101,17 @@ async function main() {
     }
     currentTier = 'low';
   }
-  // Timing, overlay and report exist only under ?debug; nothing is created otherwise.
+  rig.render();
+  loading.setProgress(1);
+  loading.setStatus('Ready');
+  const timeToGateMs = performance.now() - t0;
+  loading.showGate();
+  const app = document.getElementById('app');
+  const { audio, pointerType } = await waitForStartGesture(app);
+  loading.hide();
+
+  // Timing, overlay and report exist only under ?debug; nothing is created otherwise. They
+  // start with play, so the report's elapsed time and minutes exclude the loading screen.
   const debug = flags.debug
     ? createDebugSession({
         rig,
@@ -93,13 +124,15 @@ async function main() {
         getLockReason: () => (controller.locked ? controller.reason : null),
         versions: { build: __BUILD_HASH__, pyodide: PYODIDE_VERSION, three: __THREE_VERSION__ },
         startMs: performance.now(),
+        timeToGateMs,
       })
     : null;
+  // Input devices are created after the gate, so the gate tap or key press never reaches them.
   // Touch mode is decided by the two devices themselves: a touch pointerdown turns it on (and
   // with it auto-fire), any later keydown turns it off. The sampler owns the flag.
   let sampler = null;
   const keyboard = createKeyboardInput(window, { onKeyDown: () => sampler?.setTouchMode(false) });
-  const touch = createTouchInput(document.getElementById('app'), {
+  const touch = createTouchInput(app, {
     onTouchMode: () => sampler?.setTouchMode(true),
   });
   const mapperArgs = { camera: rig.camera, viewportW: 1, viewportH: 1, shipWorld: ship.position };
@@ -113,6 +146,8 @@ async function main() {
       return mapperArgs;
     },
   });
+  // A touch tap on the gate is already a touch session: steer by drag and auto-fire.
+  if (pointerType === 'touch') sampler.setTouchMode(true);
   const world = new THREE.Vector3();
   let pause = null; // created after the loop; onFrame only runs once the loop has started
 
@@ -172,6 +207,11 @@ async function main() {
   if (debug) {
     globalThis.__scorched = {
       ready: true,
+      started: true,
+      timeToGateMs,
+      get audioState() {
+        return audio?.state ?? 'none';
+      },
       header,
       slots,
       manifest,

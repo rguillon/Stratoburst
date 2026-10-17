@@ -8,6 +8,7 @@ export const PY_SOURCES = import.meta.glob('/src/**/*.py', {
 });
 
 const LIB_ROOT = '/lib';
+const WARM_UP_DT_MS = 1000 / 60;
 
 export function installSources(pyodide, sources = PY_SOURCES) {
   for (const [key, text] of Object.entries(sources)) {
@@ -43,4 +44,29 @@ export async function startGame(pyodide, options) {
 
   const tick = game.tick; // held once; called once per animation frame
   return { tick, game, manifest, header, slots: manifest.header.slots, channels };
+}
+
+// Runs `ticks` simulation steps on a throwaway game, so pool and heap growth happen before play
+// and the first real frames are not the ones that pay for it. The game, its buffers and every
+// proxy created here are discarded.
+export function warmUp(pyodide, options, ticks = 120) {
+  const entry = pyodide.pyimport('scorched_web.entrypoint');
+  const optionsProxy = pyodide.toPy(options);
+  const game = entry.create_game(optionsProxy);
+  try {
+    const manifestProxy = game.manifest();
+    const manifest = manifestProxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false });
+    manifestProxy.destroy();
+    game.attach('header', new Float32Array(manifest.header.len));
+    for (const [name, { stride, cap }] of Object.entries(manifest.channels)) {
+      game.attach(name, new Float32Array(stride * cap));
+    }
+    const tick = game.tick;
+    for (let i = 0; i < ticks; i += 1) tick(WARM_UP_DT_MS, 0, 0, 0, 0, 0);
+    tick.destroy();
+  } finally {
+    game.destroy();
+    optionsProxy.destroy();
+    entry.destroy();
+  }
 }
