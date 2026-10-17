@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Phase 1 context updated (pause & resume)
-last_updated: "2026-10-17T14:44:03.736Z"
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-10-17T14:55:39.627Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: dec49d19b834e6762339210d520023bc785c4986
+state_head: 31eaca316f44696dcd5a1e7dd79b57311dfb1674
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 1 of 10
-Status: Executing Phase 01
+Plan: 2 of 10
+Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -52,6 +52,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 25 min | 3 tasks | 47 files |
 
 ## Accumulated Context
 
@@ -63,6 +68,8 @@ Recent decisions affecting current work:
 - [Roadmap]: 4 coarse MVP phases. Phase 1 ends in a real-device mobile performance + deploy go/no-go; Phase 3 (stage 1 + boss) is the vertical-slice gate before stages 2-3.
 - [Research]: Stack is Pyodide 314.0.7 (Python logic) + three.js 0.186.1 WebGL2 (render) + Vite 8 + zzfx. Babylon.js 9.31.0 is the fallback renderer. No SharedArrayBuffer or Worker design.
 - [Research]: From the first commit: fixed 60 Hz sim, seeded RNG, a single batched `tick()` per frame (no per-entity FFI), uniform-grid collision broadphase, and a pure `scorched_core` package testable with pytest.
+- [Phase 01]: Python tooling only via Astral uv; every dev command is a root Makefile target (user requirement, Task 1 amendment)
+- [Phase 01]: Ruff excludes .planning/.claude (ruff 0.17 formats Python fences in Markdown)
 
 ### Pending Todos
 
@@ -87,6 +94,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T14:42:20.292Z
-Stopped at: Phase 1 context updated (pause & resume)
-Resume file: .planning/phases/01-playable-core-on-real-devices/01-CONTEXT.md
+Last session: 2026-10-17T14:55:39.601Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None

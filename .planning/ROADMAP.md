@@ -24,6 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Playable Core on Real Devices
+
 **Goal**: Anyone with the link can load the game on desktop or phone, fly a ship and shoot down targets over scrolling 3D terrain. The Python-in-browser stack must be proven fast enough on real phones and on the real static host.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
@@ -34,10 +35,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A stress mode with 400+ Python-driven bullets and bloom on holds 60fps on a mid-range desktop and a steady 30fps or better on both phones. Quality tiers (DPR cap, reduced bloom) step down automatically, and an on-device overlay shows frame and tick timings.
   4. Game speed is identical on 60 Hz and high-refresh displays. Hiding the tab or switching away auto-pauses the game, and returning resumes it without a time jump.
   5. A deliberately triggered runtime error shows an on-screen error panel instead of a frozen page, and the Python game core's test suite passes headlessly under pytest.
-**Plans:** 10 plans
+
+**Plans:** 1/10 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — Walking skeleton: approve deps; tracer moves a Python-driven ship in a production build; convention guards
+- [x] 01-01-PLAN.md — Walking skeleton: approve deps; tracer moves a Python-driven ship in a production build; convention guards
 - [ ] 01-02-PLAN.md — Shareable link: gated CI/CD to GitHub Pages (gh-pages branch), PR-preview wiring, user creates repo (D-05), live smoke
 - [ ] 01-03-PLAN.md — Stress mode: `?stress=N` Python bullets via one instanced draw, bloom pipeline, 3 ms Python budget check
 - [ ] 01-04-PLAN.md — Auto quality tiers with verify-and-lock step-down, `?tier=`, on-device `?debug` overlay and copyable report
@@ -47,9 +49,11 @@ Plans:
 - [ ] 01-08-PLAN.md — Refresh-rate-independent 60 Hz with vsync snapping; auto-pause on hide/blur with resume-on-input
 - [ ] 01-09-PLAN.md — Loading progress and tap/click start gate (audio unlock); full error panel with `?crash=py|js`
 - [ ] 01-10-PLAN.md — Real-device go/no-go: PR preview on phones, stress soak reports, verdict, deploy main
+
 **UI hint**: yes
 
 ### Phase 2: Arcade Shooting Feel
+
 **Goal**: Shooting feels like a real 90s arcade shmup rendered in 3D. The full Raiden-style arsenal, bombs, and death and respawn all work, with punchy lighting, explosions, shake and sound, tested in a shooting gallery before any content is built.
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -60,10 +64,12 @@ Plans:
   3. Ships, air targets, ground targets and terrain are all built in code. Targets flash when hit and explode with fire, smoke and debris particles sized to their class. Ground targets leave burning wrecks and persistent scorch marks on the terrain, and air units cast shadows that make their altitude readable from the tilted camera.
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 3: Stage 1 Vertical Slice
+
 **Goal**: Player can play a complete stage 1, with scripted air and ground waves over a destructible burning city and a multi-phase boss at the end, plus scoring, lives and a HUD. This proves the content pipeline before more stages are added.
 **Mode:** mvp
 **Depends on**: Phase 2
@@ -74,10 +80,12 @@ Plans:
   3. Player earns points for destroying enemies, boss parts and city buildings, collects medals whose value climbs until one is missed, and sees a stage-clear bonus tally after the boss.
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 4: Full Campaign & Arcade Shell
+
 **Goal**: The complete game ships: a campaign of at least 3 stages with distinct settings and rising difficulty, inside a full arcade shell (title, menus, pause, continues, high scores, music and options), installable on phones and shared as a link.
 **Mode:** mvp
 **Depends on**: Phase 3
@@ -88,6 +96,7 @@ Plans:
   3. Player can pause with a key or an on-screen touch button, then resume or quit to the title. After game over, a continue screen with a countdown lets the player keep going; the continued run is flagged and its score resets.
   4. Player can enter initials (by keyboard or touch) into a top-10 high-score table that is still there after closing and reopening the browser.
   5. Player hears synthesized music for the title, each stage and the bosses, and can mute or adjust music and SFX volume. The game can be installed to a phone home screen and launched fullscreen, and the full campaign still meets the framerate targets on desktop and both phones.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -98,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Playable Core on Real Devices | 0/10 | Planned | - |
+| 1. Playable Core on Real Devices | 1/10 | In Progress | - |
 | 2. Arcade Shooting Feel | 0/TBD | Not started | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

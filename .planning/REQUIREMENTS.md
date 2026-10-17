@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Platform & Tech
 
 - [ ] **PLAT-01**: Player can open a single shareable URL (static hosting, no backend) and play in a desktop or mobile browser
-- [ ] **PLAT-02**: Game logic runs in Python (Pyodide) in the browser; rendering is three.js WebGL2
+- [x] **PLAT-02**: Game logic runs in Python (Pyodide) in the browser; rendering is three.js WebGL2
 - [ ] **PLAT-03**: Player sees a loading screen with progress, then a "tap/click to start" gate (also unlocks audio)
 - [ ] **PLAT-04**: Game holds 60fps on a mid-range desktop browser with a full stage load (≈400+ bullets, effects on)
 - [ ] **PLAT-05**: Game stays playable (≥30fps steady, no input lag spikes) on a mid-range Android phone and a recent iPhone, using automatic quality tiers (DPR cap, reduced bloom)
@@ -19,7 +19,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PLAT-08**: Game auto-pauses when the tab loses focus or is hidden
 - [ ] **PLAT-09**: If a runtime error occurs, player sees an on-screen error panel instead of a frozen page
 - [ ] **PLAT-10**: Player can install the game to a phone home screen (PWA) and launch it fullscreen
-- [ ] **PLAT-11**: Python game core is testable headlessly with pytest (no browser required)
+- [x] **PLAT-11**: Python game core is testable headlessly with pytest (no browser required)
 
 ### Player & Weapons
 
@@ -143,7 +143,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PLAT-01 | Phase 1 | Pending |
-| PLAT-02 | Phase 1 | Pending |
+| PLAT-02 | Phase 1 | Complete |
 | PLAT-03 | Phase 1 | Pending |
 | PLAT-04 | Phase 1 | Pending |
 | PLAT-05 | Phase 1 | Pending |
@@ -152,7 +152,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-08 | Phase 1 | Pending |
 | PLAT-09 | Phase 1 | Pending |
 | PLAT-10 | Phase 4 | Pending |
-| PLAT-11 | Phase 1 | Pending |
+| PLAT-11 | Phase 1 | Complete |
 | PLYR-01 | Phase 1 | Pending |
 | PLYR-02 | Phase 1 | Pending |
 | PLYR-03 | Phase 1 | Pending |
