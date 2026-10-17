@@ -15,8 +15,14 @@ function fakeTarget() {
       listeners[type]?.delete(handler);
     },
     listenerCount: (type) => listeners[type]?.size ?? 0,
-    emit(type, code) {
-      const event = { type, code, prevented: false, preventDefault: () => (event.prevented = true) };
+    emit(type, code, init = {}) {
+      const event = {
+        type,
+        code,
+        ...init,
+        prevented: false,
+        preventDefault: () => (event.prevented = true),
+      };
       for (const handler of listeners[type] ?? []) handler(event);
       return event;
     },
@@ -168,6 +174,42 @@ describe('createKeyboardInput', () => {
     expect(target.emit('keydown', 'ArrowUp').prevented).toBe(true);
     expect(target.emit('keydown', 'KeyQ').prevented).toBe(false);
     expect(target.emit('keydown', 'F5').prevented).toBe(false);
+  });
+
+  it.each(['ctrlKey', 'metaKey', 'altKey'])(
+    'leaves browser shortcuts alone: a keydown with %s held is neither game input nor prevented',
+    (modifier) => {
+      const target = fakeTarget();
+      const kb = createKeyboardInput(target);
+      const event = target.emit('keydown', 'KeyS', { [modifier]: true });
+      expect(event.prevented).toBe(false);
+      expect(kb.sample(BITS)).toEqual({ buttons: 0, moveX: 0, moveY: 0 });
+    },
+  );
+
+  it('still tells onKeyDown about a modified keydown', () => {
+    const target = fakeTarget();
+    const codes = [];
+    createKeyboardInput(target, { onKeyDown: (event) => codes.push(event.code) });
+    target.emit('keydown', 'KeyS', { ctrlKey: true });
+    expect(codes).toEqual(['KeyS']);
+  });
+
+  it('a keyup with a modifier held still releases a game key pressed earlier', () => {
+    const target = fakeTarget();
+    const kb = createKeyboardInput(target);
+    target.emit('keydown', 'KeyA');
+    target.emit('keyup', 'KeyA', { metaKey: true });
+    expect(kb.sample(BITS).moveX).toBe(0);
+  });
+
+  it('clears every held key when Meta goes down (macOS drops the keyups under Cmd)', () => {
+    const target = fakeTarget();
+    const kb = createKeyboardInput(target);
+    target.emit('keydown', 'KeyA');
+    target.emit('keydown', 'Space');
+    target.emit('keydown', 'MetaLeft', { key: 'Meta', metaKey: true });
+    expect(kb.sample(BITS)).toEqual({ buttons: 0, moveX: 0, moveY: 0 });
   });
 
   it('an unbound code changes nothing', () => {

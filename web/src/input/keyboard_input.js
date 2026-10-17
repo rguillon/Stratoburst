@@ -49,7 +49,15 @@ export function createKeyboardInput(target = window, { onKeyDown } = {}) {
   const pressedSinceSample = new Set();
 
   function onKey(event) {
-    if (event.type === 'keydown') onKeyDown?.(event);
+    if (event.type === 'keydown') {
+      onKeyDown?.(event);
+      // macOS never delivers the keyup of a key released while Cmd is down: drop everything the
+      // moment Meta goes down so nothing can stay stuck.
+      if (event.key === 'Meta') clear();
+      // Browser shortcuts (Ctrl/Cmd+S, Alt+Left, ...) are not game input: leave them alone. A
+      // keyup always falls through so a game key held before the modifier is still released.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+    }
     if (reduceKey(held, event.type, event.code, pressedSinceSample)) event.preventDefault();
   }
   const clear = () => {
