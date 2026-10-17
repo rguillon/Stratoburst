@@ -30,7 +30,7 @@ status: partial
 **Commit:** f678cdf
 **Applied fix:** `Game.tick` treats NaN, infinite or negative `dt_ms` as 0 before the refresh estimator sees it, and `FixedStepRunner.advance` also clamps the lower bound (`max(0.0, min(dt_ms, MAX_DT_MS))`). Tests cover negative, NaN, +inf and -inf (the sim returns 0 steps for the bad frame and runs normally on the next) and a negative `dt` in the runner. Status: fixed, logic fix, requires human verification (judgement call: a bad delta is "no time passed").
 
-### WR-02: Drone sway amplitude is larger than the spawn margin
+### WR-02: Drone sway amplitude is larger than the spawn margin, so drones leave the playfield
 
 **Files modified:** `src/scorched_core/tuning.py`, `tests/scorched_core/entities/test_drone_swarm.py`
 **Commit:** 9d25cb3
@@ -48,13 +48,13 @@ status: partial
 **Commit:** ce763f5
 **Applied fix:** `window` `error` events are ignored (logged with `console.warn`, no panel, no `onFatal`) when they are the opaque cross-origin `"Script error."` with no error object, or when `event.filename` is a browser-extension URL (chrome, moz, safari, safari-web, ms-browser). `unhandledrejection` is ignored only when the reason's stack comes from an extension URL. Deliberately conservative: a cross-origin error with a real error object (for example from the Pyodide CDN script) still escalates, because ignoring it could leave a frozen game with no panel. The existing test that expected `"Script error."` to crash the page was updated to a non-opaque message, and new tests cover the ignored and still-escalated cases. Status: fixed, logic fix, requires human verification.
 
-### WR-05: Deploy and preview jobs run `npm ci` and the build with a write token and persisted credentials
+### WR-05: Deploy and preview jobs run `npm ci` and the build with a write token and persisted checkout credentials
 
 **Files modified:** `.github/workflows/deploy.yml`, `.github/workflows/preview.yml`
 **Commit:** bc4dfe6
 **Applied fix:** Each workflow is split into a read-only `build` job (`contents: read`, `persist-credentials: false`, `npm ci`, `make build`, uploads `dist` as an artifact with `include-hidden-files: true` so `public/.nojekyll` survives) and a write job (`deploy` / `preview`) that checks out with `persist-credentials: false`, downloads the artifact and runs only the deploy action (token passed explicitly via `github.token`). No npm or project code runs with a write token any more. Existing action SHA pins were kept. Two new actions were added and pinned to the SHAs resolved from the upstream tags with `git ls-remote`: `actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9` (v7.0.2) and `actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333` (v8.0.2). The YAML parses and the job graph is `gate -> build -> deploy` and `gate -> build -> preview`. **Not verified in CI**: the workflows must be watched after the orchestrator pushes. Points to watch: the artifact upload/download pairing across the two major versions, `.nojekyll` being present in the deployed branch, and the `preview` job's `always()` condition on `closed` events (the `build` job is skipped then, and the preview job runs only the cleanup path). These are new GitHub Actions, not npm or PyPI packages. Status: fixed, requires human verification (CI only).
 
-### WR-07: Large parts of the JS runtime have no unit tests and there is no JS coverage gate (partially addressed)
+### WR-07: Large parts of the JS runtime have no unit tests and there is no JS coverage gate
 
 **Files modified:** `web/test/python/python_bridge.test.js`, `web/test/render/bullet_instances.test.js` (new), `web/test/debug/debug_session.test.js` (new)
 **Commit:** 0f75f3b
