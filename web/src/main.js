@@ -3,6 +3,7 @@ import { parseUrlFlags } from './boot/url_flags.js';
 import { PYODIDE_VERSION, loadRuntime } from './boot/runtime_loader.js';
 import { startGame } from './python/python_bridge.js';
 import { createFrameLoop } from './loop/frame_loop.js';
+import { createPauseController } from './loop/pause_controller.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
 import { createTouchInput } from './input/touch_input.js';
 import { createInputSampler } from './input/input_sampler.js';
@@ -113,6 +114,7 @@ async function main() {
     },
   });
   const world = new THREE.Vector3();
+  let pause = null; // created after the loop; onFrame only runs once the loop has started
 
   const loop = createFrameLoop({
     onFrame(dt, ts) {
@@ -126,6 +128,8 @@ async function main() {
       const tickStart = debug ? performance.now() : 0;
       tick(dt, input.buttons, input.moveX, input.moveY, input.dragX, input.dragY);
       const tickEnd = debug ? performance.now() : 0;
+      // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
+      pause.sync(header[slots.FLAGS]);
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
@@ -150,6 +154,13 @@ async function main() {
     },
   });
   panel.onFatal(() => loop.stop());
+  pause = createPauseController({
+    bridge,
+    loop,
+    inputs: [keyboard, touch],
+    overlayEl: document.getElementById('paused'),
+    controller,
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     loop.resetClock();
@@ -174,6 +185,9 @@ async function main() {
       projectPoint(x, y) {
         const p = rig.toWorld(x, y, new THREE.Vector3()).project(rig.camera);
         return { x: ((p.x + 1) / 2) * canvas.clientWidth, y: ((1 - p.y) / 2) * canvas.clientHeight };
+      },
+      get paused() {
+        return (header[slots.FLAGS] & manifest.flags.PAUSED) !== 0;
       },
       get touchMode() {
         return sampler.touchMode;

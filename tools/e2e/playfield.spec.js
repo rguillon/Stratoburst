@@ -36,27 +36,74 @@ for (const { name, width, height } of VIEWPORTS) {
   });
 }
 
+// One simulation step in milliseconds, and the fixed-step runner's catch-up cap (MAX_STEPS).
+const STEP_MS = 1000 / 60;
+const MAX_STEPS = 3;
+
 test('python-driven terrain scroll advances 0.8 units per 60 Hz step', async ({ page }) => {
-  // The low tier keeps software-GL frames short so the fixed-step catch-up cap (3 steps per
-  // frame) never throttles the simulation; tiers are presentation-only, so scroll is unaffected.
+  // The low tier keeps software-GL frames short; tiers are presentation-only, so scroll is
+  // unaffected.
   await bootGame(page, '?debug&tier=low');
   await page.waitForTimeout(1500);
-  // Both slots are read in one evaluate so the pair is consistent (same JS task).
-  const sample = () =>
-    page.evaluate(() => {
-      const { header, slots } = globalThis.__scorched;
-      return { scroll: header[slots.SCROLL_Y], ticks: header[slots.TICK_COUNT] };
-    });
-  const start = await sample();
-  await page.waitForTimeout(1000);
-  const end = await sample();
-  const scroll = end.scroll - start.scroll;
-  const ticks = end.ticks - start.ticks;
-  // Software GL frames are slow enough that the 3-step catch-up cap can hold the simulation
-  // below 60 Hz (46 steps in this second with the drone and bolt meshes added); the property
-  // under test is the exact 0.8 units per step below, so the floor only proves it is running.
-  expect(scroll).toBeGreaterThan(24);
-  expect(scroll).toBeLessThan(54);
-  expect(scroll).toBeCloseTo(ticks * 0.8, 1); // exactly SCROLL_SPEED per simulation step
+
+  // Frame-by-frame record instead of a wall-clock window. The probe is registered after the
+  // game's own rAF callback, so within a frame it runs second and sees that frame's header
+  // (browsers run rAF callbacks in registration order). It records the same rAF delta the
+  // game fed to Python together with the steps Python then ran.
+  const frames = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const { header, slots } = globalThis.__scorched;
+        const out = [];
+        let last = null;
+        let first = null;
+        const probe = (ts) => {
+          if (first === null) first = ts;
+          if (last !== null) {
+            out.push({
+              dt: ts - last,
+              steps: header[slots.STEPS],
+              scroll: header[slots.SCROLL_Y],
+              ticks: header[slots.TICK_COUNT],
+            });
+          }
+          last = ts;
+          if (ts - first < 2000) requestAnimationFrame(probe);
+          else resolve(out);
+        };
+        requestAnimationFrame(probe);
+      }),
+  );
+  expect(frames.length).toBeGreaterThan(5);
+
+  // Exactly SCROLL_SPEED per simulation step, however many steps ran.
+  const scroll = frames.at(-1).scroll - frames[0].scroll;
+  const ticks = frames.at(-1).ticks - frames[0].ticks;
+  expect(ticks).toBeGreaterThan(0);
+  expect(scroll).toBeCloseTo(ticks * 0.8, 1);
+
+  // Sim progress per frame, independent of how fast this machine renders: a frame owes
+  // floor(dt / step) steps, capped at MAX_STEPS (the catch-up cap, by design, slows the game
+  // down instead of spiralling). One step of slack covers the accumulator remainder and
+  // vsync snapping. Slow software GL cannot fail this; a stalled or runaway sim does.
+  for (const { dt, steps } of frames) {
+    expect(steps).toBeGreaterThanOrEqual(Math.min(MAX_STEPS, Math.floor(dt / STEP_MS)) - 1);
+    expect(steps).toBeLessThanOrEqual(Math.min(MAX_STEPS, Math.ceil(dt / STEP_MS) + 1));
+  }
+
+  // When this machine renders fast enough that the cap never engages (every frame under 45 ms),
+  // the original wall-clock property is meaningful again: the sim keeps real time at 60 Hz.
+  // The summed steps follow the summed frame time, to within 3% and the accumulator remainder.
+  const capEngaged = frames.some(({ dt }) => dt > 45);
+  test.info().annotations.push({
+    type: 'sim-rate-check',
+    description: capEngaged ? 'per-frame only (catch-up cap engaged)' : 'per-frame and real-time rate',
+  });
+  if (!capEngaged) {
+    const elapsedMs = frames.reduce((sum, { dt }) => sum + dt, 0);
+    const owed = elapsedMs / STEP_MS;
+    const stepsRun = frames.reduce((sum, { steps }) => sum + steps, 0);
+    expect(Math.abs(stepsRun - owed)).toBeLessThanOrEqual(owed * 0.03 + 3);
+  }
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });

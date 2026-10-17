@@ -138,7 +138,17 @@ class Game:
         }
 
     def set_paused(self, paused: bool) -> None:
-        """Skeleton: pausing is not wired yet."""
+        """Pause or resume. Resuming forgets all owed time so nothing jumps (PLAT-08)."""
+        if paused == self.paused:
+            return
+        self.paused = paused
+        if not paused:
+            self._runner.reset()
+            self.refresh.reset()
+            self.input.settle()  # a PAUSE bit still held from before is not a new press
+            self.ship.pending_x = 0.0  # the ship must not drift on drag owed from before
+            self.ship.pending_y = 0.0
+        self.buffers["header"][H_FLAGS] = self._flags()
 
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature (RESEARCH Pattern 2)
         self,
@@ -150,33 +160,46 @@ class Game:
         drag_y: float,
     ) -> int:
         """Advance the simulation by ``dt_ms`` and pack the header; return steps run."""
+        self.input.update(buttons)
+        if self.input.pressed(Button.PAUSE):
+            self.set_paused(not self.paused)
+        # BOMB is accepted and unused in Phase 1 (D-11 reserves the key).
+        self._firing = bool(buttons & Button.FIRE)
+        if self.paused:
+            # Time, drag and the refresh history stay untouched until the player resumes.
+            self._pack_header(0)
+            return 0
         self._move_x = move_x
         self._move_y = move_y
-        # BOMB is accepted and unused in Phase 1 (D-11 reserves the key); PAUSE arrives in 01-08.
-        self._firing = bool(buttons & Button.FIRE)
         # Queued once per call, so a frame that runs several steps still moves by the finger
         # distance only once; a frame that runs none keeps it for the next call.
         if drag_x or drag_y:
             self.ship.add_drag(drag_x, drag_y)
         steps = self._runner.advance(self.refresh.snap(dt_ms))
+        self._pack_header(steps)
+        if steps > 0:
+            self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
+            self.swarm.pack_into(self.buffers["drones"])
+            self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
+        return steps
+
+    def _flags(self) -> int:
+        return (FLAG_PAUSED if self.paused else 0) | (FLAG_FIRING if self._firing else 0)
+
+    def _pack_header(self, steps: int) -> None:
         header = self.buffers["header"]
         header[H_STEPS] = steps
         header[H_ALPHA] = self._runner.alpha
         header[H_SCROLL_Y] = self.terrain.distance
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
-        header[H_FLAGS] = FLAG_FIRING if self._firing else 0
+        header[H_FLAGS] = self._flags()
         header[H_TICK_COUNT] = self.tick_count
         header[H_PBULLET_N] = self.pbullets.n
         header[H_DRONE_N] = self.swarm.n
         header[H_DRONES_DOWN] = self.swarm.destroyed
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
-        if steps > 0:
-            self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
-            self.swarm.pack_into(self.buffers["drones"])
-            self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
-        return steps
 
     def _step(self) -> None:
         self.terrain.step()

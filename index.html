@@ -26,10 +26,44 @@
         width: 100%;
         height: 100%;
       }
+      #paused {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: rgba(11, 10, 9, 0.72);
+        color: #f2e8d5;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+        user-select: none;
+        touch-action: none;
+        cursor: pointer;
+      }
+      #paused[hidden] {
+        display: none;
+      }
+      #paused .title {
+        font-size: clamp(36px, 10vmin, 96px);
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        color: #ff8a3d;
+      }
+      #paused .hint {
+        font-size: clamp(14px, 3.2vmin, 24px);
+        opacity: 0.85;
+      }
     </style>
   </head>
   <body>
     <div id="app"><canvas id="view"></canvas></div>
+    <div id="paused" role="dialog" aria-label="Game paused" hidden>
+      <div class="title">PAUSED</div>
+      <div class="hint">tap or press any key to resume</div>
+    </div>
     <script type="module" src="/web/src/main.js"></script>
   </body>
 </html>

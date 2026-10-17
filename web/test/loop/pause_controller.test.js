@@ -124,6 +124,17 @@ describe('createPauseController resume needs the player', () => {
     expect(t.overlayEl.hidden).toBe(false);
   });
 
+  it.each(['AltLeft', 'MetaRight', 'ControlLeft', 'Tab'])(
+    'does not treat the app-switcher key %s as the resume press',
+    (code) => {
+      const t = setup();
+      t.win.emit('blur');
+      t.win.emit('keydown', { code });
+      expect(t.game.set_paused).toHaveBeenCalledTimes(1);
+      expect(t.overlayEl.hidden).toBe(false);
+    },
+  );
+
   it('ignores key presses while the game is running', () => {
     const t = setup();
     t.win.emit('keydown', { code: 'Space' });

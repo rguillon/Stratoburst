@@ -46,14 +46,22 @@ test('coming back stays paused until a tap, then resumes without a catch-up burs
   expect(await isPaused(page)).toBe(true);
   await expect(page.locator('#paused')).toBeVisible();
 
-  const before = await readSlot(page, 'TICK_COUNT');
+  // Ticks are read together with a page timestamp, so the bound is the real elapsed time and
+  // not the (variable) cost of the Playwright round trips in between.
+  const sample = () =>
+    page.evaluate(() => {
+      const { header, slots } = globalThis.__scorched;
+      return { ticks: header[slots.TICK_COUNT], t: performance.now() };
+    });
+  const before = await sample();
   await page.locator('#paused').click();
   await expect.poll(() => isPaused(page), WAIT).toBe(false);
   await expect(page.locator('#paused')).toBeHidden();
   await page.waitForTimeout(300);
-  const after = await readSlot(page, 'TICK_COUNT');
-  expect(after - before).toBeLessThanOrEqual(0.3 * 60 + 3);
-  await expect.poll(() => readSlot(page, 'TICK_COUNT'), WAIT).toBeGreaterThan(after);
+  const after = await sample();
+  const elapsedS = (after.t - before.t) / 1000;
+  expect(after.ticks - before.ticks).toBeLessThanOrEqual(elapsedS * 60 + 3);
+  await expect.poll(() => readSlot(page, 'TICK_COUNT'), WAIT).toBeGreaterThan(after.ticks);
 });
 
 test('a key press resumes too', async ({ page }) => {

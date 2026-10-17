@@ -60,6 +60,14 @@ export function createKeyboardInput(target = window, { onKeyDown } = {}) {
   target.addEventListener('keydown', onKey);
   target.addEventListener('keyup', onKey);
   target.addEventListener('blur', clear);
+  // Keyup events are lost while the page is away: a hidden tab or a leaving page must not leave
+  // a key stuck (RESEARCH Pitfall 8). `target.document` is absent on non-window test targets.
+  const doc = target.document;
+  const onVisibility = () => {
+    if (doc.visibilityState === 'hidden') clear();
+  };
+  target.addEventListener('pagehide', clear);
+  doc?.addEventListener('visibilitychange', onVisibility);
 
   return {
     // A button bit is set when its action is held OR was pressed since the previous sample;
@@ -77,6 +85,8 @@ export function createKeyboardInput(target = window, { onKeyDown } = {}) {
       target.removeEventListener('keydown', onKey);
       target.removeEventListener('keyup', onKey);
       target.removeEventListener('blur', clear);
+      target.removeEventListener('pagehide', clear);
+      doc?.removeEventListener('visibilitychange', onVisibility);
     },
   };
 }

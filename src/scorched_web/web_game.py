@@ -24,7 +24,9 @@ class WebGame:
         self._sink.attach(name, target)
 
     def set_paused(self, paused: bool) -> None:
-        """Skeleton: pausing is not wired yet."""
+        """Pause or resume now and publish the header so JS sees the flag without a tick."""
+        self._game.set_paused(paused)
+        self._sink.flush(bulk=False)
 
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature
         self,
