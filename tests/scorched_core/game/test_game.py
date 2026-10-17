@@ -1,3 +1,5 @@
+import itertools
+import random
 import sys
 
 import pytest
@@ -400,3 +402,48 @@ def test_scripted_kill_ship_tracking_the_nearest_drone_downs_three_within_1200_t
     _track_nearest_drone_and_fire(game, 1200)
     assert game.buffers["header"][H_DRONES_DOWN] >= 3
     assert game.swarm.destroyed == game.buffers["header"][H_DRONES_DOWN]
+
+
+def jittered_dts(hz: int, seconds: float = 10.0, jitter_ms: float = 0.4) -> list[float]:
+    """rAF deltas for a display at ``hz``: k * period plus seeded Gaussian timestamp jitter."""
+    rng = random.Random(1)  # noqa: S311 - seeded test jitter, not security
+    period = 1000.0 / hz
+    stamps = [k * period + rng.gauss(0.0, jitter_ms) for k in range(round(seconds * hz) + 1)]
+    return [0.0] + [b - a for a, b in itertools.pairwise(stamps)]
+
+
+@pytest.mark.parametrize("hz", [30, 60, 120, 144])
+def test_the_simulation_runs_six_hundred_steps_in_ten_seconds_at_any_refresh_rate_hz(
+    hz: int,
+) -> None:
+    game = Game()
+    steps = sum(game.tick(dt, 0, 0.0, 0.0, 0.0, 0.0) for dt in jittered_dts(hz))
+    assert 599 <= steps <= 601
+    assert game.tick_count == steps
+
+
+def test_vsync_snapping_leaves_under_one_percent_of_60_hz_frames_stuttering_with_jitter() -> None:
+    game = Game()
+    counts = [game.tick(dt, 0, 0.0, 0.0, 0.0, 0.0) for dt in jittered_dts(60)]
+    stutter = sum(1 for n in counts if n != 1)
+    assert stutter / len(counts) < 0.01
+
+
+def test_unjittered_144_hz_frames_also_give_six_hundred_steps_in_ten_seconds_hz() -> None:
+    game = Game()
+    steps = sum(game.tick(1000.0 / 144.0, 0, 0.0, 0.0, 0.0, 0.0) for _ in range(1440))
+    assert 599 <= steps <= 601
+
+
+def test_a_five_second_gap_runs_at_most_three_steps_and_drops_the_backlog_boundary() -> None:
+    game = Game()
+    for _ in range(10):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.tick(5000.0, 0, 0.0, 0.0, 0.0, 0.0) == 3
+    assert game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0) == 1
+
+
+def test_the_first_frame_with_a_zero_dt_runs_no_step_boundary() -> None:
+    game = Game()
+    assert game.tick(0.0, 0, 0.0, 0.0, 0.0, 0.0) == 0
+    assert game.tick_count == 0

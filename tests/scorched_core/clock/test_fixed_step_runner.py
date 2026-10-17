@@ -14,6 +14,33 @@ def test_exact_step_runs_once() -> None:
     assert len(calls) == 1
 
 
+def test_a_zero_dt_runs_nothing_and_adds_no_time() -> None:
+    runner, calls = make()
+    assert runner.advance(0.0) == 0
+    assert calls == []
+    assert runner.acc == 0.0
+
+
+def test_the_boundary_step_leaves_no_rounding_residue() -> None:
+    runner, _ = make()
+    runner.advance(STEP_MS)
+    assert abs(runner.acc) < 1e-9
+
+
+def test_one_second_of_exact_steps_runs_exactly_sixty() -> None:
+    runner, calls = make()
+    for _ in range(60):
+        runner.advance(STEP_MS)
+    assert len(calls) == 60
+
+
+def test_hundred_ms_gives_three_steps_with_the_accumulator_reset() -> None:
+    runner, calls = make()
+    assert runner.advance(100.0) == MAX_STEPS
+    assert len(calls) == 3
+    assert runner.acc == 0.0
+
+
 def test_just_under_a_step_runs_nothing() -> None:
     runner, calls = make()
     assert runner.advance(STEP_MS - 2e-6) == 0
