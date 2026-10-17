@@ -25,7 +25,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **PLYR-01**: Player can move the ship in 8 directions within the playfield with responsive, consistent speed
 - [x] **PLYR-02**: Player ship has a small hitbox core that is visibly marked on the ship
-- [ ] **PLYR-03**: Player can fire a main weapon (hold to fire on keyboard; auto-fire on touch)
+- [x] **PLYR-03**: Player can fire a main weapon (hold to fire on keyboard; auto-fire on touch)
 - [ ] **PLYR-04**: Player can collect colored weapon pickups: red (vulcan spread), blue (laser), purple (homing)
 - [ ] **PLYR-05**: Collecting the same color as the current weapon raises its level (up to 5); a different color switches weapon type
 - [ ] **PLYR-06**: On death the player loses weapon power and a recovery pickup drops nearby
@@ -155,7 +155,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-11 | Phase 1 | Complete |
 | PLYR-01 | Phase 1 | Complete |
 | PLYR-02 | Phase 1 | Complete |
-| PLYR-03 | Phase 1 | Pending |
+| PLYR-03 | Phase 1 | Complete |
 | PLYR-04 | Phase 2 | Pending |
 | PLYR-05 | Phase 2 | Pending |
 | PLYR-06 | Phase 2 | Pending |
