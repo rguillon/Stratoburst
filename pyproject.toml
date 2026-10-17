@@ -1,0 +1,42 @@
+[project]
+name = "scorched"
+version = "0.0.0"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "pytest-cov==7.1.0", "ruff==0.17.1"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src", "tests"]
+# Ruff 0.17 also formats Python code fences in Markdown; keep it off planning docs.
+extend-exclude = [".planning", ".claude", "node_modules", "dist"]
+
+[tool.ruff.lint]
+# Do NOT add "TC": it demands moving runtime-useful imports (Callable, array) into
+# TYPE_CHECKING blocks and fights dataclass annotations.
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4", "RUF", "PT", "ANN", "PL", "S", "T20", "A", "RET", "ARG"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN", "PLR", "ARG", "PLC0415"]
