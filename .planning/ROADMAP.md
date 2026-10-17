@@ -16,7 +16,7 @@ Scorched goes from an empty directory to a shareable 3-stage, 3D-rendered Raiden
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Playable Core on Real Devices** - Pyodide + three.js deployed to the real host; ship flies and shoots on desktop and phones; mobile performance go/no-go
+- [x] **Phase 1: Playable Core on Real Devices** - Pyodide + three.js deployed to the real host; ship flies and shoots on desktop and phones; mobile performance go/no-go (completed 2026-10-17)
 - [ ] **Phase 2: Arcade Shooting Feel** - Full Raiden arsenal, bombs, death/respawn and the complete 3D juice + SFX stack, validated in a shooting gallery
 - [ ] **Phase 3: Stage 1 Vertical Slice** - Complete data-driven stage 1 with multi-phase boss, scoring, lives and HUD (content-pipeline gate)
 - [ ] **Phase 4: Full Campaign & Arcade Shell** - Stages 2-3, difficulty, stage select, title/pause/continue screens, high scores, music, options, PWA
@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Game speed is identical on 60 Hz and high-refresh displays. Hiding the tab or switching away auto-pauses the game, and returning resumes it without a time jump.
   5. A deliberately triggered runtime error shows an on-screen error panel instead of a frozen page, and the Python game core's test suite passes headlessly under pytest.
 
-**Plans:** 10/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md — Walking skeleton: approve deps; tracer moves a Python-driven ship in a production build; convention guards
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Playable Core on Real Devices | 10/10 | In Progress | - |
+| 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 0/TBD | Not started | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

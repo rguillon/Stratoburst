@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 01
-current_phase_name: Playable Core on Real Devices
-status: verifying
-stopped_at: Completed 01-10-PLAN.md
-last_updated: "2026-10-17T18:00:04.469Z"
+current_phase: 2
+current_phase_name: Arcade Shooting Feel
+status: planning
+stopped_at: Phase 01 complete, ready to plan Phase 2
+last_updated: "2026-10-17T18:46:42.868Z"
 last_activity: 2026-10-17
-last_activity_desc: Phase 01 execution started
-state_head: 060161b174ea0e26796780074378a755b9083c47
+last_activity_desc: Phase 01 complete, transitioned to Phase 2
+state_head: 73bbce04db1e89e7804cf04be5e3f067886d7558
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 10
   completed_plans: 10
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -23,21 +23,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-17)
 
 **Core value:** Shooting feels great: tight, responsive ship control and punchy 3D feedback (hits, explosions, screen shake) at a smooth framerate in the browser.
-**Current focus:** Phase 01 — Playable Core on Real Devices
+**Current focus:** Phase 2 — Arcade Shooting Feel
 
 ## Current Position
 
-Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 10 of 10
-Status: Phase complete — ready for verification
-Last activity: 2026-10-17 — Phase 01 execution started
+Phase: 2 — Arcade Shooting Feel
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-17 — Phase 01 complete, transitioned to Phase 2
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 10
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 10 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -98,7 +98,7 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-09: keyboard, touch, sampler and pause controller are created after the start gate, so the gate tap/key never reaches them; only pointerType decides touch mode
 - [Phase 01]: 01-09: __scorched.audioState is a live getter on AudioContext.state (resume() settles asynchronously)
 - [Phase 01]: 01-09: error panel Copy report appends the device report layout even without a debug session; text via textContent only; ?crash values are allow-listed on JS and Python sides
-- [Phase 01]: Plan 01-10 verdict is GO (desktop), phone performance gate DEFERRED by the user; PLAT-05 stays pending until Android and iPhone reports are pasted into 01-DEVICE-REPORTS.md
+- [Phase 01]: Plan 01-10 verdict was GO (desktop) with the phone gate deferred; phone gate (PLAT-05) then passed in Phase 1 UAT on 2026-10-17
 
 ### Pending Todos
 
@@ -106,13 +106,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Pre-Phase 1]: Toolchain is behind. Node 18.19.1 is installed but Vite 8 needs 20.19 or newer (install Node 22), and the local Python is 3.12.3 (install a uv-managed Python 3.14).
-- [Phase 1]: Mobile Pyodide tick cost and bloom fill-rate are unmeasured. WSL software-GL numbers don't count. If the gate fails: try numpy, lower quality tiers, or the Babylon.js fallback.
-- [Phase 1]: Hosting is undecided (GitHub Pages vs itch.io vs Netlify/Cloudflare Pages), along with .wasm MIME/compression and Pyodide startup (snapshots, .pyc). Research needed: mobile measurement method, altitude-scale camera mapping.
 - [Phase 2]: iOS audio unlock and silent switch behavior; bloom cost on mobile GPUs; bullet palette vs fire backgrounds.
 - [Phase 3]: Research needed: boss authoring format and destructible-part model.
 - [Phase 4]: Research needed: touch initials-entry UX, music synthesis vs loops. Stages 4-5 (CAMP-01) are a v2 stretch only.
-- Phone performance gate open: Android and iPhone stress reports not collected (PLAT-05 pending); run the Part B protocol and fill 01-DEVICE-REPORTS.md before trusting Phase 2 mobile work
+- [Phase 1]: Phone gate passed in UAT, but the Android/iPhone stress reports are not pasted into 01-DEVICE-REPORTS.md yet; add them as the mobile baseline for Phase 2
 
 ## Deferred Items
 
@@ -124,6 +121,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T17:59:56.612Z
-Stopped at: Completed 01-10-PLAN.md
+Last session: 2026-10-17
+Stopped at: Phase 1 complete, ready to plan Phase 2
 Resume file: None

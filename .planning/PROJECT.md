@@ -12,13 +12,15 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Game logic written in Python, running fully client-side in the browser (Pyodide on GitHub Pages, no backend) — Phase 1
+- ✓ 3D rendering (WebGL-class) with gameplay constrained to a 2D plane — Phase 1
+- ✓ Fixed tilted top-down camera — Phase 1
+- ✓ Keyboard controls (arrows/WASD + fire, physical keys so AZERTY works) — Phase 1
+- ✓ Touch controls: relative 1:1 drag with auto-fire — Phase 1 (bomb button comes with bombs in Phase 2)
+- ✓ Stable 60fps on desktop browsers; playable framerate on modern phones (stress mode, auto quality tiers) — Phase 1
 
 ### Active
 
-- [ ] Game logic written in Python, running fully client-side in the browser (Python-in-WASM; static hosting, no backend)
-- [ ] 3D rendering (WebGL-class) with gameplay constrained to a 2D plane
-- [ ] Fixed tilted top-down camera
 - [ ] Modern polished look: dynamic lighting, bloom/glow, particle effects, explosions, screen shake
 - [ ] All 3D models generated procedurally in code (no external model files required)
 - [ ] Player ship with 8-direction movement, focused/precise hitbox
@@ -29,10 +31,8 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 - [ ] Lives and continues
 - [ ] Classic scoring: points per kill, medal/bonus pickups, stage-clear bonuses, local high-score table (persisted in browser storage)
 - [ ] Title screen, pause, game-over / continue screen, high-score entry
-- [ ] Keyboard controls (arrows/WASD + fire + bomb)
-- [ ] Touch controls on mobile (relative drag to move, auto-fire, bomb button)
+- [ ] Bomb key and on-screen bomb button (with the bomb system)
 - [ ] Sound effects and music (generated or code-synthesized where possible)
-- [ ] Stable 60fps target on desktop browsers; playable framerate on modern phones
 
 ### Out of Scope
 
@@ -45,7 +45,7 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 
 ## Context
 
-- Greenfield project, empty directory.
+- Phase 1 shipped: Pyodide + three.js core live on GitHub Pages; the ship flies and shoots over scrolling 3D terrain on desktop and phones.
 - Key technical unknown: pygame is 2D-only, so "Python + 3D + browser" needs a specific stack. Candidates to evaluate: Python in Pyodide driving three.js (or Babylon.js) via JS interop; Panda3D's experimental WebAssembly build; pygbag with WebGL/OpenGL ES; Harfang3D or other WASM-capable Python 3D engines. Choice must balance: game logic genuinely in Python, WebGL post-processing (bloom), mobile performance, load time.
 - Performance risk: Python-in-WASM per-frame overhead with many bullets/particles, especially on mobile. Hot paths (bullet updates, particles, rendering) may need to be batched/instanced or pushed to the JS/GPU side.
 - "Modern polished" with code-built models: visual quality will rely on shaders, lighting, emissive/glow materials, particles, and camera effects rather than detailed geometry.
@@ -67,14 +67,16 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | 3D graphics, 2D gameplay plane | User wants 3D visuals with classic shmup gameplay | — Pending |
-| Python running in the browser (WASM), no server | User choice; shareable link, no hosting cost | — Pending |
+| Python running in the browser (WASM), no server | User choice; shareable link, no hosting cost | ✓ Good — live on GitHub Pages (rguillon/Stratoburst) |
 | 90s arcade era (Raiden-style) over bullet hell | User choice | — Pending |
 | Raiden-style colored weapon pickups | User choice | — Pending |
-| Fixed tilted top-down camera | User choice | — Pending |
+| Fixed tilted top-down camera | User choice | ✓ Good — 25° tilt, 30° FOV, letterboxed portrait playfield |
 | Procedural/code-built models | User choice; no asset pipeline | — Pending |
-| 3D rendering stack | To be decided by research | — Pending |
+| GitHub Pages hosting with gated CI/CD and PR previews | Static host, no special headers needed on the main thread | ✓ Good — Phase 1 |
+| Fixed 60 Hz sim, one batched tick per frame, uniform-grid broadphase | Keeps Python cost within 3 ms per frame and speed independent of refresh rate | ✓ Good — tick ~1.1 ms at 500 stress bullets |
+| 3D rendering stack | Research: Pyodide 314.0.7 + three.js 0.186.1 WebGL2, Babylon.js as fallback | ✓ Good — desktop and phone checks passed in Phase 1 UAT |
 | One class per file, domain subdirectories | User coding standard | — Pending |
-| pytest with 100% line+branch coverage gate | User quality standard; pure core makes it achievable | — Pending |
+| pytest with 100% line+branch coverage gate | User quality standard; pure core makes it achievable | ✓ Good — enforced in CI through Makefile targets |
 
 ## Evolution
 
@@ -94,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-17 after initialization*
+*Last updated: 2026-10-17 after Phase 1*
