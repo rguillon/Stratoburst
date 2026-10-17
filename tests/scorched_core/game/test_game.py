@@ -10,6 +10,7 @@ from scorched_core.protocol import (
     EBULLET_STRIDE,
     H_ALPHA,
     H_EBULLET_N,
+    H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
     H_STEPS,
@@ -38,6 +39,25 @@ def test_manifest_contract() -> None:
         "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
     }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
+
+
+def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
+    assert Game().manifest()["tuning"] == {"scroll_speed": 0.8, "hitbox_radius": 2.0}
+
+
+def test_header_scroll_y_follows_the_terrain_steps() -> None:
+    game = Game()
+    for _ in range(10):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.terrain.distance == pytest.approx(8.0)
+    assert game.buffers["header"][H_SCROLL_Y] == pytest.approx(8.0, rel=1e-6)
+
+
+def test_zero_step_tick_repacks_the_current_scroll() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_SCROLL_Y] == pytest.approx(0.8, rel=1e-6)
 
 
 @pytest.mark.parametrize(

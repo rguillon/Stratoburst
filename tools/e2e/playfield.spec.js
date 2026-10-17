@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { bootGame } from './helpers.js';
+import { bootGame, readSlot } from './helpers.js';
 
 const VIEWPORTS = [
   { name: 'portrait phone', width: 390, height: 844 },
@@ -35,3 +35,13 @@ for (const { name, width, height } of VIEWPORTS) {
     await expect(page.locator('#error-panel')).toHaveCount(0);
   });
 }
+
+test('python-driven terrain scroll advances 0.8 units per 60 Hz step', async ({ page }) => {
+  await bootGame(page, '?debug');
+  const before = await readSlot(page, 'SCROLL_Y');
+  await page.waitForTimeout(1000);
+  const after = await readSlot(page, 'SCROLL_Y');
+  expect(after - before).toBeGreaterThan(42);
+  expect(after - before).toBeLessThan(54);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

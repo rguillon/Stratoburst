@@ -17,3 +17,6 @@ STORM_SPEED_MIN: Final = 0.6  # units per 60 Hz step
 STORM_SPEED_MAX: Final = 2.0
 # Player hitbox core radius; plan 01-06 draws its marker.
 HITBOX_RADIUS: Final = 2.0
+
+# Terrain scroll in terrain units per 60 Hz step (about 48 units per second); STGE-02.
+SCROLL_SPEED: Final = 0.8
