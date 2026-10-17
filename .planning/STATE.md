@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Playable Core on Real Devices
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-10-17T15:08:28.932Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-10-17T15:17:37.698Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 01 execution started
-state_head: 9aa0bdc8d91461056ee23058cd45f444aaff731e
+state_head: d0282f5596254cfb36fc8a3037179bb98a1fd82d
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 10
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 01 (Playable Core on Real Devices) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 01 execution started
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 |------|----------|-------|-------|
 | Phase 01 P01 | 25 min | 3 tasks | 47 files |
 | Phase 01 P02 | 10min | 3 tasks | 10 files |
+| Phase 01 P03 | 15 min | 2 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Ruff excludes .planning/.claude (ruff 0.17 formats Python fences in Markdown)
 - [Phase 01]: Repo is rguillon/Stratoburst; live URL https://rguillon.github.io/Stratoburst/ derived from origin (case-sensitive); page title stays Scorched
 - [Phase 01]: CI workflow steps call Makefile targets (user-requested uv+Makefile tooling); literal gate.yml greps satisfied via Makefile
+- [Phase 01]: Plan 01-03: bloom defaults strength 0.45 / radius 0.25 / threshold 1.0, since 1.0 / 0.4 washed out a 500-bullet frame; Python tick for 500 stress bullets measures 0.50 ms avg (budget 3 ms)
 
 ### Pending Todos
 
@@ -97,6 +99,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T15:08:28.905Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-10-17T15:17:37.671Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
