@@ -17,17 +17,38 @@ import { createDroneInstances } from './render/drone_instances.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createDebugSession } from './debug/debug_session.js';
+import { buildReport } from './debug/report.js';
 import * as THREE from 'three';
 
 const PLAYFIELD_W = 240;
 const PLAYFIELD_H = 320;
 const LOAD_TIMEOUT_MS = 60_000;
+const JS_FAULT_FRAME = 120;
 
 const panel = installErrorPanel();
+
+// What Copy report appends to the error text: the full device report once a debug session
+// exists, otherwise the same report layout with only what is known without one. Registered
+// before main() so even a load failure produces it.
+let debugSession = null;
+function reportText(flags) {
+  if (debugSession) return debugSession.reportText();
+  return buildReport({
+    ua: globalThis.navigator?.userAgent,
+    screen: { width: globalThis.screen?.width, height: globalThis.screen?.height },
+    css: { width: globalThis.innerWidth, height: globalThis.innerHeight },
+    dpr: globalThis.devicePixelRatio,
+    pyodide: PYODIDE_VERSION,
+    three: __THREE_VERSION__,
+    build: __BUILD_HASH__,
+    flags,
+  });
+}
 
 async function main() {
   const t0 = performance.now();
   const flags = parseUrlFlags(globalThis.location.search);
+  panel.setReportProvider(() => reportText(flags));
   const loading = createLoadingScreen();
   // Before the gate, a debug page already answers "has the game started?" (e2e reads it).
   if (flags.debug) globalThis.__scorched = { ready: false, started: false };
@@ -127,6 +148,7 @@ async function main() {
         timeToGateMs,
       })
     : null;
+  debugSession = debug;
   // Input devices are created after the gate, so the gate tap or key press never reaches them.
   // Touch mode is decided by the two devices themselves: a touch pointerdown turns it on (and
   // with it auto-fire), any later keydown turns it off. The sampler owns the flag.
@@ -149,10 +171,16 @@ async function main() {
   // A touch tap on the gate is already a touch session: steer by drag and auto-fire.
   if (pointerType === 'touch') sampler.setTouchMode(true);
   const world = new THREE.Vector3();
+  let frameCount = 0;
   let pause = null; // created after the loop; onFrame only runs once the loop has started
 
   const loop = createFrameLoop({
     onFrame(dt, ts) {
+      frameCount += 1;
+      // ?crash=js proves the error panel for JS faults (PLAT-09); the loop routes it to onError.
+      if (flags.crash === 'js' && frameCount === JS_FAULT_FRAME) {
+        throw new Error(`Injected JS fault (?crash=js) at frame ${JS_FAULT_FRAME}`);
+      }
       const q = controller.update(dt, ts);
       if (q.changed) {
         rig.applyTier(TIERS[q.tier]);
@@ -201,6 +229,14 @@ async function main() {
     loop.resetClock();
     controller.resetWarmup(performance.now());
   });
+  // A lost GPU context pauses the game behind a notice; three.js re-uploads its resources on
+  // restore and the player resumes from the PAUSED overlay.
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault(); // required, or the browser never offers to restore the context
+    pause.pause('context-lost');
+    panel.showNotice('Graphics context lost: waiting for the browser to restore it');
+  });
+  canvas.addEventListener('webglcontextrestored', () => panel.hideNotice());
   controller.resetWarmup(performance.now());
   loop.start();
 

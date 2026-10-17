@@ -1,5 +1,5 @@
 // On-device debug overlay (only created under ?debug). Text goes in through textContent, never
-// innerHTML, and is throttled to 4 Hz so the overlay itself stays out of the frame budget.
+// an HTML string, and is throttled to 4 Hz so the overlay itself stays out of the frame budget.
 
 const REFRESH_MS = 250;
 

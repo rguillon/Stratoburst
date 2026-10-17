@@ -80,6 +80,8 @@ export function createDebugSession({
   overlay.onCopy(() => copyReport(buildReport(snapshot(performance.now()))));
 
   return {
+    // The full device report as text (the error panel's Copy report appends it).
+    reportText: () => buildReport(snapshot(performance.now())),
     // Called once per frame, after the render submit. dt is the rAF frame delta.
     record({ frameMs, tickMs, renderMs, nowMs }) {
       drawCalls = info.render.calls;
