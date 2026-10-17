@@ -19,7 +19,7 @@ class FixedStepRunner:
 
     def advance(self, dt_ms: float) -> int:
         """Add ``dt_ms`` of frame time and run the owed steps; return how many ran."""
-        self.acc += min(dt_ms, MAX_DT_MS)
+        self.acc += max(0.0, min(dt_ms, MAX_DT_MS))
         steps = 0
         while self.acc >= STEP_MS - EPS and steps < MAX_STEPS:
             self.step_fn()

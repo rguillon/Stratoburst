@@ -74,3 +74,11 @@ def test_reset_zeroes_accumulator() -> None:
     runner.advance(STEP_MS / 2)
     runner.reset()
     assert runner.acc == 0.0
+
+
+def test_a_negative_dt_adds_no_time() -> None:
+    runner, calls = make()
+    runner.advance(STEP_MS / 2)
+    assert runner.advance(-5000.0) == 0
+    assert calls == []
+    assert runner.acc == pytest.approx(STEP_MS / 2)

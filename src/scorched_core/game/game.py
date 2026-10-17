@@ -1,5 +1,6 @@
 """Game facade: owns the simulation, the packed channel buffers and the manifest."""
 
+import math
 import random
 from array import array
 from typing import Final
@@ -180,6 +181,8 @@ class Game:
         # distance only once; a frame that runs none keeps it for the next call.
         if drag_x or drag_y:
             self.ship.add_drag(drag_x, drag_y)
+        if not math.isfinite(dt_ms) or dt_ms < 0.0:
+            dt_ms = 0.0  # a bad rAF delta is "no time passed", never a frozen or crashed sim
         steps = self._runner.advance(self.refresh.snap(dt_ms))
         self._pack_header(steps)
         if steps > 0:

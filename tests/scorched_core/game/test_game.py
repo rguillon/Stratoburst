@@ -143,6 +143,15 @@ def test_zero_step_tick_still_packs_header() -> None:
     assert header[H_TICK_COUNT] == 0
 
 
+@pytest.mark.parametrize("bad_dt", [-5000.0, float("nan"), float("inf"), float("-inf")])
+def test_a_bad_dt_is_no_time_and_never_freezes_or_crashes_the_sim(bad_dt: float) -> None:
+    game = Game()
+    for _ in range(5):  # enough samples for the refresh estimator to be live
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.tick(bad_dt, 0, 0.0, 0.0, 0.0, 0.0) == 0
+    assert game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0) == 1  # the next frame runs normally
+
+
 def test_no_stress_means_an_empty_storm() -> None:
     game = Game()
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
