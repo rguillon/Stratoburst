@@ -544,17 +544,23 @@ if self.input.pressed(Button.BOMB):
 
 **If this table is empty:** (not empty) — A1-A11 need user/UAT confirmation before they are locked.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Phone baseline.** STATE.md notes the Android/iPhone stress reports were never pasted into `01-DEVICE-REPORTS.md` (UAT result was "pass" without numbers).
    - What we know: desktop passes at 60 fps with `?debug&stress=500`; phones passed UAT qualitatively.
    - What's unclear: any phone frame-time or tick-time number to compare the effect stack against.
    - Recommendation: make the first plan a `checkpoint:human-verify` that records both phones' Phase 1 reports **before** effects land; the final plan re-runs the same protocol with the gallery and effects on.
+   - RESOLVED: the baseline is measured side by side in the device gate, plan 02-33. The live URL keeps serving the Phase 1 build until that plan pushes main, so in one session both phones run the same `?debug&stress=500` protocol on the live Phase 1 build and the worst-case run on the Phase 2 PR preview. The Phase 1 reports are pasted into `01-DEVICE-REPORTS.md` and compared against the Phase 2 numbers in `02-DEVICE-REPORTS.md`. A first-plan checkpoint was not used, because it would need a human session before any code lands. The live Phase 1 build gives the same baseline at the end.
 2. **Ground-target compensation visual acceptance (A3/A4).** Recommend a very early spike task that renders one tank in the ground layer and checks hit alignment at portrait and landscape.
+   - RESOLVED: the ray-compensated ground layer (Pattern 14) and `GROUND_SCROLL_RATIO = 0.94` are adopted. Python ground motion is in plan 02-05, and the JS ground layer with wrecks is in plan 02-12. Hit alignment is proven automatically: plan 02-12 has a vitest NDC comparison at aspects 9:19.5, 3:4 and 16:9 (within 1e-6), and an e2e check that `groundLayerK` stays within 1.03..1.09. A3 (residual slide is acceptable) is an accepted assumption, checked by the plan 02-14 human-check at portrait and landscape. If it fails, the fallback is ratio 1.0.
 3. **Should the beam stop at the first enemy?** Raiden DX pierces; Strikers-style lasers often do not. Defaulting to pierce.
+   - RESOLVED: the beam pierces every enemy in its column (Raiden DX, assumption A2). This is a reversible tuning choice implemented in plan 02-21 (`resolve_beam_vs_enemies`, with a pierce test).
 4. **Debug/test URL flags.** The Phase 1 grammar reads exactly four parameters (url_flags.js header: "Only these four parameters are read"). Gallery tuning and e2e need `?weapon=`, `?level=`, `?bombs=`, possibly `?god`. Recommend extending the grammar with allow-listed, clamped values validated on both JS and Python sides (like `crash`). Needs a decision because D-15/Phase 1 documented four flags.
+   - RESOLVED: the grammar is extended with allow-listed, clamped flags. Each one is validated in `url_flags.js` and again in Python (`entrypoint.py` and `Game.__init__`): `?weapon=vulcan|laser|homing` and `?level=1..5` in plan 02-11, `?god` (presence only, real boolean in Python) in plan 02-20, and `?bombs=0..7` in plan 02-27. Plan 02-27 also prints every flag on the report's `flags:` line. The Phase 1 flags (`?debug`, `?stress`, `?tier`, `?crash`) are unchanged (D-20).
 5. **Minimal readout.** No HUD until Phase 3, but testers need weapon/level/bombs visible on the live link. Recommend a tiny DOM readout (colored pip, Lv, bomb count) that Phase 3 replaces; at minimum surface them in the `?debug` overlay.
+   - RESOLVED: a tiny DOM status readout, written with `textContent` only, shows the weapon name in its crystal colour and the level (plan 02-11). The "MAX" flash comes in plan 02-24 and the bomb pips in plan 02-27. The Phase 3 HUD replaces the readout.
 6. **Vendored zzfx vs dependency.** CLAUDE.md names zzfx 1.4.0. The recommended vendored `buildSamples` satisfies the intent without the SUS install; confirm with the user if a literal dependency is wanted.
+   - RESOLVED: the zzfx 1.4.0 sample generator is vendored as one pure function, with its MIT header kept verbatim, in `web/src/audio/zzfx_synth.js` (plan 02-31). No npm package is installed and the lockfile is unchanged. This meets CLAUDE.md's zzfx requirement and avoids both the import-time `AudioContext` (Pitfall 11) and the SUS install checkpoint. An automated gate rejects any audio-context, network or dynamic-code token in the vendored file.
 
 ## Environment Availability
 

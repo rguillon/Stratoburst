@@ -65,7 +65,87 @@ Plans:
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
 
-**Plans**: TBD
+**Plans:** 33 plans (21 waves)
+
+Plans:
+**Wave 1**
+- [ ] 02-01-PLAN.md — (wave 1) Events foundation: protocol v2, preallocated event ring, drone kill and hit events, bridge accepts v2
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 02-02-PLAN.md — (wave 2) GPU particle explosions sized by class from events, hit sparks, tier-scaled counts
+- [ ] 02-03-PLAN.md — (wave 2) Enemy pool with kind tables and a looping gallery script replace the drones (Python)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 02-04-PLAN.md — (wave 3) Gallery enemies drawn per kind; wire names become enemies / ENEMY_N / KILLS
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 02-05-PLAN.md — (wave 4) Full roster: dive and hover jets and helicopters, ground tanks and aiming turrets, 1200-step loop (Python)
+- [ ] 02-06-PLAN.md — (wave 4) Model kit, smooth player ship and rounded buildings with tier-driven detail
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 02-07-PLAN.md — (wave 5) Smooth air enemies (jet, helicopter with rotor, carrier) with body / glow / top instancing
+- [ ] 02-08-PLAN.md — (wave 5) Weapon loadout with colour rules and the vulcan fan as data, Lv1 parity with the twin shot (Python)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 02-09-PLAN.md — (wave 6) Smooth tanks and AA turrets whose guns track the player
+- [ ] 02-10-PLAN.md — (wave 6) Colour-cycling crystals from carriers, ship-body catches, MAX bonus counter (Python)
+- [ ] 02-11-PLAN.md — (wave 6) ?weapon / ?level flags validated on both sides, weapon readout, bolt flight angle
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 02-12-PLAN.md — (wave 7) Ray-compensated ground layer, hits aligned at every aspect, ground blasts and wrecks
+- [ ] 02-13-PLAN.md — (wave 7) Homing missiles by uid with turn-rate steering (Python)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 02-14-PLAN.md — (wave 8) Scorch marks and smouldering wrecks that scroll with the terrain, tier decal limits
+- [ ] 02-15-PLAN.md — (wave 8) Player life state machine: grace window, death, fly-in respawn, invulnerability (Python units)
+- [ ] 02-16-PLAN.md — (wave 8) Stress storm in its own harmless pool; one shared bullet channel; STORM_N
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 02-17-PLAN.md — (wave 9) Pink enemy-bullet orbs in a post-bloom pass, reserved-pink palette, stretched HDR bolts
+- [ ] 02-18-PLAN.md — (wave 9) Enemy fire: aimed shots and rings at Raiden pacing into the gameplay pool (Python)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 02-19-PLAN.md — (wave 10) Explosion light pool (fixed 3 lights) and air shadows that show altitude
+- [ ] 02-20-PLAN.md — (wave 10) Lethal hits wired: death and fly-in respawn in the game; ?god flag, mortal e2e helper, death spec
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [ ] 02-21-PLAN.md — (wave 11) Piercing laser beam: hitscan, BEAM_W, glowing beam mesh
+
+**Wave 12** *(blocked on Wave 11 completion)*
+- [ ] 02-22-PLAN.md — (wave 12) Nuke core (Shift/K): bullet clear, growing damage, invulnerability, stock, press latch
+- [ ] 02-23-PLAN.md — (wave 12) Visible homing missiles with trails; perf gate per weapon at Lv5
+
+**Wave 13** *(blocked on Wave 12 completion)*
+- [ ] 02-24-PLAN.md — (wave 13) Visible spinning crystals, pickup sparkle, MAX flash
+
+**Wave 14** *(blocked on Wave 13 completion)*
+- [ ] 02-25-PLAN.md — (wave 14) Death costs 2 levels, recovery crystal, ship hide, death FX, hull blink with visible hitbox
+
+**Wave 15** *(blocked on Wave 14 completion)*
+- [ ] 02-26-PLAN.md — (wave 15) Bomb showcase FX, deathbomb grace cancel, turret bomb pickups, respawn refill
+
+**Wave 16** *(blocked on Wave 15 completion)*
+- [ ] 02-27-PLAN.md — (wave 16) Bomb pips, ?bombs flag, full flags line in device reports, perf bomb load
+
+**Wave 17** *(blocked on Wave 16 completion)*
+- [ ] 02-28-PLAN.md — (wave 17) Hitstop and render-only screen shake on bombs and deaths only; frozen effect clock
+
+**Wave 18** *(blocked on Wave 17 completion)*
+- [ ] 02-29-PLAN.md — (wave 18) Touch bomb button: margin or corner layout, drag exclusion, pause release
+- [ ] 02-30-PLAN.md — (wave 18) Python SFX ids routed from gameplay events
+
+**Wave 19** *(blocked on Wave 18 completion)*
+- [ ] 02-31-PLAN.md — (wave 19) Vendored zzfx synthesis, full SFX table, playback on the gate's AudioContext
+
+**Wave 20** *(blocked on Wave 19 completion)*
+- [ ] 02-32-PLAN.md — (wave 20) Laser hum, pause mute, 20-voice limit and cooldowns, iOS audio keepalive, report audio line
+
+**Wave 21** *(blocked on Wave 20 completion)*
+- [ ] 02-33-PLAN.md — (wave 21) Real-device gate with side-by-side Phase 1 baseline, iOS audio check, verdict, deploy main
+
+**Cross-cutting constraints:**
+- make perf still averages at most 3 ms per tick.
+
 **UI hint**: yes
 
 ### Phase 3: Stage 1 Vertical Slice
@@ -108,6 +188,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
-| 2. Arcade Shooting Feel | 0/TBD | Not started | - |
+| 2. Arcade Shooting Feel | 0/33 | Planned | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
