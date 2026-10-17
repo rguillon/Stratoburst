@@ -33,3 +33,17 @@ def test_tick_skips_bulk_when_no_steps() -> None:
     game.tick.return_value = 0
     assert web.tick(1.0, 0, 0.0, 0.0, 0.0, 0.0) == 0
     sink.flush.assert_called_once_with(bulk=False)
+
+
+def test_set_paused_delegates_and_flushes_only_the_header_paused() -> None:
+    web, game, sink = make()
+    web.set_paused(True)
+    game.set_paused.assert_called_once_with(True)
+    sink.flush.assert_called_once_with(bulk=False)
+
+
+def test_set_paused_false_delegates_too_resume() -> None:
+    web, game, sink = make()
+    web.set_paused(False)
+    game.set_paused.assert_called_once_with(False)
+    sink.flush.assert_called_once_with(bulk=False)

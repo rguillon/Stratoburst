@@ -196,6 +196,39 @@ describe('createKeyboardInput', () => {
     expect(kb.sample(BITS)).toEqual({ buttons: 0, moveX: 0, moveY: 0 });
   });
 
+  it('clears all key state on pagehide', () => {
+    const target = fakeTarget();
+    const kb = createKeyboardInput(target);
+    target.emit('keydown', 'KeyD');
+    target.emit('keydown', 'Space');
+    target.emit('pagehide');
+    expect(kb.sample(BITS)).toEqual({ buttons: 0, moveX: 0, moveY: 0 });
+  });
+
+  it('clears all key state when the document becomes hidden, but not when it becomes visible', () => {
+    const target = fakeTarget();
+    const doc = Object.assign(fakeTarget(), { visibilityState: 'visible' });
+    target.document = doc;
+    const kb = createKeyboardInput(target);
+    target.emit('keydown', 'KeyD');
+    doc.emit('visibilitychange');
+    expect(kb.sample(BITS).moveX).toBe(1);
+    doc.visibilityState = 'hidden';
+    doc.emit('visibilitychange');
+    expect(kb.sample(BITS)).toEqual({ buttons: 0, moveX: 0, moveY: 0 });
+  });
+
+  it('dispose() removes the pagehide and visibilitychange listeners too', () => {
+    const target = fakeTarget();
+    const doc = Object.assign(fakeTarget(), { visibilityState: 'visible' });
+    target.document = doc;
+    const kb = createKeyboardInput(target);
+    expect(doc.listenerCount('visibilitychange')).toBe(1);
+    kb.dispose();
+    expect(doc.listenerCount('visibilitychange')).toBe(0);
+    expect(target.listenerCount('pagehide')).toBe(0);
+  });
+
   it('clear() drops held keys and press edges', () => {
     const target = fakeTarget();
     const kb = createKeyboardInput(target);

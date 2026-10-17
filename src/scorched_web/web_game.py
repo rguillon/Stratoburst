@@ -23,6 +23,9 @@ class WebGame:
         """Bind a JS typed array to a channel."""
         self._sink.attach(name, target)
 
+    def set_paused(self, paused: bool) -> None:
+        """Skeleton: pausing is not wired yet."""
+
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature
         self,
         dt_ms: float,

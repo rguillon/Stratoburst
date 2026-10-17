@@ -12,6 +12,7 @@ from scorched_core.protocol import (
     DRONE_STRIDE,
     EBULLET_STRIDE,
     FLAG_FIRING,
+    FLAG_PAUSED,
     H_ALPHA,
     H_DRONE_N,
     H_DRONES_DOWN,
@@ -67,9 +68,9 @@ def test_firing_flag_is_set_on_a_zero_step_tick_too() -> None:
     assert int(game.buffers["header"][H_FLAGS]) == FLAG_FIRING
 
 
-def test_bomb_and_pause_bits_have_no_gameplay_effect_in_phase_one() -> None:
+def test_the_bomb_bit_has_no_gameplay_effect_in_phase_one() -> None:
     game = Game()
-    game.tick(STEP_MS, Button.BOMB | Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
     assert int(game.buffers["header"][H_FLAGS]) == 0
     assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
 
@@ -447,3 +448,147 @@ def test_the_first_frame_with_a_zero_dt_runs_no_step_boundary() -> None:
     game = Game()
     assert game.tick(0.0, 0, 0.0, 0.0, 0.0, 0.0) == 0
     assert game.tick_count == 0
+
+
+def flags(game: Game) -> int:
+    return int(game.buffers["header"][H_FLAGS])
+
+
+def test_a_pause_press_pauses_before_any_step_runs_paused() -> None:
+    game = Game()
+    assert game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0) == 0
+    assert game.paused
+    assert game.tick_count == 0
+    assert flags(game) == FLAG_PAUSED
+    assert game.buffers["header"][H_STEPS] == 0
+
+
+def test_while_paused_a_five_second_dt_runs_nothing_and_moves_nothing_paused() -> None:
+    game = Game()
+    game.set_paused(True)
+    ticks = game.tick_count
+    scroll = game.terrain.distance
+    assert game.tick(5000.0, 0, 1.0, 0.0, 0.0, 0.0) == 0
+    assert game.tick_count == ticks
+    assert game.terrain.distance == scroll
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert flags(game) & FLAG_PAUSED
+    assert game.buffers["header"][H_STEPS] == 0
+    assert game.buffers["header"][H_TICK_COUNT] == ticks
+
+
+def test_while_paused_the_accumulator_and_estimator_are_left_alone_paused() -> None:
+    game = Game()
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    acc = game._runner.acc
+    game.set_paused(True)
+    for _ in range(5):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game._runner.acc == acc
+
+
+def test_while_paused_a_drag_is_not_queued_paused() -> None:
+    game = Game()
+    game.set_paused(True)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 30.0, 0.0)
+    assert game.ship.pending_x == 0.0
+
+
+def test_while_paused_the_fire_flag_is_still_reflected_paused() -> None:
+    game = Game()
+    game.set_paused(True)
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert flags(game) == FLAG_PAUSED | FLAG_FIRING
+    assert game.pbullets.n == 0
+
+
+def test_set_paused_shows_in_the_header_without_a_tick_paused() -> None:
+    game = Game()
+    game.set_paused(True)
+    assert flags(game) == FLAG_PAUSED
+    game.set_paused(False)
+    assert flags(game) == 0
+
+
+def test_resume_after_a_pause_runs_exactly_one_step_for_one_period_resume() -> None:
+    game = Game()
+    game.set_paused(True)
+    game.set_paused(False)
+    assert game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0) == 1
+
+
+def test_resume_zeroes_the_accumulator_resume() -> None:
+    game = Game()
+    game.tick(STEP_MS * 0.9, 0, 0.0, 0.0, 0.0, 0.0)
+    game.set_paused(True)
+    game.set_paused(False)
+    assert game.tick(STEP_MS * 0.9, 0, 0.0, 0.0, 0.0, 0.0) == 0
+
+
+def test_resume_forgets_the_refresh_history_resume() -> None:
+    game = Game()
+    for _ in range(10):
+        game.tick(1000.0 / 120.0, 0, 0.0, 0.0, 0.0, 0.0)
+    game.set_paused(True)
+    game.set_paused(False)
+    assert game.refresh.snap(16.9) == 16.9
+
+
+def test_resume_drops_the_drag_the_ship_still_owed_resume() -> None:
+    game = Game()
+    game.ship.pending_x = 25.0
+    game.set_paused(True)
+    game.set_paused(False)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.ship.x == SHIP_START_X
+
+
+def test_set_paused_false_while_running_is_a_no_op_resume() -> None:
+    game = Game()
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    game.set_paused(False)
+    assert game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0) == 1
+
+
+def test_set_paused_true_twice_is_idempotent_paused() -> None:
+    game = Game()
+    game.set_paused(True)
+    game.set_paused(True)
+    game.set_paused(False)
+    assert not game.paused
+    assert flags(game) == 0
+
+
+def test_a_second_pause_press_resumes_in_the_same_tick_resume() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.paused
+    assert game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0) == 1
+    assert not game.paused
+    assert flags(game) == 0
+
+
+def test_holding_pause_does_not_toggle_again_paused() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    for _ in range(5):
+        game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    assert game.paused
+
+
+def test_a_still_held_pause_bit_does_not_retoggle_after_resume_resume() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    game.set_paused(False)  # JS resumed while the key was still down
+    assert game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0) == 1
+    assert not game.paused
+
+
+def test_pausing_from_js_while_pause_is_held_does_not_unpause_paused() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)  # Escape: pause
+    game.set_paused(False)
+    game.set_paused(True)  # a blur while Escape is still down
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    assert game.paused

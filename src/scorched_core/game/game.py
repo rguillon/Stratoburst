@@ -11,6 +11,7 @@ from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.drone_swarm import DroneSwarm
 from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.input.button import Button
+from scorched_core.input.input_frame import InputFrame
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
     DRONE_CAP,
@@ -76,6 +77,8 @@ class Game:
         "ebullet_cap",
         "ebullets",
         "grid",
+        "input",
+        "paused",
         "pbullets",
         "refresh",
         "rng",
@@ -108,6 +111,8 @@ class Game:
         self._move_x = 0.0
         self._move_y = 0.0
         self.refresh = RefreshEstimator()
+        self.input = InputFrame()
+        self.paused = False
         self._runner = FixedStepRunner(self._step)
         self.buffers: dict[str, array] = {
             "header": array("f", bytes(4 * HEADER_LEN)),
@@ -131,6 +136,9 @@ class Game:
             "buttons": {b.name: b.value for b in Button},
             "tuning": {"scroll_speed": SCROLL_SPEED, "hitbox_radius": HITBOX_RADIUS},
         }
+
+    def set_paused(self, paused: bool) -> None:
+        """Skeleton: pausing is not wired yet."""
 
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature (RESEARCH Pattern 2)
         self,
