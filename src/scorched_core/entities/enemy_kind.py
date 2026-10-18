@@ -14,3 +14,7 @@ class EnemyKind(IntEnum):
     TRAIN = 5  # the mid-boss hull: an armored train on the maglev line (ground unit)
     TRAIN_TURRET = 6  # a destructible gun car on the train
     TRAIN_STUMP = 7  # what a destroyed gun car leaves on the hull
+    HOUSE = 8  # city targets (D-05): selected buildings that are destructible ground units
+    FUEL_TANK = 9
+    DEPOT = 10
+    BILLBOARD = 11

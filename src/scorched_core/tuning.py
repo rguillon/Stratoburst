@@ -120,15 +120,16 @@ HITSTOP_BOSS_TICKS: Final = 8  # D-14: and the boss's final explosion is the big
 
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET, TRAIN, TRAIN_TURRET,
-# TRAIN_STUMP). The three train kinds are the mid-boss's rows (plan 03-14): the hull is the
-# largest collider in the game and still fits one grid cell with the larger shot radius.
+# TRAIN_STUMP, HOUSE, FUEL_TANK, DEPOT, BILLBOARD). The three train kinds are the mid-boss's rows
+# (plan 03-14): the hull is the largest collider in the game and still fits one grid cell with the
+# larger shot radius. The last four are the city's destructible targets (plan 03-15, D-05).
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames
 ENEMY_MAX_ALIVE: Final = 56  # spawns beyond this are refused; a boss and its parts share the pool
 ENEMY_EXIT_MARGIN: Final = 24.0  # an enemy this far outside the playfield is gone
 ENEMY_SWAY: Final = 30.0  # sinusoidal sway amplitude in units
 ENEMY_SWAY_PERIOD: Final = 120  # steps per full sway cycle
-ENEMY_RADIUS: Final = (9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0)
-ENEMY_HP: Final = (3, 6, 12, 8, 6, 500, 120, 1)
+ENEMY_RADIUS: Final = (9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0)
+ENEMY_HP: Final = (3, 6, 12, 8, 6, 500, 120, 1, 8, 6, 16, 10)
 ENEMY_BLAST: Final = (
     BLAST_SMALL,
     BLAST_MEDIUM,
@@ -138,16 +139,24 @@ ENEMY_BLAST: Final = (
     BLAST_LARGE,
     BLAST_MEDIUM,
     BLAST_SMALL,
+    BLAST_MEDIUM,
+    BLAST_LARGE,
+    BLAST_LARGE,
+    BLAST_MEDIUM,
 )
-ENEMY_GROUND: Final = (False, False, False, True, True, True, True, True)
+ENEMY_GROUND: Final = (False, False, False, True, True, True, True, True, True, True, True, True)
+# Which kinds leave a wreck behind when destroyed (1) and which do not (0): ground vehicles, the
+# train hull and the city targets burn out in place, aircraft, gun cars and stumps vanish. The
+# renderer reads this from the manifest (``tuning.enemy_wreck``), so the choice stays data.
+ENEMY_WRECK: Final = (0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1)
 
 # Enemy fire (D-17), Raiden pacing and not bullet hell. Fire is data (ENMY-04): each kind names
 # its default pattern from the PATTERNS registry (patterns/pattern_library.py), indexed by
-# EnemyKind (JET, HELI, CARRIER, TANK, TURRET, TRAIN, TRAIN_TURRET, TRAIN_STUMP); None means the
-# kind never fires (a boss's own guns are emitters in its BossSpec, not the pool's). A stage
-# wave can name another pattern. Nothing fires until a pattern's delay (ENEMY_FIRE_DELAY steps
-# by default) after it spawned, nor above the top edge or below ENEMY_FIRE_MAX_Y, so nothing
-# shoots point-blank from under the ship.
+# EnemyKind (JET, HELI, CARRIER, TANK, TURRET, TRAIN, TRAIN_TURRET, TRAIN_STUMP and the four city
+# targets); None means the kind never fires (a boss's own guns are emitters in its BossSpec, not
+# the pool's). A stage wave can name another pattern. Nothing fires until a pattern's delay
+# (ENEMY_FIRE_DELAY steps by default) after it spawned, nor above the top edge or below
+# ENEMY_FIRE_MAX_Y, so nothing shoots point-blank from under the ship.
 ENEMY_FIRE_DELAY: Final = 45
 ENEMY_FIRE_MAX_Y: Final = PLAYFIELD_H * 0.7
 ENEMY_PATTERN: Final = (
@@ -159,16 +168,21 @@ ENEMY_PATTERN: Final = (
     None,
     None,
     None,
+    None,
+    None,
+    None,
+    None,
 )
 
 # Scoring (SCOR-01, SCOR-04, D-17, D-19), all tunable. A kill pays a fixed amount by kind, indexed
 # by EnemyKind (JET, HELI, CARRIER, TANK, TURRET; the train kinds pay 0 because the boss
-# controller pays its parts and its hull): no multiplier and no point-blank bonus. The
+# controller pays its parts and its hull; HOUSE, FUEL_TANK, DEPOT and BILLBOARD pay 500, 1500,
+# 2000 and 1000, SCOR-01): no multiplier and no point-blank bonus. The
 # deferred Lv5 MAX catch pays a flat MAX_BONUS_POINTS. The score is a Python int clamped at
 # SCORE_CAP, seven digits, so the float32 header slot always holds it exactly. The player starts
 # with LIVES_START ships (never more than LIVES_CAP) and earns an extend at EXTEND_FIRST and then
 # every EXTEND_EVERY.
-ENEMY_POINTS: Final = (300, 800, 2000, 1000, 1200, 0, 0, 0)
+ENEMY_POINTS: Final = (300, 800, 2000, 1000, 1200, 0, 0, 0, 500, 1500, 2000, 1000)
 SCORE_CAP: Final = 9_999_999
 MAX_BONUS_POINTS: Final = 10_000
 LIVES_START: Final = 3

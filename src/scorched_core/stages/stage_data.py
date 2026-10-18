@@ -8,6 +8,7 @@ from scorched_core.patterns.pattern_library import pattern_index
 from scorched_core.stages.city_block import CityBlock
 from scorched_core.stages.city_builder import scenery_placements
 from scorched_core.stages.city_feature import CityFeature
+from scorched_core.stages.ground_entry import GroundEntry
 from scorched_core.stages.wave_entry import WaveEntry
 
 
@@ -21,7 +22,8 @@ class StageData:
 
     ``city`` (road-grid blocks) and ``features`` (the maglev, the runway lights) author the
     scenery as data (D-34); ``seed`` seeds its expansion, which is done once here into the flat
-    ``placements`` tuple the manifest ships to the renderer.
+    ``placements`` tuple the manifest ships to the renderer. ``ground`` is the terrain-anchored
+    rows (the city's destructible targets, ``target_entries``), sorted by ``at`` like the waves.
     """
 
     number: int
@@ -31,6 +33,7 @@ class StageData:
     city: tuple[CityBlock, ...] = ()
     features: tuple[CityFeature, ...] = ()
     seed: int = 1
+    ground: tuple[GroundEntry, ...] = ()
     placements: tuple[float, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -59,6 +62,7 @@ class StageData:
                 msg = f"marker {name!r} (at={distance}) is outside the stage [0, {self.length}]"
                 raise ValueError(msg)
         self._check_city()
+        self._check_ground()
         object.__setattr__(
             self, "placements", scenery_placements(self.city, self.features, self.seed)
         )
@@ -76,6 +80,24 @@ class StageData:
                     f"is outside the stage [0, {self.length}]"
                 )
                 raise ValueError(msg)
+
+    def _check_ground(self) -> None:
+        """Every ground entry must lie inside the stage, sorted by ``at``."""
+        previous = 0.0
+        for index, entry in enumerate(self.ground):
+            if not 0.0 <= entry.at <= self.length:
+                msg = (
+                    f"ground entry {index} (at={entry.at}, {entry.kind.name}) "
+                    f"is outside the stage [0, {self.length}]"
+                )
+                raise ValueError(msg)
+            if entry.at < previous:
+                msg = (
+                    f"ground entry {index} (at={entry.at}) breaks the order: "
+                    "ground entries must be sorted by at"
+                )
+                raise ValueError(msg)
+            previous = entry.at
 
     @staticmethod
     def _check_path(index: int, wave: WaveEntry) -> None:

@@ -13,6 +13,7 @@ from typing import Final
 from scorched_core.stages.city_block import CityBlock
 from scorched_core.stages.city_feature import CityFeature
 from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.ground_entry import GroundEntry
 from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.tuning import (
     CITY_BLOCK,
@@ -95,7 +96,11 @@ def _signs(count: int, buildings: list[Record], cell_w: float, rng: random.Rando
 
 
 def _block_records(block: CityBlock, seed: int, corridors: Sequence[Corridor]) -> list[Record]:
-    """Every placement of one block: buildings, fires, lamps and signs."""
+    """Every placement of one block: buildings, fires, lamps and signs.
+
+    A lot flagged as a target (``block.targets``) is left out altogether: it is not scenery but an
+    enemy row (``target_entries``). Fires are only drawn on the other lots.
+    """
     rng = random.Random(seed ^ block.seed)  # noqa: S311 - scenery randomness, not security
     cell_w = CITY_BLOCK / block.cols
     cell_d = CITY_BLOCK / block.rows
@@ -115,11 +120,13 @@ def _block_records(block: CityBlock, seed: int, corridors: Sequence[Corridor]) -
                     variant,
                 )
             )
-    burning = set(rng.sample(range(len(lots)), block.fires))
+    flagged = {lot for lot, _, _ in block.targets}
+    free = [index for index in range(len(lots)) if index not in flagged]
+    burning = set(rng.sample(free, min(block.fires, len(free))))
     placed: list[Record] = []
     buildings: list[Record] = []
     for index, lot in enumerate(lots):
-        if _blocked(lot, corridors):
+        if index in flagged or _blocked(lot, corridors):
             continue
         if index in burning:
             fire = _record(
@@ -181,6 +188,25 @@ def _feature_records(feature: CityFeature) -> list[Record]:
         )
         for i in range(count)
     ]
+
+
+def target_entries(blocks: Sequence[CityBlock]) -> tuple[GroundEntry, ...]:
+    """The ground rows of every flagged lot, sorted by distance (then x).
+
+    Each row sits at its lot's centre and the lot's distance, the same place the scenery would
+    have drawn the building, so the target spawns exactly where the block shows it (D-05).
+    """
+    entries: list[GroundEntry] = []
+    for block in blocks:
+        cell_w = CITY_BLOCK / block.cols
+        cell_d = CITY_BLOCK / block.rows
+        for lot, kind, drop in block.targets:
+            row, col = divmod(lot, block.cols)
+            x = CITY_PITCH * block.col + _INSET + (col + 0.5) * cell_w
+            at = block.d + _INSET + (row + 0.5) * cell_d
+            entries.append(GroundEntry(at=at, kind=kind, x=x, drop=drop))
+    entries.sort(key=lambda entry: (entry.at, entry.x))
+    return tuple(entries)
 
 
 def scenery_placements(

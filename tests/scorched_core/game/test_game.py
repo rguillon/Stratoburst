@@ -206,6 +206,10 @@ def test_manifest_contract() -> None:
         "TRAIN": 5,
         "TRAIN_TURRET": 6,
         "TRAIN_STUMP": 7,
+        "HOUSE": 8,
+        "FUEL_TANK": 9,
+        "DEPOT": 10,
+        "BILLBOARD": 11,
     }
 
 
