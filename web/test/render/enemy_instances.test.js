@@ -52,6 +52,8 @@ describe('createEnemyInstances', () => {
       'enemy-tank-glow',
       'enemy-tank-top',
       'enemy-turret',
+      'enemy-turret-glow',
+      'enemy-turret-top',
     ]);
     for (const mesh of enemies.meshes) {
       expect(mesh.isInstancedMesh).toBe(true);
@@ -81,7 +83,7 @@ describe('createEnemyInstances', () => {
   it('draws nothing until told how many enemies are live', () => {
     const { enemies } = build();
     enemies.update(0);
-    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it('routes each instance to its kind mesh and counts per kind', () => {
@@ -254,7 +256,10 @@ describe('createEnemyInstances hit flash and bad data', () => {
     setEnemy(data, 3, { x: 40, y: 40, kind: Number.NaN });
     setEnemy(data, 4, { x: 50, y: 50, kind: KINDS.TURRET });
     enemies.update(5);
-    expect(enemies.meshes.reduce((total, mesh) => total + mesh.count, 0)).toBe(1);
+    // Only the turret is drawn: its body, glow and top meshes hold one instance each.
+    const drawn = enemies.meshes.filter((mesh) => mesh.count > 0).map((mesh) => mesh.name);
+    expect(drawn).toEqual(['enemy-turret', 'enemy-turret-glow', 'enemy-turret-top']);
+    expect(enemies.meshes.every((mesh) => mesh.count <= 1)).toBe(true);
     expect(byName['enemy-turret'].count).toBe(1);
     expect(positionOf(byName['enemy-turret'], 0).toArray()).toEqual([-70, 0, -110]);
   });
@@ -306,13 +311,15 @@ describe('createEnemyInstances models', () => {
     for (let i = 0; i < 2; i++) expect(matrixOf(glow, i)).toEqual(matrixOf(body, i));
   });
 
-  it('builds the jet and the tank from the code-built models and keeps a primitive for an unknown kind', () => {
+  it('builds every gallery kind from the code-built models and keeps a primitive for an unknown kind', () => {
     const { byName } = build();
     expect(byName['enemy-jet'].geometry).toBe(enemyModel('JET', 'high').body);
     expect(byName['enemy-jet-glow'].geometry).toBe(enemyModel('JET', 'high').glow);
     expect(byName['enemy-tank'].geometry).toBe(enemyModel('TANK', 'high').body);
     expect(byName['enemy-tank-glow'].geometry).toBe(enemyModel('TANK', 'high').glow);
     expect(byName['enemy-tank-top'].geometry).toBe(enemyModel('TANK', 'high').top);
+    expect(byName['enemy-turret'].geometry).toBe(enemyModel('TURRET', 'high').body);
+    expect(byName['enemy-turret-top'].geometry).toBe(enemyModel('TURRET', 'high').top);
     const mystery = createEnemyInstances({
       data: new Float32Array(STRIDE * 2),
       capacity: 2,

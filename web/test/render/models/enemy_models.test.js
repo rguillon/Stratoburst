@@ -65,6 +65,25 @@ describe('TANK', () => {
   });
 });
 
+const MANIFEST_KINDS = ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET'];
+
+describe('the manifest roster', () => {
+  it('has a builder for every manifest kind, so no primitive shape is drawn', () => {
+    for (const name of MANIFEST_KINDS) expect(hasModel(name)).toBe(true);
+    expect(Object.keys(BUILDERS).sort()).toEqual([...MANIFEST_KINDS].sort());
+  });
+
+  it('warms every manifest kind', () => {
+    expect(warmModels(MANIFEST_KINDS)).toEqual(MANIFEST_KINDS);
+  });
+
+  it('gives the ground kinds a top that can turn toward the player', () => {
+    for (const name of ['TANK', 'TURRET']) {
+      for (const detail of ['high', 'mid', 'low']) expect(enemyModel(name, detail).top).not.toBeNull();
+    }
+  });
+});
+
 describe('hasModel', () => {
   it('is true for kinds with a builder and false for the rest', () => {
     expect(hasModel('JET')).toBe(true);

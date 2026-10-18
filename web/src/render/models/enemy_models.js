@@ -3,6 +3,7 @@ import { buildJet } from './jet.js';
 import { buildHeli } from './heli.js';
 import { buildCarrier } from './carrier.js';
 import { buildTank } from './tank.js';
+import { buildTurret } from './turret.js';
 
 // The enemy model registry (VISL-01, D-25). Each builder takes a detail level and returns
 // `{ body, glow, top }`: the lit hull, the HDR accents that bloom, and an optional part that
@@ -10,7 +11,13 @@ import { buildTank } from './tank.js';
 // so a tier change swaps geometries that already exist (T-02-09).
 
 // Kinds without a builder keep the primitive geometry of enemy_instances.js.
-export const BUILDERS = { JET: buildJet, HELI: buildHeli, CARRIER: buildCarrier, TANK: buildTank };
+export const BUILDERS = {
+  JET: buildJet,
+  HELI: buildHeli,
+  CARRIER: buildCarrier,
+  TANK: buildTank,
+  TURRET: buildTurret,
+};
 
 const cache = new Map();
 
