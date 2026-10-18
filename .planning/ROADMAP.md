@@ -161,7 +161,7 @@ Plans:
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
 
-**Plans:** 3/28 plans executed (19 waves)
+**Plans:** 4/28 plans executed (19 waves)
 
 Plans:
 **Wave 1**
@@ -170,7 +170,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 03-03-PLAN.md — (wave 2) Orange-yellow enemy bullets, neon palette, white/cyan vs gunmetal/red factions, colour scan test
-- [ ] 03-04-PLAN.md — (wave 2) Stage 1 is the default game: protocol v3 header/events, ?gallery, ?at, live scroll rate
+- [x] 03-04-PLAN.md — (wave 2) Stage 1 is the default game: protocol v3 header/events, ?gallery, ?at, live scroll rate
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 03-05-PLAN.md — (wave 3) Bullet patterns as data: aimed / spread / ring / stream registry, one runner, gallery parity (Python)
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
-| 3. Stage 1 Vertical Slice | 3/28 | In Progress | - |
+| 3. Stage 1 Vertical Slice | 4/28 | In Progress | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
