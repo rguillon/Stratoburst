@@ -161,7 +161,7 @@ Plans:
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
 
-**Plans:** 19/28 plans executed (19 waves)
+**Plans:** 20/28 plans executed (19 waves)
 
 Plans:
 **Wave 1**
@@ -212,7 +212,7 @@ Plans:
 - [x] 03-19-PLAN.md — (wave 14) Giant bomber boss: WARNING, crawl, three phases with an opening core, 100 s timeout, CLEAR (Python)
 
 **Wave 15** *(blocked on Wave 14 completion)*
-- [ ] 03-20-PLAN.md — (wave 15) Bomber in the browser: WARNING banner, shadow sweep, models, HUGE blast and shake chain
+- [x] 03-20-PLAN.md — (wave 15) Bomber in the browser: WARNING banner, shadow sweep, models, HUGE blast and shake chain
 
 **Wave 16** *(blocked on Wave 15 completion)*
 - [ ] 03-21-PLAN.md — (wave 16) Stage clear: four-line tally, STAGE CLEAR, run loop with everything kept
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
-| 3. Stage 1 Vertical Slice | 19/28 | In Progress | - |
+| 3. Stage 1 Vertical Slice | 20/28 | In Progress | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

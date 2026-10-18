@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-19-PLAN.md
-last_updated: "2026-10-18T19:50:48.699Z"
+stopped_at: Completed 03-20-PLAN.md
+last_updated: "2026-10-18T20:08:49.657Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 1cde081570d95dd4e0f50dce5cdd95e779937e92
+state_head: 038830feadcc26a749c9fb66e24f5185801836bd
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 62
+  completed_plans: 63
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 20 of 28
+Plan: 21 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -119,6 +119,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P17 | 6 min | 2 tasks | 11 files |
 | Phase 03 P18 | 29 min | 2 tasks | 16 files |
 | Phase 03 P19 | 12 min | 2 tasks | 17 files |
+| Phase 03 P20 | 16 min | 2 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -254,6 +255,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-18: the train hull now leaves a charred wreck on death (ENEMY_WRECK marks it, and it finally has a model); gun cars and stumps leave none
 - [Phase 03]: 03-19: the bomber keeps the plan's part geometry; engine pods are reachable by plain bolts only through a narrow gap (measured), laser and bomb pierce - revisit at the 03-28 gate
 - [Phase 03]: 03-19: a phase jump keeps the deepest hull_kind named so far, and CLEAR yields to GAME_OVER when the ship is OUT
+- [Phase 03]: 03-20: The WARNING flash is a soft 0.5 s opacity pulse (2 Hz) with prefers-reduced-motion off; a unit test reads index.html and asserts a period of at least 0.34 s
+- [Phase 03]: 03-20: The boss death shake is a chain of four ceiling-strength shakes (3.0, 0.5 s) queued 0.35 s apart in update time inside createShake, never a raised ceiling
+- [Phase 03]: 03-20: Bomber shadows use sizeScale 3 (126 units) to match the 120-unit airframe; the boss sweep silhouette repeats the wing outline of bomber.js
 
 ### Pending Todos
 
@@ -277,6 +281,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T19:50:48.475Z
-Stopped at: Completed 03-19-PLAN.md
+Last session: 2026-10-18T20:08:49.428Z
+Stopped at: Completed 03-20-PLAN.md
 Resume file: None
