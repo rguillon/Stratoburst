@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { basicEnemyGeometry, createEnemyInstances } from '../../src/render/enemy_instances.js';
+import { ROTOR_RATE, basicEnemyGeometry, createEnemyInstances } from '../../src/render/enemy_instances.js';
 import { enemyModel } from '../../src/render/models/enemy_models.js';
 
 const STRIDE = 8;
@@ -44,7 +44,10 @@ describe('createEnemyInstances', () => {
       'enemy-jet',
       'enemy-jet-glow',
       'enemy-heli',
+      'enemy-heli-glow',
+      'enemy-heli-top',
       'enemy-carrier',
+      'enemy-carrier-glow',
       'enemy-tank',
       'enemy-turret',
     ]);
@@ -62,7 +65,7 @@ describe('createEnemyInstances', () => {
     expect(material.vertexColors).toBe(true);
     expect(material.roughness).toBeCloseTo(0.55);
     expect(material.metalness).toBeCloseTo(0.25);
-    const bodies = enemies.meshes.filter((mesh) => !mesh.name.endsWith('-glow'));
+    const bodies = enemies.meshes.filter((mesh) => !mesh.name.endsWith('-glow') && !mesh.name.endsWith('-top'));
     expect(bodies.every((mesh) => mesh.material === material)).toBe(true);
   });
 
@@ -76,7 +79,7 @@ describe('createEnemyInstances', () => {
   it('draws nothing until told how many enemies are live', () => {
     const { enemies } = build();
     enemies.update(0);
-    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it('routes each instance to its kind mesh and counts per kind', () => {
@@ -186,8 +189,7 @@ describe('createEnemyInstances hit flash and bad data', () => {
     const { byName } = build();
     const first = (name) => Array.from(byName[name].geometry.getAttribute('color').array.slice(0, 3));
     expect(first('enemy-tank')).toEqual([expect.closeTo(0.62), expect.closeTo(0.52), expect.closeTo(0.34)]);
-    expect(new Set(['enemy-heli', 'enemy-carrier', 'enemy-tank', 'enemy-turret'].map((n) => first(n).join()))
-      .size).toBe(4);
+    expect(first('enemy-tank')).not.toEqual(first('enemy-turret'));
   });
 
   it('an enemy that stops flashing goes back to the base colour', () => {
@@ -212,7 +214,8 @@ describe('createEnemyInstances hit flash and bad data', () => {
     const heli = byName['enemy-heli'];
     expect(heli.instanceMatrix.version).toBeGreaterThan(before['enemy-heli'][0]);
     expect(heli.instanceColor.version).toBeGreaterThan(before['enemy-heli'][1]);
-    for (const name of ['enemy-jet', 'enemy-jet-glow', 'enemy-carrier', 'enemy-tank', 'enemy-turret']) {
+    const others = ['enemy-jet', 'enemy-jet-glow', 'enemy-carrier', 'enemy-carrier-glow', 'enemy-tank'];
+    for (const name of [...others, 'enemy-turret']) {
       expect(byName[name].instanceMatrix.version).toBe(before[name][0]);
       expect(byName[name].instanceColor?.version).toBe(before[name][1]);
     }
@@ -340,6 +343,99 @@ describe('createEnemyInstances models', () => {
     enemies.update(0);
     expect(byName['enemy-jet'].count).toBe(0);
     expect(byName['enemy-jet-glow'].count).toBe(0);
+  });
+});
+
+describe('createEnemyInstances tops', () => {
+  const headingOfTop = (mesh, i) => headingOf(mesh, i);
+  const angleOf = (heading) => Math.atan2(heading.x, heading.z);
+  const wrapped = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+  it('gives a kind whose model has a top a third mesh sharing the body material', () => {
+    const { byName } = build();
+    expect(byName['enemy-heli-top'].isInstancedMesh).toBe(true);
+    expect(byName['enemy-heli-top'].material).toBe(byName['enemy-heli'].material);
+    expect(byName['enemy-jet-top']).toBeUndefined();
+    expect(byName['enemy-carrier-top']).toBeUndefined();
+  });
+
+  it('exports the rotor rate of 30 rad/s', () => {
+    expect(ROTOR_RATE).toBe(30);
+  });
+
+  it('turns the heli rotor by angle + timeS * ROTOR_RATE and leaves the body at its heading', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, angle: 0.4, kind: KINDS.HELI });
+    enemies.update(1, 0.05);
+    const expected = wrapped(0.4 + 0.05 * ROTOR_RATE);
+    expect(angleOf(headingOfTop(byName['enemy-heli-top'], 0))).toBeCloseTo(expected, 4);
+    expect(angleOf(headingOf(byName['enemy-heli'], 0))).toBeCloseTo(0.4, 4);
+    enemies.update(1, 0.1);
+    expect(angleOf(headingOfTop(byName['enemy-heli-top'], 0))).toBeCloseTo(wrapped(0.4 + 3), 4);
+  });
+
+  it('writes the top at the body position with the same count and flash colour', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 100, y: 50, kind: KINDS.HELI });
+    setEnemy(data, 1, { x: 30, y: 60, flash: 1, kind: KINDS.HELI });
+    enemies.update(2, 1);
+    const top = byName['enemy-heli-top'];
+    expect(top.count).toBe(2);
+    expect(positionOf(top, 0).toArray()).toEqual(positionOf(byName['enemy-heli'], 0).toArray());
+    expect(colourOf(top, 0)).toEqual([1, 1, 1]);
+    expect(colourOf(top, 1)).toEqual([6, 6, 6]);
+  });
+
+  it('draws no tops once the last helicopter has left', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: KINDS.HELI });
+    enemies.update(1);
+    enemies.update(0);
+    expect(byName['enemy-heli-top'].count).toBe(0);
+  });
+
+  it('turns the top of any other kind by the aux aim angle', () => {
+    const data = new Float32Array(STRIDE * 4);
+    const enemies = createEnemyInstances({
+      data,
+      capacity: 4,
+      kinds: KINDS,
+      playfieldW: 240,
+      playfieldH: 320,
+      geometryFor: (name) => ({
+        body: new THREE.BoxGeometry(1, 1, 1),
+        glow: null,
+        top: name === 'TURRET' ? new THREE.BoxGeometry(1, 1, 3) : null,
+      }),
+    });
+    const top = enemies.meshes.find((mesh) => mesh.name === 'enemy-turret-top');
+    data.set([10, 10, 0.2, 0, 1, KINDS.TURRET, 1.1, 0], 0);
+    enemies.update(1, 5);
+    expect(angleOf(headingOf(top, 0))).toBeCloseTo(1.1, 4);
+  });
+
+  it('setDetail swaps the top geometry too and creates no mesh', () => {
+    const { enemies, byName } = build();
+    const before = enemies.meshes.length;
+    enemies.setDetail('low');
+    expect(byName['enemy-heli-top'].geometry).toBe(enemyModel('HELI', 'low').top);
+    expect(byName['enemy-heli'].geometry).toBe(enemyModel('HELI', 'low').body);
+    expect(byName['enemy-carrier-glow'].geometry).toBe(enemyModel('CARRIER', 'low').glow);
+    enemies.setDetail('high');
+    expect(byName['enemy-heli-top'].geometry).toBe(enemyModel('HELI', 'high').top);
+    expect(enemies.meshes).toHaveLength(before);
+  });
+
+  it('allocates nothing when updating with a clock: arrays keep their identity', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: KINDS.HELI });
+    enemies.update(1, 0.1);
+    const top = byName['enemy-heli-top'];
+    const matrices = top.instanceMatrix.array;
+    const colours = top.instanceColor.array;
+    enemies.update(1, 0.2);
+    expect(top.instanceMatrix.array).toBe(matrices);
+    expect(top.instanceColor.array).toBe(colours);
   });
 });
 

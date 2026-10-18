@@ -245,7 +245,7 @@ async function main() {
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
-      enemies.update(header[slots.ENEMY_N]);
+      enemies.update(header[slots.ENEMY_N], fxTime);
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz.
       rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);

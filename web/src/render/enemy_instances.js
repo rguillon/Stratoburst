@@ -6,6 +6,7 @@ const STRIDE = 8; // x, y, angle, flash, hp_frac, kind, aux, spare
 const ANGLE = 2;
 const FLASH = 3;
 const KIND = 5;
+const AUX = 6;
 
 // Military tones for the primitive stand-ins, every channel below 1.0.
 const BASE_COLORS = {
@@ -114,7 +115,13 @@ export function createEnemyInstances({
     body.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
     body.instanceColor.setUsage(THREE.DynamicDrawUsage);
     const glow = model.glow === null ? null : instanced(model.glow, glowMaterial, `enemy-${lower}-glow`);
-    entries[value] = { name, body, glow, index: value };
+    let top = null;
+    if (model.top !== null) {
+      top = instanced(model.top, bodyMaterial, `enemy-${lower}-top`);
+      top.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
+      top.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    }
+    entries[value] = { name, body, glow, top, spins: name === 'HELI', index: value };
   }
   const slotCount = entries.length;
   const counts = new Int32Array(slotCount);
@@ -130,10 +137,12 @@ export function createEnemyInstances({
       const model = geometryFor(entry.name, next);
       entry.body.geometry = model.body;
       if (entry.glow !== null) entry.glow.geometry = model.glow;
+      if (entry.top !== null) entry.top.geometry = model.top;
     }
   }
 
-  function update(n) {
+  // `timeS` is the effect clock in seconds: it turns rotors, and is presentation only.
+  function update(n, timeS = 0) {
     const count = Math.min(n, capacity);
     counts.fill(0);
     for (let i = 0; i < count; i++) {
@@ -148,16 +157,29 @@ export function createEnemyInstances({
       if (entry.glow !== null) entry.glow.setMatrixAt(slot, matrix);
       const rgb = data[base + FLASH] > 0 ? FLASH_COLOR : REST_COLOR;
       entry.body.setColorAt(slot, color.setRGB(rgb[0], rgb[1], rgb[2]));
+      if (entry.top !== null) {
+        // A rotor spins on the effect clock; any other top (a turret head) points along the aim angle.
+        const topAngle = entry.spins ? data[base + ANGLE] + timeS * ROTOR_RATE : data[base + AUX];
+        topQuaternion.setFromAxisAngle(UP, topAngle);
+        matrix.compose(position, topQuaternion, scale);
+        entry.top.setMatrixAt(slot, matrix);
+        entry.top.setColorAt(slot, color);
+      }
     }
     for (let k = 0; k < live.length; k++) {
       const entry = live[k];
       const written = counts[entry.index];
       entry.body.count = written;
       if (entry.glow !== null) entry.glow.count = written;
+      if (entry.top !== null) entry.top.count = written;
       if (written === 0) continue; // nothing was written, so nothing to upload
       entry.body.instanceMatrix.needsUpdate = true;
       entry.body.instanceColor.needsUpdate = true;
       if (entry.glow !== null) entry.glow.instanceMatrix.needsUpdate = true;
+      if (entry.top !== null) {
+        entry.top.instanceMatrix.needsUpdate = true;
+        entry.top.instanceColor.needsUpdate = true;
+      }
     }
   }
 
