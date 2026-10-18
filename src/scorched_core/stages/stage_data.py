@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from scorched_core.bosses.boss_spec import BossSpec
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.paths.path_library import path_index
 from scorched_core.patterns.pattern_library import pattern_index
@@ -24,6 +25,9 @@ class StageData:
     scenery as data (D-34); ``seed`` seeds its expansion, which is done once here into the flat
     ``placements`` tuple the manifest ships to the renderer. ``ground`` is the terrain-anchored
     rows (the city's destructible targets, ``target_entries``), sorted by ``at`` like the waves.
+
+    ``midboss`` and ``boss`` are the fights that start at the markers of the same name; a stage
+    that names a fight must also name its marker.
     """
 
     number: int
@@ -34,6 +38,8 @@ class StageData:
     features: tuple[CityFeature, ...] = ()
     seed: int = 1
     ground: tuple[GroundEntry, ...] = ()
+    midboss: BossSpec | None = None
+    boss: BossSpec | None = None
     placements: tuple[float, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -63,9 +69,18 @@ class StageData:
                 raise ValueError(msg)
         self._check_city()
         self._check_ground()
+        self._check_bosses()
         object.__setattr__(
             self, "placements", scenery_placements(self.city, self.features, self.seed)
         )
+
+    def _check_bosses(self) -> None:
+        """A fight needs the marker that starts it."""
+        names = {name for name, _ in self.markers}
+        for name, spec in (("midboss", self.midboss), ("boss", self.boss)):
+            if spec is not None and name not in names:
+                msg = f"the stage has {name} data but no {name!r} marker to start it"
+                raise ValueError(msg)
 
     def _check_city(self) -> None:
         """Every city block row and feature line must lie inside the stage."""

@@ -278,6 +278,20 @@ _BLAST_CLASSES: dict[str, int] = {
 }
 
 
+def _boss_manifest(stage: StageData) -> list[dict[str, object]]:
+    """List the stage's fights for the boss bar: the slot, the name and the phase thresholds.
+
+    ``phase_fracs`` are the hull-health fractions at which later phases start (the first phase,
+    which starts at 1.0, is left out), so the bar can draw one tick mark per threshold.
+    """
+    fights = ((1, "midboss", stage.midboss), (2, "boss", stage.boss))
+    return [
+        {"slot": slot, "name": name, "phase_fracs": [phase.hp_frac for phase in spec.phases[1:]]}
+        for slot, name, spec in fights
+        if spec is not None
+    ]
+
+
 class Game:
     """Pure simulation core; knows nothing about JS."""
 
@@ -376,6 +390,7 @@ class Game:
         self.events = EventRing()
         self.enemies = EnemyPool()
         self.pickups = PickupPool()
+        self.terrain = TerrainScroll()
         self.max_bonus = 0  # same-colour catches at the top level (D-06), each also paid in points
         self.chain = MedalChain()  # what the next medal pays and the catches in a row (D-15)
         self.score = ScoreKeeper(lives=self._start_lives, high_score=max(high_score, 0))
@@ -390,6 +405,9 @@ class Game:
                 score=self.score,
                 events=self.events,
                 stage_number=stage.number,
+                terrain=self.terrain,
+                enemies=self.enemies,
+                stage=stage,
             )
             if stage is not None
             else None
@@ -400,7 +418,6 @@ class Game:
             BulletStorm(self.storm_pool, self.stress, self.rng) if self.stress > 0 else None
         )
         self.storm_hits = 0
-        self.terrain = TerrainScroll()
         self._open_stage()
         self.tick_count = 0
         self._firing = False
@@ -563,6 +580,7 @@ class Game:
                 "markers": {},
                 "loop": True,
                 "city": list(STAGE_1.placements),
+                "bosses": [],
                 **layout,
             }
         return {
@@ -571,6 +589,7 @@ class Game:
             "markers": dict(stage.markers),
             "loop": False,
             "city": list(stage.placements),
+            "bosses": _boss_manifest(stage),
             **layout,
         }
 
@@ -675,12 +694,48 @@ class Game:
         header[H_PLAYER_PHASE] = int(self.life.phase)
         header[H_INVULN] = self.life.invuln
         header[H_DEATHS] = self.life.deaths
+        self._pack_boss_header(header)
         bomb = self.bomb
         header[H_BOMBS] = bomb.stock
         header[H_BOMB_PHASE] = int(bomb.phase)
         header[H_BOMB_X] = bomb.x
         header[H_BOMB_Y] = bomb.y
         header[H_BOMB_T] = bomb.progress
+
+    def _pack_boss_header(self, header: array) -> None:
+        """Write the boss slots: its slot number, phase, hull health and the last-seconds timer."""
+        flow = self.flow
+        boss = None if flow is None else flow.boss
+        if boss is None:
+            header[H_BOSS_ACTIVE] = 0
+            header[H_BOSS_PHASE] = 0
+            header[H_BOSS_HP] = 0
+            header[H_BOSS_TIMER_S] = -1
+            return
+        header[H_BOSS_ACTIVE] = boss.slot
+        header[H_BOSS_PHASE] = boss.phase_number
+        header[H_BOSS_HP] = boss.hp_fraction
+        header[H_BOSS_TIMER_S] = boss.seconds_left
+
+    def _step_boss(self) -> None:
+        """Advance the running boss fight, if any: after the director, before the enemies move."""
+        flow = self.flow
+        if flow is not None and flow.boss is not None:
+            flow.boss.step(self.enemies, self.ebullets, self.ship.x, self.ship.y, self.events)
+
+    def _settle_boss(self) -> None:
+        """Resolve the boss's damage after every damage pass and before ``remove_dead`` (SCOR-01).
+
+        A part shot off becomes a stump and a hull at zero starts its death sequence instead of
+        being removed; what that pays (turret points, then the kill) goes through the score keeper.
+        """
+        flow = self.flow
+        if flow is None or flow.boss is None:
+            return
+        boss = flow.boss
+        points = boss.settle(self.enemies, self.ebullets, self.events, self.hitstop)
+        if points:
+            self.score.award(points, self.events, boss.spec.x, boss.spec.hold_y)
 
     def _settle_kills(self) -> None:
         """Remove the dead, then pay for them and drop what they carried."""
@@ -853,6 +908,7 @@ class Game:
             self.gallery.step(self.enemies)
         elif flow.spawning:  # nothing new comes once the run is over
             director.step(self.terrain.distance, self.enemies)
+        self._step_boss()
         self.enemies.step(self.ship.x, self.ship.y, self.terrain.speed * GROUND_SCROLL_RATIO)
         self.enemies.fire(self.ebullets, self.ship.x, self.ship.y, self.events)
         self.missiles.steer(self.enemies)
@@ -879,6 +935,7 @@ class Game:
             self.events,
             radius=MISSILE_RADIUS,
         )
+        self._settle_boss()
         self._settle_kills()
         self._step_pickups()
         if life.vulnerable and not self.god and self._lethal_contact():
