@@ -1,14 +1,14 @@
 import pytest
+
+from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.motion_kind import MotionKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.stages.formations import (
     column_formation,
     line_formation,
     mirrored,
     v_formation,
 )
-
-from scorched_core.entities.enemy_kind import EnemyKind
-from scorched_core.entities.motion_kind import MotionKind
-from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.stages.wave_entry import WaveEntry
 
 
