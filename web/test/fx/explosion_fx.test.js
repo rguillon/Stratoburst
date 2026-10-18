@@ -3,12 +3,14 @@ import { PALETTE } from '../../src/fx/palette.js';
 import {
   HIT_RECIPE,
   PICKUP_RECIPE,
+  PLAYER_DEATH_RECIPE,
+  PLAYER_HIT_RECIPE,
   RECIPES,
   createExplosionFx,
   mulberry32,
 } from '../../src/fx/explosion_fx.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, PLAYER_HIT: 6, PLAYER_DEATH: 7 };
 const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4 };
 const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
 
@@ -234,7 +236,12 @@ describe('recipe colours (D-23)', () => {
   }
 
   it('take every colour from the palette, with no inline literals', () => {
-    const emitters = [...Object.values(RECIPES).flat(), ...HIT_RECIPE];
+    const emitters = [
+      ...Object.values(RECIPES).flat(),
+      ...HIT_RECIPE,
+      ...PLAYER_HIT_RECIPE,
+      ...PLAYER_DEATH_RECIPE,
+    ];
     const known = Object.values(PALETTE).map((entry) => entry.rgb.join(','));
     for (const e of emitters) {
       expect(known, `colour ${e.color.join(',')} is not a palette entry`).toContain(e.color.join(','));
@@ -242,7 +249,12 @@ describe('recipe colours (D-23)', () => {
   });
 
   it('stay out of the hot-pink band reserved for enemy bullets', () => {
-    const emitters = [...Object.values(RECIPES).flat(), ...HIT_RECIPE];
+    const emitters = [
+      ...Object.values(RECIPES).flat(),
+      ...HIT_RECIPE,
+      ...PLAYER_HIT_RECIPE,
+      ...PLAYER_DEATH_RECIPE,
+    ];
     expect(emitters.length).toBeGreaterThan(10);
     for (const e of emitters) {
       const h = hue(e.color);
@@ -328,5 +340,67 @@ describe('the PICKUP sparkle', () => {
     fx.handle(EVENTS.HIT, 120, 160, 0, 0, 0);
     expect(emitted.additive).toHaveLength(HIT_RECIPE[0].count);
     expect(emitted.additive[0].slice(9, 12)).toEqual(PALETTE.HIT_SPARK.rgb);
+  });
+});
+
+describe('the player ship recipes (PLYR-06)', () => {
+  const white = PALETTE.HIT_SPARK.rgb;
+
+  function play(type, { scale = 1 } = {}) {
+    const built = build({ getScale: () => scale });
+    built.fx.handle(type, 130, 170, 0, 0, 0);
+    return built.emitted;
+  }
+
+  it('PLAYER_DEATH plays a LARGE-sized fireball: every LARGE particle, at full size', () => {
+    const { additive, normal } = play(EVENTS.PLAYER_DEATH);
+    const large = RECIPES.LARGE;
+    const additiveCount = large.filter((e) => e.layer === 'additive').reduce((n, e) => n + e.count, 0);
+    const normalCount = large.filter((e) => e.layer === 'normal').reduce((n, e) => n + e.count, 0);
+    expect(normal).toHaveLength(normalCount);
+    expect(additive).toHaveLength(additiveCount + 16);
+    expect(additive[0].slice(7, 9)).toEqual([26, 44]); // the LARGE core
+  });
+
+  it('PLAYER_DEATH adds a ring of 16 white sparks spread evenly around the ship', () => {
+    const { additive } = play(EVENTS.PLAYER_DEATH);
+    const ring = additive.slice(-16);
+    for (const p of ring) {
+      expect(p.slice(9, 12)).toEqual(white);
+      expect(p.slice(0, 3)).toEqual([10, 0, 10]); // toWorld(130, 170)
+      expect(p[4]).toBe(0); // flat on the plane
+    }
+    const headings = ring.map((p) => Math.atan2(p[5], p[3]));
+    const sorted = headings.map((h) => (h + 2 * Math.PI) % (2 * Math.PI)).sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i += 1) {
+      expect(sorted[i] - sorted[i - 1]).toBeCloseTo((2 * Math.PI) / 16, 5);
+    }
+  });
+
+  it('PLAYER_HIT is a quick white ring of 10 sparks and nothing else', () => {
+    const { additive, normal } = play(EVENTS.PLAYER_HIT);
+    expect(normal).toHaveLength(0);
+    expect(additive).toHaveLength(10);
+    for (const p of additive) {
+      expect(p.slice(9, 12)).toEqual(white);
+      expect(p.slice(0, 3)).toEqual([10, 0, 10]);
+      expect(p[6]).toBeLessThan(0.3); // quick
+    }
+    expect(PLAYER_HIT_RECIPE).toHaveLength(1);
+  });
+
+  it('scales the counts with the tier but never the sizes', () => {
+    const full = play(EVENTS.PLAYER_DEATH);
+    const low = play(EVENTS.PLAYER_DEATH, { scale: 0.35 });
+    expect(low.additive.length).toBeLessThan(full.additive.length);
+    expect(low.additive[0].slice(7, 9)).toEqual(full.additive[0].slice(7, 9));
+    expect(play(EVENTS.PLAYER_HIT, { scale: 0.6 }).additive).toHaveLength(6);
+    expect(play(EVENTS.PLAYER_HIT, { scale: 0.01 }).additive).toHaveLength(1);
+  });
+
+  it('leaves the other recipes alone', () => {
+    const { fx, emitted } = build();
+    fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.SMALL, 0, 0);
+    expect(emitted.additive).toHaveLength(27);
   });
 });

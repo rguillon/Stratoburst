@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { createShipModel } from '../../src/render/ship_model.js';
+import { createShipModel, hullVisibleFor } from '../../src/render/ship_model.js';
 
 function meshesOf(root) {
   const meshes = [];
@@ -223,6 +223,55 @@ describe('createShipModel', () => {
     it('is always visible: nothing hides it behind a mode flag', () => {
       expect(marker.visible).toBe(true);
       for (const mesh of markerMeshes) expect(mesh.visible).toBe(true);
+    });
+  });
+
+  describe('the respawn blink (PLYR-10, Pitfall 9)', () => {
+    const hull = ['fuselage', 'canopy', 'engine-glow'];
+
+    it('setHullVisible(false) hides the hull, the canopy and the engine glow', () => {
+      const ship = createShipModel();
+      ship.userData.setHullVisible(false);
+      for (const name of hull) expect(ship.getObjectByName(name).visible, name).toBe(false);
+    });
+
+    it('keeps the hitbox marker and both its meshes visible while the hull is hidden', () => {
+      const ship = createShipModel();
+      ship.userData.setHullVisible(false);
+      const marker = ship.getObjectByName('hitbox-marker');
+      expect(marker.visible).toBe(true);
+      for (const mesh of meshesOf(marker)) expect(mesh.visible).toBe(true);
+      expect(ship.visible).toBe(true);
+    });
+
+    it('setHullVisible(true) shows the hull again', () => {
+      const ship = createShipModel();
+      ship.userData.setHullVisible(false);
+      ship.userData.setHullVisible(true);
+      for (const name of hull) expect(ship.getObjectByName(name).visible, name).toBe(true);
+    });
+
+    it('starts with the hull shown', () => {
+      const ship = createShipModel();
+      for (const name of hull) expect(ship.getObjectByName(name).visible, name).toBe(true);
+    });
+
+    it('hullVisibleFor is true at 0 and for every step of an even four-step block', () => {
+      expect(hullVisibleFor(0)).toBe(true);
+      for (const invuln of [1, 2, 3, 8, 9, 10, 11, 144, 147]) expect(hullVisibleFor(invuln), `${invuln}`).toBe(true);
+    });
+
+    it('hullVisibleFor is false for every step of an odd four-step block', () => {
+      for (const invuln of [4, 5, 6, 7, 12, 15, 20, 148, 149, 150]) expect(hullVisibleFor(invuln), `${invuln}`).toBe(false);
+    });
+
+    it('blinks with a period of eight steps across the 150-step respawn window', () => {
+      let flips = 0;
+      for (let invuln = 150; invuln > 1; invuln -= 1) {
+        if (hullVisibleFor(invuln) !== hullVisibleFor(invuln - 1)) flips += 1;
+      }
+      expect(flips).toBeGreaterThan(30);
+      expect(hullVisibleFor(0)).toBe(true);
     });
   });
 });
