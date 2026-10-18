@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-29-PLAN.md
-last_updated: "2026-10-18T07:50:05.944Z"
+stopped_at: Completed 02-30-PLAN.md
+last_updated: "2026-10-18T08:01:10.044Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 447d5236e6bbdc1ea1de5d5bdbe6bb2ec5487e5f
+state_head: 6841290a5c1cfa3da806fa4753ce4d285d1b31b2
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 39
+  completed_plans: 40
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 30 of 33
+Plan: 31 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -95,6 +95,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P27 | 5 min | 2 tasks | 13 files |
 | Phase 02 P28 | 18 min | 2 tasks | 11 files |
 | Phase 02 P29 | 17 min | 2 tasks | 13 files |
+| Phase 02 P30 | 10 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -179,6 +180,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-28: hitstop is a Python gate at the top of _step (4 steps on bomb detonation, 6 on a confirmed death, header slot 14) and the shake is a render-only seeded camera jitter wrapped around the render call; the effect clock and extrapolation alpha hold during hitstop and pause
 - [Phase 02]: 02-28: a shake never exceeds 3.0 units or 0.5 s, update(0) holds age and jitter so a paused game stays still, and a new shake replaces the current one only when it is at least as strong as the strength left now
 - [Phase 02]: 02-29: the touch bomb button tracks pointer ids and a press latch, carries data-no-steer so touch_input ignores pointers that start on it, and is laid out in the letterbox margin or over the playfield corner from the projected corners
+- [Phase 02]: 02-30: the SFX router runs at the end of every live step over only that step's events (frozen hitstop steps route nothing); VULCAN, MISSILE, HIT and ENEMY_FIRE are pushed low priority and a laser shot is silent because the hum follows BEAM_W
 
 ### Pending Todos
 
@@ -201,6 +203,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T07:50:05.829Z
-Stopped at: Completed 02-29-PLAN.md
+Last session: 2026-10-18T08:01:09.940Z
+Stopped at: Completed 02-30-PLAN.md
 Resume file: None
