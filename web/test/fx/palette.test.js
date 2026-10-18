@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BULLET_EXCLUSION_DEGREES,
+  BULLET_MIN_SATURATION,
   PALETTE,
-  PINK_EXCLUSION_DEGREES,
-  PINK_MIN_SATURATION,
   hueDistance,
   hueOf,
   saturationOf,
@@ -58,6 +58,7 @@ describe('hueDistance', () => {
 
 describe('PALETTE', () => {
   const halo = PALETTE.ENEMY_BULLET_HALO.rgb;
+  const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
   it('is frozen, all the way down', () => {
     expect(Object.isFrozen(PALETTE)).toBe(true);
@@ -66,36 +67,69 @@ describe('PALETTE', () => {
   });
 
   it('only uses the known roles', () => {
-    const roles = new Set(['bullet', 'effect', 'weapon', 'pickup', 'neutral']);
+    const roles = new Set(['bullet', 'effect', 'weapon', 'pickup', 'scene', 'neutral']);
     for (const [name, { role }] of Object.entries(PALETTE)) {
       expect(roles.has(role), `${name} has role ${role}`).toBe(true);
     }
   });
 
-  it('keeps the enemy bullet halo hot pink and low dynamic range (it is drawn after bloom)', () => {
+  it('exports the reservation constants under their bullet names', () => {
+    expect(BULLET_EXCLUSION_DEGREES).toBe(35);
+    expect(BULLET_MIN_SATURATION).toBe(0.25);
+  });
+
+  it('keeps the enemy bullet halo orange-yellow and low dynamic range (it is drawn after bloom)', () => {
     const hue = hueOf(halo);
-    expect(hue).toBeGreaterThanOrEqual(320);
-    expect(hue).toBeLessThanOrEqual(335);
+    expect(hue).toBeGreaterThanOrEqual(36);
+    expect(hue).toBeLessThanOrEqual(46);
     expect(Math.max(...halo)).toBeLessThanOrEqual(0.98);
     expect(Math.max(...PALETTE.ENEMY_BULLET_CORE.rgb)).toBeLessThanOrEqual(0.98);
   });
 
   it('gives each orb layer a distinct luminance so it reads without hue: white core, dark rim', () => {
-    const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
     expect(luma(PALETTE.ENEMY_BULLET_CORE.rgb)).toBeGreaterThan(luma(halo));
     expect(luma(halo)).toBeGreaterThan(luma(PALETTE.ENEMY_BULLET_RIM.rgb) * 3);
   });
 
-  it('reserves pink: no saturated effect, weapon or pickup colour is within 35 degrees of it', () => {
+  it('reserves orange-yellow: no saturated effect, weapon, pickup or scene colour is within 35 degrees of it', () => {
     const guarded = Object.entries(PALETTE).filter(([, { role }]) =>
-      ['effect', 'weapon', 'pickup'].includes(role),
+      ['effect', 'weapon', 'pickup', 'scene'].includes(role),
     );
-    expect(guarded.length).toBeGreaterThan(15);
+    expect(guarded.length).toBeGreaterThan(20);
     const offenders = guarded
-      .filter(([, { rgb }]) => saturationOf(rgb) >= PINK_MIN_SATURATION)
-      .filter(([, { rgb }]) => hueDistance(hueOf(rgb), hueOf(halo)) < PINK_EXCLUSION_DEGREES)
+      .filter(([, { rgb }]) => saturationOf(rgb) >= BULLET_MIN_SATURATION)
+      .filter(([, { rgb }]) => hueDistance(hueOf(rgb), hueOf(halo)) < BULLET_EXCLUSION_DEGREES)
       .map(([name]) => name);
-    expect(offenders, `colours too close to enemy-bullet pink: ${offenders.join(', ')}`).toEqual([]);
+    expect(offenders, `colours too close to the enemy-bullet hue: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('moves fire and explosions off orange: white-hot core, red fire, magenta embers, cyan sparks', () => {
+    expect(saturationOf(PALETTE.FIRE_CORE.rgb)).toBeLessThan(0.25);
+    expect(hueDistance(hueOf(PALETTE.FIRE.rgb), 355)).toBeLessThanOrEqual(10);
+    expect(hueDistance(hueOf(PALETTE.EMBER.rgb), 313)).toBeLessThanOrEqual(15);
+    expect(hueDistance(hueOf(PALETTE.SPARK.rgb), 195)).toBeLessThanOrEqual(15);
+  });
+
+  it('retints the vulcan tracer and red crystal crimson, the bomb pickup acid green, the medal white-cyan', () => {
+    expect(hueDistance(hueOf(PALETTE.VULCAN_TRACER.rgb), 350)).toBeLessThanOrEqual(15);
+    expect(hueDistance(hueOf(PALETTE.CRYSTAL_RED.rgb), 350)).toBeLessThanOrEqual(15);
+    expect(hueDistance(hueOf(PALETTE.BOMB_PICKUP.rgb), 114)).toBeLessThanOrEqual(15);
+    expect(hueDistance(hueOf(PALETTE.MEDAL.rgb), 190)).toBeLessThanOrEqual(15);
+  });
+
+  it('defines the neon scene entries and the red beacon', () => {
+    for (const name of [
+      'NEON_CYAN',
+      'NEON_MAGENTA',
+      'NEON_RED',
+      'NEON_VIOLET',
+      'NEON_BLUE',
+      'NEON_GREEN',
+    ]) {
+      expect(PALETTE[name]?.role, name).toBe('scene');
+    }
+    expect(PALETTE.BEACON_RED.role).toBe('effect');
+    expect(PALETTE.BEACON_AMBER).toBeUndefined();
   });
 
   it('places the blue laser near 215 and the purple missiles near 257 degrees', () => {

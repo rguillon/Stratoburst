@@ -59,7 +59,7 @@ describe('createBulletInstances', () => {
 
   it('keeps the flat style an HDR colour so bullets cross the bloom threshold, with an override', () => {
     const flat = build({ name: 'pbullets' }).mesh.material;
-    expect(flat.uniforms.uColor.value.toArray()).toEqual([4.0, 1.6, 0.4]);
+    expect(flat.uniforms.uColor.value.toArray()).toEqual([...PALETTE.VULCAN_TRACER.rgb]);
     expect(
       build({ name: 'pbullets', color: [1, 2, 3] }).mesh.material.uniforms.uColor.value.toArray(),
     ).toEqual([1, 2, 3]);
@@ -105,7 +105,7 @@ describe('createBulletInstances', () => {
       expect(mesh.material.uniforms.uInvHalf.value).toBeCloseTo(1 / 3);
     });
 
-    it('draws a disc with a white core, a pink halo and a dark rim, discarding outside it', () => {
+    it('draws a disc with a white core, an orange-yellow halo and a dark rim, discarding outside it', () => {
       const { fragmentShader } = build().mesh.material;
       expect(fragmentShader).toContain('if (r > 1.0) discard;');
       expect(fragmentShader).toContain('smoothstep(0.26, 0.38, r)');
