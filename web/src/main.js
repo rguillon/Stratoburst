@@ -19,6 +19,7 @@ import { createEnemyInstances } from './render/enemy_instances.js';
 import { createMissileInstances } from './render/missile_instances.js';
 import { createPickupInstances } from './render/pickup_instances.js';
 import { createCityLayer } from './render/city_layer.js';
+import { createRainLayer } from './render/rain_layer.js';
 import { createCityGround } from './render/city_ground.js';
 import { warmScenery } from './render/models/scenery_models.js';
 import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
@@ -362,6 +363,19 @@ async function main() {
   });
   rig.scene.add(bombFx.group);
   bombFx.showAll(true);
+  // The rain (D-32, D-36): one instanced streak draw in the main scene, so it comes before the
+  // post-bloom enemy-bullet pass and never covers a bullet. It is created at full capacity so the
+  // shader compiles with the prewarm; the tier below only sets how many streaks are drawn.
+  const rain = createRainLayer({
+    capacity: TIERS.high.rain,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(rain.mesh);
+  // The rain-soaked atmosphere follows the tier (D-36): counts and visibility only, never a rebuild.
+  const applyAtmosphere = (tierName) => {
+    rain.setCount(TIERS[tierName].rain);
+  };
   // Screen shake: only the big events (a bomb detonation, the ship's death, a boss part blowing off and the
   // boss's end, a chain) move the camera, and only around the render call. The freeze itself is Python's hitstop.
   const shake = createShake({ events: manifest.events });
@@ -392,6 +406,7 @@ async function main() {
   }
   applyDecalLimit(currentTier);
   applyLights(currentTier);
+  applyAtmosphere(currentTier);
   // Upload every detail level's geometry now, behind the loading screen, so a tier change
   // during play never uploads or compiles anything.
   for (const { modelDetail } of Object.values(TIERS)) {
@@ -551,6 +566,7 @@ async function main() {
         applyModelDetail(q.tier);
         applyDecalLimit(q.tier);
         applyLights(q.tier);
+        applyAtmosphere(q.tier);
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }
@@ -588,6 +604,7 @@ async function main() {
       bossBar.update(header, slots);
       tallyPanel.update(header, slots, ts);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
+      rain.update(fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);
       bombFx.update(
@@ -750,6 +767,10 @@ async function main() {
         },
         get decals() {
           return decals.live;
+        },
+        // Rain streaks drawn this frame: the tier's count, 0 on the low tier (e2e).
+        get rainCount() {
+          return rain.count;
         },
         get lightsFlashed() {
           return lightPool.flashes;

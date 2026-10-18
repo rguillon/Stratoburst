@@ -74,7 +74,7 @@ describe('createRainLayer', () => {
       expect(hueDistance(hue, bullet)).toBeGreaterThanOrEqual(BULLET_EXCLUSION_DEGREES);
     }
     const { material } = build().mesh;
-    expect(material.uniforms.uColor.value.toArray()).toEqual(RAIN_COLOR.map((c) => Math.fround(c)));
+    expect(material.uniforms.uColor.value.toArray()).toEqual([...RAIN_COLOR]);
   });
 
   describe('setCount', () => {

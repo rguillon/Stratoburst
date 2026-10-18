@@ -1,8 +1,11 @@
 // Quality tier ladder. Presentation only: DPR, canvas pixel budget, bloom mode and the share of
 // the bloom strength (retuned for the neon night, D-37; low keeps a value but runs without bloom),
 // the share of each explosion's particles that is spawned (the explosion's size never changes), the
-// level of detail of the procedural models, how many scorch marks are drawn, and how many of the
-// pooled explosion lights may flash.
+// level of detail of the procedural models, how many scorch marks are drawn, how many of the
+// pooled explosion lights may flash, and the rain-soaked atmosphere (D-36): `rain` is how many rain
+// streaks are drawn (the layer's fixed capacity is the most), `reflections` whether the wet streets
+// mirror the neon, and `plumes` whether burning ruins send up fire and smoke. The low tier sheds all
+// three. A tier change only changes counts and visibility, never compiles a shader.
 // Nothing here reaches Python, so every device plays the same simulation.
 
 export const TIERS = Object.freeze({
@@ -16,6 +19,9 @@ export const TIERS = Object.freeze({
     modelDetail: 'high',
     maxDecals: 48,
     lights: 3,
+    rain: 600,
+    reflections: true,
+    plumes: true,
   }),
   mid: Object.freeze({
     name: 'mid',
@@ -27,6 +33,9 @@ export const TIERS = Object.freeze({
     modelDetail: 'mid',
     maxDecals: 32,
     lights: 2,
+    rain: 300,
+    reflections: true,
+    plumes: true,
   }),
   low: Object.freeze({
     name: 'low',
@@ -38,6 +47,9 @@ export const TIERS = Object.freeze({
     modelDetail: 'low',
     maxDecals: 16,
     lights: 0,
+    rain: 0,
+    reflections: false,
+    plumes: false,
   }),
 });
 
