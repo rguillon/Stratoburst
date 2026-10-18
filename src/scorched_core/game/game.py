@@ -98,7 +98,7 @@ from scorched_core.weapons.vulcan import Vulcan
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_core.weapons.weapon_loadout import WeaponLoadout
 
-# Bolts are culled once they are this far outside the playfield.
+# Bolts and gameplay enemy bullets are culled once they are this far outside the playfield.
 _MARGIN: Final = 16.0
 
 _HEADER_SLOTS: dict[str, int] = {
@@ -387,6 +387,8 @@ class Game:
         )
         self.pbullets.integrate()
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
+        self.ebullets.integrate()
+        self.ebullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.gallery.step(self.enemies)
         self.enemies.step(self.ship.x, self.ship.y)
         self.missiles.steer(self.enemies)
