@@ -11,3 +11,15 @@
 
   **Resolved** after plan 03-15 (orchestrator post-wave test gate, wave 12): the spec now polls the `.hiscore`
   text against the live HIGH_SCORE slot. 4/4 isolated runs passed.
+
+## From plan 03-25
+
+- `tools/e2e/intro.spec.js` ("the banner is visible while the intro runs") failed once in a full 100-spec run
+  (3 workers, software GL) and passed in isolation, on the plan's code and on the pre-plan build. The spec checks
+  `#banner` is visible right after `bootGame` returns, but the banner fades during the second half of the 2 s intro,
+  so a boot that returns late under load races it. Pre-existing race in the spec; not fixed here (out of scope). A fix
+  would assert on the header FLOW state (INTRO) or read the banner while polling from the first frame.
+- `tools/e2e/medal.spec.js` needs about 49 s of its 60 s popup wait alone on the pre-plan build and about 55 s with
+  the rain, reflections and plumes at the high tier (software GL renders fewer frames, and the sim only advances with
+  frames). It failed once in the loaded full run. Fixed in 03-25 by widening its waits (popup 100 s, test 160 s); the
+  real cost of the atmosphere belongs to the end-of-phase device check (T-03-33).

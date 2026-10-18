@@ -7,7 +7,7 @@ import { bootGame, readSlot } from './helpers.js';
 test('a laser under the medal tank column catches a medal: chain 1 and a "100" popup', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(160_000);
   await bootGame(page, '?debug&weapon=laser&level=5', { stage: true });
   expect(await readSlot(page, 'MEDAL_CHAIN')).toBe(0);
   expect(await readSlot(page, 'MEDAL_VALUE')).toBe(100);
@@ -44,14 +44,16 @@ test('a laser under the medal tank column catches a medal: chain 1 and a "100" p
   expect(Math.abs((await readSlot(page, 'SHIP_X')) - 80)).toBeLessThanOrEqual(10);
 
   await page.keyboard.down('Space');
-  // The popup is up for under a second: watch for it with every frame instead of sampling.
+  // The popup is up for under a second: watch for it with every frame instead of sampling. The wait is
+  // generous because the simulation only advances with the frames software GL manages (about 50 s
+  // alone, more when the whole suite loads the machine, and the high tier's rain and plumes cost frames).
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll('#popups .popup')].some(
         (span) => !span.hidden && span.textContent === '100',
       ),
     null,
-    { polling: 'raf', timeout: 60_000 },
+    { polling: 'raf', timeout: 100_000 },
   );
   await page.keyboard.up('Space');
 
