@@ -6,7 +6,13 @@ from typing import Any, Final
 from scorched_core.game.fault_mode import FaultMode
 from scorched_core.game.game import Game
 from scorched_core.stages.stage_1 import STAGE_1
-from scorched_core.tuning import BOMB_MAX_STOCK, BOMB_START_STOCK, MAX_LEVEL
+from scorched_core.tuning import (
+    BOMB_MAX_STOCK,
+    BOMB_START_STOCK,
+    LIVES_CAP,
+    LIVES_START,
+    MAX_LEVEL,
+)
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_web.bridge.render_sink import RenderSink
 from scorched_web.web_game import WebGame
@@ -33,6 +39,7 @@ def create_game(options: Any = None) -> WebGame:  # noqa: ANN401 - dict or JsPro
         level=_level(opts.get("level")),
         god=_flag(opts.get("god")),
         bombs=_bombs(opts.get("bombs")),
+        lives=_lives(opts.get("lives")),
         stage=None if gallery else STAGE_1,
         at=None if gallery else _at(opts.get("at")),
     )
@@ -78,6 +85,22 @@ def _bombs(value: object) -> int:
     if not math.isfinite(number):
         return BOMB_START_STOCK
     return min(max(int(number), 0), BOMB_MAX_STOCK)
+
+
+def _lives(value: object) -> int:
+    """The requested starting lives, truncated and clamped to 1..LIVES_CAP; junk means 3.
+
+    A run never starts with no ship: zero is reached only through deaths.
+    """
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return LIVES_START
+    try:
+        number = float(value)
+    except ValueError:
+        return LIVES_START
+    if not math.isfinite(number):
+        return LIVES_START
+    return min(max(int(number), 1), LIVES_CAP)
 
 
 def _at(value: object) -> str | None:

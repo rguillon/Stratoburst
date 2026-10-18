@@ -28,6 +28,11 @@ class WebGame:
         self._game.set_paused(paused)
         self._sink.flush(bulk=False)
 
+    def restart(self) -> None:
+        """Start a fresh run now and publish the header and every channel (D-28)."""
+        self._game.restart()
+        self._sink.flush(bulk=True)
+
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature
         self,
         dt_ms: float,
