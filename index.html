@@ -191,6 +191,30 @@
       #max-flash[hidden] {
         display: none;
       }
+      /* The stage banner (D-26): STAGE n over the playfield during the intro, driven by the header FLOW. Neon
+         cyan like the HUD, never orange-yellow. */
+      #banner {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 36%;
+        z-index: 4;
+        pointer-events: none;
+        text-align: center;
+        font: 900 clamp(36px, 11vmin, 104px) / 1 system-ui, sans-serif;
+        letter-spacing: 0.22em;
+        text-indent: 0.22em;
+        color: rgb(27, 215, 255);
+        text-shadow:
+          0 0 10px rgba(27, 215, 255, 0.9),
+          0 0 28px rgba(27, 215, 255, 0.6),
+          0 0 56px rgba(27, 215, 255, 0.35),
+          0 2px 0 #06303a;
+        user-select: none;
+      }
+      #banner[hidden] {
+        display: none;
+      }
       /* The touch bomb button (INPT-03): the bomb pickup's acid green, never orange-yellow. data-no-steer keeps
          touch_input from treating a press on it as a drag. */
       #bomb-button {
@@ -321,6 +345,7 @@
         <div class="hud-bl"><span class="lives"></span> <span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
       </div>
       <div id="max-flash" hidden>MAX</div>
+      <div id="banner" hidden></div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
     </div>
     <div id="game-over" role="dialog" aria-label="Game over" data-no-steer hidden>

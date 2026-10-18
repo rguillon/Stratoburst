@@ -37,6 +37,7 @@ import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
 import { createGameOverOverlay } from './ui/game_over_overlay.js';
+import { createBannerOverlay } from './ui/banner_overlay.js';
 import { createDebugSession } from './debug/debug_session.js';
 import { buildReport } from './debug/report.js';
 import * as THREE from 'three';
@@ -348,6 +349,8 @@ async function main() {
     flowStates: manifest.flow_states,
     onRestart: () => bridge.restart(),
   });
+  // Shown while FLOW is INTRO (the stage start, D-26): STAGE n fading as the ship flies in.
+  const banner = createBannerOverlay({ flowStates: manifest.flow_states });
   fx.add(readout); // the MAX flash listens for the MAXED pickup events
   // Python picks the sound for each event; this plays it on the gate's AudioContext (null = silent).
   const sfxPlayer = createSfxPlayer({
@@ -485,6 +488,7 @@ async function main() {
       pbullets.update(header[slots.PBULLET_N]);
       readout.update(header, slots);
       gameOver.update(header, slots, ts);
+      banner.update(header, slots);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);
