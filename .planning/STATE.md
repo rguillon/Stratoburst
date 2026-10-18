@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-25-PLAN.md
-last_updated: "2026-10-18T06:44:03.636Z"
+stopped_at: Completed 02-26-PLAN.md
+last_updated: "2026-10-18T07:00:39.302Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 56baa11e2e925bd1a3329985ab84797ef250f0d8
+state_head: cdae681bed178c373e1cd6d9a0039cf71093ff95
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 35
+  completed_plans: 36
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 26 of 33
+Plan: 27 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -91,6 +91,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P23 | 9 min | 2 tasks | 7 files |
 | Phase 02 P24 | 14 min | 2 tasks | 9 files |
 | Phase 02 P25 | 11 min | 2 tasks | 13 files |
+| Phase 02 P26 | 14 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -169,6 +170,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-24: the MAX flash is static markup armed by the MAXED PICKUP event and started by the next frame tick (900 ms, 400 ms fade, repeat restarts it); createStatusReadout now requires events, maxed and #max-flash
 - [Phase 02]: 02-25: death costs DEATH_LEVEL_PENALTY (2) levels with floor 1 and drops a fixed-colour recovery pickup at the clamped death spot, guaranteed by evicting the oldest pickup when the pool is full
 - [Phase 02]: 02-25: only the hull (fuselage, canopy, engine glow) blinks from INVULN parity (floor(invuln / 4) even = shown); the whole ship, hitbox marker and shadow hide only while DYING; PLAYER_DEATH is a LARGE fireball plus a 16-spark white ring
+- [Phase 02]: 02-26: the deathbomb needs only try_deathbomb after a successful launch, because the bomb press already resolves before life.step; a refused launch never saves
+- [Phase 02]: 02-26: the bomb fireball is a squashed front-face additive sphere at gain 0.4 with an EMBER rim (full-gain double-sided tone-mapped to white), and one detonation is one instant-rise linear-decay bloom pulse of 2.2x over 0.3 s
 
 ### Pending Todos
 
@@ -191,6 +194,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T06:44:03.534Z
-Stopped at: Completed 02-25-PLAN.md
+Last session: 2026-10-18T07:00:39.190Z
+Stopped at: Completed 02-26-PLAN.md
 Resume file: None
