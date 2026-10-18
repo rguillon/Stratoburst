@@ -96,3 +96,81 @@ test('a tap on the bomb button drops a bomb without moving the ship', async ({ p
   expect(Math.abs((await readSlot(page, 'SHIP_X')) - x0)).toBeLessThan(0.01);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+test('a drag that starts on the bomb button does not steer the ship', async ({ page }) => {
+  await bootGame(page, '?debug', { tap: true });
+  const cdp = await page.context().newCDPSession(page);
+  const x0 = await readSlot(page, 'SHIP_X');
+  const y0 = await readSlot(page, 'SHIP_Y');
+
+  const { x, y } = await centreOf(page, '#bomb-button');
+  await touch(cdp, 'touchStart', x, y);
+  for (let i = 1; i <= 6; i++) {
+    await touch(cdp, 'touchMove', x - i * 10, y);
+    await page.waitForTimeout(50);
+  }
+  await touch(cdp, 'touchEnd');
+  await page.waitForTimeout(800);
+
+  expect(Math.abs((await readSlot(page, 'SHIP_X')) - x0)).toBeLessThan(0.01);
+  expect(Math.abs((await readSlot(page, 'SHIP_Y')) - y0)).toBeLessThan(0.01);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('on a 390 x 844 phone the button sits in the bottom letterbox margin', async ({ page }) => {
+  await bootGame(page, '?debug', { tap: true });
+  const { inMargin, rect, corners } = await page.evaluate(() => ({
+    inMargin: globalThis.__scorched.bombButton.inMargin,
+    rect: globalThis.__scorched.bombButton.rect,
+    corners: globalThis.__scorched.projectPlayfield(),
+  }));
+  expect(inMargin).toBe(true);
+  // Below the playfield's bottom edge and fully on screen.
+  expect(rect.top).toBeGreaterThanOrEqual(Math.max(...corners.map((c) => c.y)));
+  expect(rect.top + rect.height).toBeLessThanOrEqual(844);
+  expect(rect.left + rect.width).toBeLessThanOrEqual(390);
+  // The DOM box is where the layout said.
+  const box = await page.locator('#bomb-button').boundingBox();
+  expect(Math.abs(box.x - rect.left)).toBeLessThan(1);
+  expect(Math.abs(box.y - rect.top)).toBeLessThan(1);
+  expect(Math.abs(box.width - rect.width)).toBeLessThan(1);
+});
+
+test('a rotation to landscape moves the button into the right margin', async ({ page }) => {
+  await bootGame(page, '?debug', { tap: true });
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.bombButton.rect.left), { timeout: 10_000 })
+    .toBeGreaterThan(390);
+  const { inMargin, rect, corners } = await page.evaluate(() => ({
+    inMargin: globalThis.__scorched.bombButton.inMargin,
+    rect: globalThis.__scorched.bombButton.rect,
+    corners: globalThis.__scorched.projectPlayfield(),
+  }));
+  expect(inMargin).toBe(true);
+  expect(rect.left).toBeGreaterThanOrEqual(Math.max(...corners.map((c) => c.x)));
+  expect(rect.left + rect.width).toBeLessThanOrEqual(844);
+  expect(rect.top + rect.height).toBeLessThanOrEqual(390);
+});
+
+test.describe('a viewport with the playfield own aspect', () => {
+  test.use({ viewport: { width: 600, height: 800 } });
+
+  test('has no margin: the button overlays the playfield bottom-right corner', async ({ page }) => {
+    await bootGame(page, '?debug', { tap: true });
+    const { inMargin, rect, corners } = await page.evaluate(() => ({
+      inMargin: globalThis.__scorched.bombButton.inMargin,
+      rect: globalThis.__scorched.bombButton.rect,
+      corners: globalThis.__scorched.projectPlayfield(),
+    }));
+    expect(inMargin).toBe(false);
+    const right = Math.max(...corners.map((c) => c.x));
+    const bottom = Math.max(...corners.map((c) => c.y));
+    const left = Math.min(...corners.map((c) => c.x));
+    const top = Math.min(...corners.map((c) => c.y));
+    expect(rect.left).toBeGreaterThanOrEqual(left);
+    expect(rect.top).toBeGreaterThanOrEqual(top);
+    expect(rect.left + rect.width).toBeLessThanOrEqual(right);
+    expect(rect.top + rect.height).toBeLessThanOrEqual(bottom);
+  });
+});

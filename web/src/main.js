@@ -8,7 +8,8 @@ import { createFrameLoop } from './loop/frame_loop.js';
 import { createPauseController } from './loop/pause_controller.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
 import { createTouchInput } from './input/touch_input.js';
-import { createBombButton } from './input/bomb_button.js';
+import { createBombButton, readSafeInsets } from './input/bomb_button.js';
+import { layoutBombButton } from './input/bomb_button_layout.js';
 import { createInputSampler } from './input/input_sampler.js';
 import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel, hullVisibleFor } from './render/ship_model.js';
@@ -358,6 +359,35 @@ async function main() {
     sampler?.setTouchMode(on);
     bombButton.setVisible(on);
   };
+  // Placed in the letterbox margin when there is room, else over the playfield's bottom-right corner.
+  // The rig refits the camera on a CSS size change; asking it to resize first makes the projected
+  // corners current whichever of the two handlers runs first. Re-laid out on every resize and
+  // orientation change (a coalesced rAF, like the rig's own).
+  let bombLayout = null;
+  const layOutBombButton = () => {
+    rig.resize();
+    const viewportW = canvas.clientWidth;
+    const viewportH = canvas.clientHeight;
+    bombLayout = layoutBombButton({
+      corners: projectCorners(rig.camera, viewportW, viewportH, PLAYFIELD_W / 2, PLAYFIELD_H / 2),
+      viewportW,
+      viewportH,
+      insets: readSafeInsets(),
+    });
+    bombButton.place(bombLayout);
+  };
+  let bombLayoutQueued = false;
+  const queueBombLayout = () => {
+    if (bombLayoutQueued) return;
+    bombLayoutQueued = true;
+    requestAnimationFrame(() => {
+      bombLayoutQueued = false;
+      layOutBombButton();
+    });
+  };
+  window.addEventListener('resize', queueBombLayout);
+  window.visualViewport?.addEventListener('resize', queueBombLayout);
+  layOutBombButton();
   const keyboard = createKeyboardInput(window, { onKeyDown: () => setTouchMode(false) });
   const touch = createTouchInput(app, {
     onTouchMode: () => setTouchMode(true),
@@ -473,7 +503,7 @@ async function main() {
   pause = createPauseController({
     bridge,
     loop,
-    inputs: [keyboard, touch],
+    inputs: [keyboard, touch, bombButton],
     overlayEl: document.getElementById('paused'),
     controller,
   });
@@ -531,6 +561,14 @@ async function main() {
       bombButton: {
         get visible() {
           return !bombButton.el.hidden;
+        },
+        // Whether the button sits in the letterbox margin, and its box in CSS pixels.
+        get inMargin() {
+          return bombLayout.inMargin;
+        },
+        get rect() {
+          const { left, top, size } = bombLayout;
+          return { left, top, width: size, height: size };
         },
       },
       get tier() {

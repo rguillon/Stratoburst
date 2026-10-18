@@ -3,6 +3,29 @@
 // mirrors keyboard_input.js: a `held` state plus a press latch, so a tap shorter than one frame
 // still reaches the next sample. Python acts on the press edge, so holding never repeats bombs.
 
+const INSET_SIDES = ['Left', 'Right', 'Top', 'Bottom'];
+
+// The device's safe-area insets in CSS px (the notch, the rounded corners, the home bar). CSS can
+// only expose env() through a property, so a hidden probe is padded with each inset, read back
+// through getComputedStyle and removed. A browser without env() support keeps the padding at 0.
+export function readSafeInsets(doc = document) {
+  const probe = doc.createElement('div');
+  probe.style.position = 'fixed';
+  probe.style.visibility = 'hidden';
+  probe.style.pointerEvents = 'none';
+  for (const side of INSET_SIDES) {
+    probe.style[`padding${side}`] = `env(safe-area-inset-${side.toLowerCase()}, 0px)`;
+  }
+  doc.body.append(probe);
+  const computed = doc.defaultView.getComputedStyle(probe);
+  const insets = {};
+  for (const side of INSET_SIDES) {
+    insets[side.toLowerCase()] = Number.parseFloat(computed[`padding${side}`]) || 0;
+  }
+  probe.remove();
+  return insets;
+}
+
 export function createBombButton(el) {
   const down = new Set(); // pointer ids currently on the button
   let pressedSinceSample = false;
@@ -44,6 +67,15 @@ export function createBombButton(el) {
     clear,
     setVisible(on) {
       el.hidden = !on;
+    },
+    // Absolute placement from layoutBombButton, replacing the CSS corner defaults.
+    place({ left, top, size }) {
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
     },
     dispose() {
       el.removeEventListener('pointerdown', onDown);

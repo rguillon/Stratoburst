@@ -12,6 +12,9 @@ export function createTouchInput(el, { onTouchMode } = {}) {
   let dyPx = 0;
 
   function onDown(event) {
+    // Controls drawn over the playfield (the bomb button) mark themselves data-no-steer: a pointer
+    // that starts on one is not a drag, and must not change the steering pointer (D-13).
+    if (event.target?.closest?.('[data-no-steer]')) return;
     if (event.pointerType === 'touch') onTouchMode?.();
     if (steering !== null) return;
     steering = event.pointerId;
