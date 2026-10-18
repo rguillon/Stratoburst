@@ -29,6 +29,9 @@ import { createBeamMesh } from './fx/beam_mesh.js';
 import { createBombFx } from './fx/bomb_fx.js';
 import { createShake, effectClockDelta, withCameraOffset } from './fx/shake.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
+import { SFX_TABLE } from './audio/sfx_table.js';
+import { createSfxBank, synthesizeAll } from './audio/sfx_bank.js';
+import { createSfxPlayer } from './audio/sfx_player.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
@@ -78,6 +81,9 @@ async function main() {
   // unhandled rejection if the synchronous setup below throws first.
   const runtimeP = loadRuntime({ onProgress: loading.setProgress, timeoutMs: LOAD_TIMEOUT_MS });
   runtimeP.catch(() => {});
+  // Sound samples are plain CPU math, so they are rendered now, while the runtime downloads. The
+  // AudioBuffers are made after the start tap, on the context the gate unlocked.
+  const sfxSamples = synthesizeAll(SFX_TABLE);
 
   const canvas = document.getElementById('view');
   const rig = createRendererRig(canvas, { playfieldW: PLAYFIELD_W, playfieldH: PLAYFIELD_H });
@@ -330,6 +336,15 @@ async function main() {
   });
   readout.show();
   fx.add(readout); // the MAX flash listens for the MAXED pickup events
+  // Python picks the sound for each event; this plays it on the gate's AudioContext (null = silent).
+  const sfxPlayer = createSfxPlayer({
+    audio,
+    bank: createSfxBank({ audio, samples: sfxSamples }),
+    table: SFX_TABLE,
+    sfxIds: manifest.sfx,
+    events: manifest.events,
+  });
+  fx.add(sfxPlayer);
 
   // Timing, overlay and report exist only under ?debug; nothing is created otherwise. They
   // start with play, so the report's elapsed time and minutes exclude the loading screen.
@@ -573,6 +588,12 @@ async function main() {
       },
       get tier() {
         return currentTier;
+      },
+      // Sound voices started so far (e2e checks a kill is heard).
+      sfx: {
+        get played() {
+          return sfxPlayer.played;
+        },
       },
       fx: {
         get particlesSpawned() {
