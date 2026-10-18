@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-09-PLAN.md
-last_updated: "2026-10-18T04:14:09.035Z"
+stopped_at: Completed 02-10-PLAN.md
+last_updated: "2026-10-18T04:19:53.525Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: ff185e7f2220f853254fe4ac2a0d2145318d4da5
+state_head: 5dc0d5b6109eca25bc1e3c02dfe4a42f46ce8f0e
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 19
+  completed_plans: 20
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 10 of 33
+Plan: 11 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -75,6 +75,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P07 | 8 min | 2 tasks | 13 files |
 | Phase 02 P08 | 10 min | 2 tasks | 14 files |
 | Phase 02 P09 | 8 min | 2 tasks | 7 files |
+| Phase 02 P10 | 4 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-08: TwinShot is deleted; Lv1 of the VULCAN_STREAMS tables reproduces it exactly (parity test), and Game clamps the starting level to 1..5 itself
 - [Phase 02]: 02-08: every weapon is stepped every step with fire gated by loadout.kind, so cooldowns keep running and a switch is immediate; LASER and HOMING fire nothing until 02-21 and 02-13
 - [Phase 02]: 02-09: tank and AA turret are { body, glow, top } models built only from model_kit parts, with the turret/gun as a pivot-centred top that follows the aux aim angle; all five gallery kinds now have builders
+- [Phase 02]: 02-10: pickups bounce with the pickup radius as edge margin, drift off the bottom after 600 steps, and a MAXED catch is only counted (game.max_bonus, header slot 20) for Phase 3 scoring
+- [Phase 02]: 02-10: the pickup colour is decided in Python (colour_at) and packed into the pickups channel; the collect callback is bound once so no closure is built per step
 
 ### Pending Todos
 
@@ -143,6 +146,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:14:08.959Z
-Stopped at: Completed 02-09-PLAN.md
+Last session: 2026-10-18T04:19:53.449Z
+Stopped at: Completed 02-10-PLAN.md
 Resume file: None
