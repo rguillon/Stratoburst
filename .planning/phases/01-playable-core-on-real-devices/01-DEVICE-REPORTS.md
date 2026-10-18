@@ -2,7 +2,7 @@
 
 Plan 01-10. Measurements come from real hardware against the real static host. WSL2 SwiftShader numbers do not count.
 
-**Status in one line: GO (desktop) — phone performance gate DEFERRED.** Desktop passed every bar. No phone was measured; the user chose to skip phone reports for now.
+**Status in one line: GO (desktop); iPhone baseline measured later at the Phase 2 gate and passes; Android NOT MEASURED (no device).** Desktop passed every bar. The iPhone baseline was added on 2026-10-18 from the Phase 1 live build and passes every phone bar. No Android phone has ever been measured.
 
 ## Header
 
@@ -124,11 +124,28 @@ minute 0: frames 1864, avg fps 60.0, p95 frame 16.7 ms, avg tick 1.08 ms, p95 ti
 
 ## Android
 
-**NOT MEASURED.** Deferred by user choice ("We will skip phone reports for now."). No model, browser, power state or reports exist. The user separately said the game looked smooth on their phone; that is a qualitative remark, not a measurement, and it does not identify the phone model or the browser. It is not counted against any bar.
+**NOT MEASURED, and now permanently unmeasurable for the user: they have no Android device** (stated at the Phase 2 device gate, plan 02-33). There is no Android model, browser, power state or report. The earlier remark that the game looked smooth on "their phone" was qualitative and is not counted against any bar. The Android baseline stays open until someone with an Android phone runs the protocol.
 
 ## iPhone
 
-**NOT MEASURED.** Deferred by user choice, as above. No Safari-version or Low Power Mode data, and A6 (Safari streaming compile through the progress wrapper, progress reaching 80%) remains unverified.
+**MEASURED during the Phase 2 device gate (plan 02-33, 2026-10-18), from the Phase 1 build on the live URL.** The Phase 1 baseline was never pasted at the Phase 1 gate; it was measured afterwards, side by side with Phase 2, while the live URL still served Phase 1 (`origin/main` = `6dcec36`).
+
+Device: iPhone 16 Pro, plugged in (power state was not stated separately for this run; the same plugged-in phone is assumed), Firefox for iOS (FxiOS 158, iOS 18.7; WebKit under the hood, not Safari). `?debug&stress=500`, auto tier. The run lasted 5.2 min (longer than the 2 min baseline protocol). The user was told beforehand that pasted text becomes public. Pasted verbatim:
+
+```
+ua: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/158.0 Mobile/15E148 Safari/604.1
+screen: 402x874 (css 402x670); dpr: 3 (effective 1.50); canvas: 603x1005; gl renderer: Apple GPU; precision: highp (23 bits); pyodide 314.0.7; three 0.186.1; build: 6dcec36
+flags: debug=on stress=500 tier=auto crash=none
+tier: mid; time to gate: 1.8 s; elapsed: 5.2 min; tier log: none
+minute 0: frames 3588, avg fps 59.8, p95 frame 17.0 ms, avg tick 1.47 ms, p95 tick 2.00 ms
+minute 1: frames 3316, avg fps 59.9, p95 frame 17.0 ms, avg tick 1.43 ms, p95 tick 2.00 ms
+minute 2: frames 3600, avg fps 60.0, p95 frame 17.0 ms, avg tick 1.51 ms, p95 tick 2.00 ms
+minute 3: frames 3599, avg fps 60.0, p95 frame 17.0 ms, avg tick 1.51 ms, p95 tick 2.00 ms
+minute 4: frames 1491, avg fps 59.8, p95 frame 17.0 ms, avg tick 1.49 ms, p95 tick 2.00 ms
+minute 5: frames 98, avg fps 56.3, p95 frame 25.0 ms, avg tick 0.14 ms, p95 tick 1.00 ms   (partial minute)
+```
+
+Against the Phase 1 phone pass bars (avg fps >= 29, p95 frame <= 40 ms, no minute under 29 fps, final tier keeps bloom): PASS on every full minute (59.8 to 60.0 fps, p95 17 ms, final tier mid). The frame counts total 15692 over 5.2 min elapsed, so part of the run was probably backgrounded or auto-paused; minute 4 (1491 frames) and minute 5 (98 frames, 1.6 s) are short samples, and even minute 5 (56.3 fps, p95 25 ms) clears the bars. The forced `tier=low` and `tier=high` runs were not done. A6 (Safari streaming compile through the progress wrapper) is still unverified in Safari proper; the time to gate on this phone was 1.8 s. Compared with the Phase 2 build on the same phone see `.planning/phases/02-arcade-shooting-feel/02-DEVICE-REPORTS.md`.
 
 ## Feel checklist
 
@@ -156,8 +173,8 @@ Values are parsed from the report lines above. "Worst minute" excludes nothing; 
 | Desktop (auto, 5.2 min) | Python tick average | <= 3 ms | 1.08 to 1.12 ms (p95 2.00 ms) | PASS |
 | Desktop `tier=low` (1.3 min) | recorded | n/a | 60.0 fps, p95 16.7 ms, tick 0.89 / 1.34 ms | recorded (shorter than protocol) |
 | Desktop `tier=high` (0.5 min) | recorded | n/a | 60.0 fps, p95 16.7 ms, tick 1.08 ms | recorded (shorter than protocol) |
-| Android | all phone bars | see Pass bars | none | NOT MEASURED |
-| iPhone | all phone bars | see Pass bars | none | NOT MEASURED |
+| Android | all phone bars | see Pass bars | none (user has no Android device) | NOT MEASURED |
+| iPhone (auto, 5.2 min, measured at the Phase 2 gate, Phase 1 build) | Average fps / p95 frame / worst minute / final tier | >= 29 / <= 40 ms / >= 29 / high or mid | 59.8 to 60.0 / 17.0 ms / 59.8 / mid | PASS (tick 1.43 to 1.51 ms recorded) |
 | All | Feel checklist items 5 to 12 | all passed | "no problem observed", not itemized | NOT ITEMIZED |
 
 Observations:
@@ -174,6 +191,10 @@ Observations:
 - Desktop: GO. Every desktop bar passes with margin (60.0 fps vs >= 58, p95 16.7 ms vs <= 20 ms, tick ~1.1 ms vs <= 3 ms, final tier high with bloom on). This is one machine and one browser (Snapdragon X, Firefox 158), so Chromium and Safari desktop have not been measured. It is the evidence that PLAT-04's numeric bar holds, with `?stress=500` bullets standing in for the full stage load that does not exist yet.
 - Phones: not measured, so the phone half of the ROADMAP "After Phase 1 (go/no-go)" gate (PLAT-05, success criterion 3 on phones) is **not decided**. This is neither a GO nor a NO-GO for phones. No lever is recommended because there is no phone data to classify the bottleneck. The only phone evidence is the user's remark that animation looked smooth on a phone.
 - Consequence: the phone go/no-go must be closed before the Phase 2 content work is trusted on mobile. PLAT-05 stays pending.
+
+### Addendum (2026-10-18, Phase 2 device gate)
+
+The iPhone half of the phone gate is now measured: iPhone 16 Pro, Phase 1 build `6dcec36`, 59.8 to 60.0 fps, p95 17 ms, final tier mid, tick about 1.5 ms. It passes every phone bar. The Android half remains unmeasured because the user has no Android device, so PLAT-05 is decided for the iPhone only.
 
 ### Open follow-ups (route to UAT)
 
