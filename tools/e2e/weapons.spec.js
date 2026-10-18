@@ -1,0 +1,47 @@
+import { expect, test } from '@playwright/test';
+import { bootGame, readSlot } from './helpers.js';
+
+test('?weapon=vulcan&level=5 starts with a seven-stream fan and a VULCAN Lv 5 readout', async ({
+  page,
+}) => {
+  await bootGame(page, '?debug&weapon=vulcan&level=5');
+  expect(await readSlot(page, 'WEAPON')).toBe(0);
+  expect(await readSlot(page, 'LEVEL')).toBe(5);
+  const readout = page.locator('#status-readout');
+  await expect(readout).toBeVisible();
+  await expect(readout).toContainText('VULCAN');
+  await expect(readout).toContainText('Lv 5');
+
+  await page.keyboard.down('Space');
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.header[globalThis.__scorched.slots.PBULLET_N]), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThanOrEqual(7);
+  await page.keyboard.up('Space');
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('?weapon=laser&level=3 starts as a level 3 laser', async ({ page }) => {
+  await bootGame(page, '?debug&weapon=laser&level=3');
+  expect(await readSlot(page, 'WEAPON')).toBe(1);
+  expect(await readSlot(page, 'LEVEL')).toBe(3);
+  const readout = page.locator('#status-readout');
+  await expect(readout).toContainText('LASER');
+  await expect(readout).toContainText('Lv 3');
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('?weapon=plasma&level=99 falls back to a level 5 vulcan', async ({ page }) => {
+  await bootGame(page, '?debug&weapon=plasma&level=99');
+  expect(await readSlot(page, 'WEAPON')).toBe(0);
+  expect(await readSlot(page, 'LEVEL')).toBe(5);
+  await expect(page.locator('#status-readout')).toContainText('VULCAN');
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('without flags the readout shows VULCAN Lv 1', async ({ page }) => {
+  await bootGame(page, '?debug');
+  await expect(page.locator('#status-readout')).toContainText('VULCAN');
+  await expect(page.locator('#status-readout')).toContainText('Lv 1');
+});

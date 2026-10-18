@@ -9,6 +9,8 @@ class FakeElement {
     this.textContent = '';
     this.value = '';
     this.id = '';
+    this.className = '';
+    this.hidden = false;
     this.readOnly = false;
     this.parent = null;
     this.focused = false;
@@ -25,6 +27,20 @@ class FakeElement {
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this);
     this.parent = null;
+  }
+
+  // Class selectors only (".weapon"): all the readout needs.
+  querySelector(selector) {
+    const cls = selector.slice(1);
+    const walk = (node) => {
+      for (const child of node.children) {
+        if (child.className.split(' ').includes(cls)) return child;
+        const found = walk(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(this);
   }
 
   addEventListener(type, handler) {

@@ -20,6 +20,7 @@ import { createExplosionFx } from './fx/explosion_fx.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
+import { createStatusReadout } from './ui/status_readout.js';
 import { createDebugSession } from './debug/debug_session.js';
 import { buildReport } from './debug/report.js';
 import * as THREE from 'three';
@@ -74,9 +75,9 @@ async function main() {
   const pyodide = await runtimeP;
   loading.setStatus('Starting Python…');
   loading.setProgress(0.8);
-  const bridge = await startGame(pyodide, { seed: 1, stress: flags.stress, crash: flags.crash });
+  const bridge = await startGame(pyodide, { seed: 1, ...flags });
   // The throwaway game never carries the injected fault: it must not fire before the gate.
-  warmUp(pyodide, { seed: 1, stress: flags.stress, crash: null });
+  warmUp(pyodide, { seed: 1, ...flags, crash: null });
   loading.setProgress(0.9);
   loading.setStatus('Warming up graphics…');
   const { tick, header, slots, manifest } = bridge;
@@ -176,6 +177,8 @@ async function main() {
   const app = document.getElementById('app');
   const { audio, pointerType } = await waitForStartGesture(app);
   loading.hide();
+  const readout = createStatusReadout({ weapons: manifest.weapons });
+  readout.show();
 
   // Timing, overlay and report exist only under ?debug; nothing is created otherwise. They
   // start with play, so the report's elapsed time and minutes exclude the loading screen.
@@ -245,6 +248,7 @@ async function main() {
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
+      readout.update(header[slots.WEAPON], header[slots.LEVEL]);
       enemies.update(header[slots.ENEMY_N], fxTime);
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz.

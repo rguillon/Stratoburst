@@ -112,6 +112,21 @@
         color: #0b0a09;
         outline: none;
       }
+      #status-readout {
+        position: absolute;
+        left: calc(env(safe-area-inset-left, 0px) + 10px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+        z-index: 4;
+        pointer-events: none;
+        font: 700 13px/1.2 ui-monospace, Menlo, Consolas, monospace;
+        letter-spacing: 0.08em;
+        color: #f2e8d5;
+        text-shadow: 0 0 3px #000, 0 0 6px #000;
+        user-select: none;
+      }
+      #status-readout[hidden] {
+        display: none;
+      }
       #paused {
         position: fixed;
         inset: 0;
@@ -155,6 +170,7 @@
         <p id="loading-status" role="status">Loading Python runtime…</p>
         <button id="start-gate" type="button" hidden>TAP / CLICK TO START</button>
       </div>
+      <div id="status-readout" hidden><span class="weapon"></span> <span class="level"></span></div>
     </div>
     <div id="paused" role="dialog" aria-label="Game paused" hidden>
       <div class="title">PAUSED</div>
