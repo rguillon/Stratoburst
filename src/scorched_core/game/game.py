@@ -130,6 +130,7 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
     PROTOCOL_VERSION,
 )
+from scorched_core.scoring.medal_chain import MedalChain
 from scorched_core.scoring.score_keeper import ScoreKeeper
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
@@ -290,6 +291,7 @@ class Game:
         "_start_weapon",
         "bomb",
         "buffers",
+        "chain",
         "director",
         "ebullet_cap",
         "ebullets",
@@ -369,6 +371,7 @@ class Game:
         self.enemies = EnemyPool()
         self.pickups = PickupPool()
         self.max_bonus = 0  # same-colour catches at the top level (D-06), each also paid in points
+        self.chain = MedalChain()  # what the next medal pays and the catches in a row (D-15)
         self.score = ScoreKeeper(lives=self._start_lives, high_score=max(high_score, 0))
         self._on_pickup = self._collect_pickup  # bound once: no closure is built per step
         self.gallery = GallerySpawner()
@@ -479,6 +482,8 @@ class Game:
         self.missiles.clear()
         self.pickups.clear()
         self.max_bonus = 0
+        self.chain.miss()
+        self.chain.stage_reset()
         self.hitstop.ticks = 0
         self._bomb_requested = False
         terrain = self.terrain
@@ -596,6 +601,7 @@ class Game:
         if steps > 0:
             self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
             self.enemies.pack_into(self.buffers["enemies"])
+            self.pickups.medal_tier = self.chain.index
             self.pickups.pack_into(self.buffers["pickups"])
             self.missiles.pack_into(self.buffers["missiles"])
             self.storm_pool.pack_into(self.buffers["ebullets"], 1.0)
@@ -635,6 +641,8 @@ class Game:
         header[H_LEVEL] = self.loadout.level
         header[H_BEAM_W] = self.laser.half_width
         header[H_MAX_BONUS] = self.max_bonus
+        header[H_MEDAL_VALUE] = self.chain.value
+        header[H_MEDAL_CHAIN] = self.chain.chain
         score = self.score
         header[H_SCORE] = score.score
         header[H_HIGH_SCORE] = score.high_score
@@ -666,7 +674,8 @@ class Game:
     def _drop_pickups(self) -> None:
         """Spawn what every enemy killed this step drops at its kill position.
 
-        A CRYSTAL is launched up and sideways; a BOMB (an AA turret's drop) just falls slowly.
+        A CRYSTAL is launched up and sideways; a BOMB (an AA turret's drop) just falls slowly; a
+        MEDAL stays where it fell and drifts with the scroll (a refused spawn is simply lost).
         """
         enemies = self.enemies
         for k in range(enemies.kill_n):
@@ -677,13 +686,24 @@ class Game:
                 self.pickups.spawn(
                     PickupKind.BOMB, enemies.kill_x[k], enemies.kill_y[k], 0.0, BOMB_DROP_VY
                 )
+            elif drop == PickupKind.MEDAL:
+                self.pickups.spawn_medal(enemies.kill_x[k], enemies.kill_y[k])
+
+    def _collect_medal(self, x: float, y: float) -> None:
+        """Pay the chain value for a caught medal and announce it as one MEDAL event (D-15)."""
+        value = self.chain.collect()
+        self.score.award(value, self.events, x, y)
+        self.events.push(EV_MEDAL, x, y, value, self.chain.chain)
 
     def _collect_pickup(self, kind: int, color: int, x: float, y: float) -> None:
-        """Apply a caught pickup and announce it as one PICKUP event.
+        """Apply a caught pickup and announce it as one PICKUP event (a medal: one MEDAL event).
 
         A BOMB stocks one bomb up to ``BOMB_MAX_STOCK`` and is consumed even when the stock is
         full (STOCKED); every other kind is a weapon colour for the loadout.
         """
+        if kind == PickupKind.MEDAL:
+            self._collect_medal(x, y)
+            return
         if kind == PickupKind.BOMB:
             bomb = self.bomb
             bomb.stock = min(bomb.stock + 1, BOMB_MAX_STOCK)
@@ -821,7 +841,7 @@ class Game:
             radius=MISSILE_RADIUS,
         )
         self._settle_kills()
-        self.pickups.step()
+        self.pickups.step(self.terrain.speed * GROUND_SCROLL_RATIO)
         if life.can_control:
             resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)
         if life.vulnerable and not self.god and self._lethal_contact():

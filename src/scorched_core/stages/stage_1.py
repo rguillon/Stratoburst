@@ -2,14 +2,15 @@
 
 Distances are scroll units (48 per second at the cruise speed of 0.8 per step); the boss marker
 sits at 8640, about three minutes in (D-01). The slums opening is sparse on purpose (D-07, Raiden
-pacing): a few jets, a helicopter or two, tanks crawling down the two roads (x 80 and 160) and a
-carrier about every 30 to 40 seconds (D-08). Downtown is denser, with jets in curved formations on
-authored paths, helicopter pairs, tank columns driving down their roads and rooftop turrets, and
-breaks for the mid-boss at 4200: nothing spawns in the ``MIDBOSS_LULL`` after its marker. The
-airbase strafes, brings heavier turret groups and the last carrier, then goes quiet for
-``BOSS_QUIET`` units before the bomber arrives. Every wave names slow, spaced-out bullet patterns.
-Each section is a tuple of rows (formation helpers expand into plain rows) and the stage merges
-them with a stable sort on ``at``, so rows that share a distance keep their authored order.
+pacing): a few jets, a helicopter or two, tanks crawling down the two roads (x 80 and 160; the
+left column carries medals) and a carrier about every 30 to 40 seconds (D-08). Downtown is
+denser, with jets in curved formations on authored paths, helicopter pairs, tank columns driving
+down their roads and rooftop turrets, and breaks for the mid-boss at 4200: nothing spawns in the
+``MIDBOSS_LULL`` after its marker. The airbase strafes, brings heavier turret groups and the last
+carrier, then goes quiet for ``BOSS_QUIET`` units before the bomber arrives. Every wave names
+slow, spaced-out bullet patterns. Each section is a tuple of rows (formation helpers expand into
+plain rows) and the stage merges them with a stable sort on ``at``, so rows that share a distance
+keep their authored order.
 """
 
 from typing import Final
@@ -37,6 +38,8 @@ _SWAY: Final = MotionKind.SWAY
 _GROUND: Final = MotionKind.GROUND
 _PATH: Final = MotionKind.PATH
 
+_MEDAL: Final = PickupKind.MEDAL
+
 _MIDBOSS_AT: Final = 4200.0
 _BOSS_AT: Final = 8640.0  # about three minutes in (D-01)
 
@@ -57,10 +60,11 @@ _SLUMS: Final = (
     WaveEntry(420.0, _HELI, 160.0, y=-14.0, motion=_HOVER, vy=1.2, pattern="ring10_slow"),
     # The first carrier: kill it for a crystal.
     WaveEntry(600.0, _CARRIER, 120.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
-    # A tank column crawls down the left road, then another down the right.
-    WaveEntry(820.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
-    WaveEntry(850.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
-    WaveEntry(880.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
+    # A tank column crawls down the left road, each tank carrying a medal, then another down the
+    # right.
+    WaveEntry(820.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow", drop=_MEDAL),
+    WaveEntry(850.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow", drop=_MEDAL),
+    WaveEntry(880.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow", drop=_MEDAL),
     WaveEntry(1000.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
     WaveEntry(1030.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
     # An AA turret guards a bomb.
@@ -100,9 +104,17 @@ _DOWNTOWN: Final = (
     ),
     # A tank column drives down the left road, a rooftop turret covers the right.
     *column_formation(
-        2880.0, _TANK, 80.0, 3, 36.0, motion=_PATH, path="road_down", pattern="aimed_slow"
+        2880.0,
+        _TANK,
+        80.0,
+        3,
+        36.0,
+        motion=_PATH,
+        path="road_down",
+        pattern="aimed_slow",
+        drop=_MEDAL,
     ),
-    WaveEntry(2900.0, _TURRET, 200.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    WaveEntry(2900.0, _TURRET, 200.0, motion=_GROUND, vy=0.0, pattern="stream3", drop=_MEDAL),
     # Four jets weave down the screen abreast.
     *line_formation(
         3060.0, _JET, 120.0, 4, 44.0, motion=_PATH, path="s_dive", pattern="aimed_slow"
@@ -128,7 +140,15 @@ _DOWNTOWN: Final = (
     WaveEntry(3720.0, _CARRIER, 120.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
     # A tank column turns onto the crossing road, then a second column the other way.
     *column_formation(
-        3800.0, _TANK, 80.0, 3, 40.0, motion=_PATH, path="road_bend", pattern="aimed_slow"
+        3800.0,
+        _TANK,
+        80.0,
+        3,
+        40.0,
+        motion=_PATH,
+        path="road_bend",
+        pattern="aimed_slow",
+        drop=_MEDAL,
     ),
     *column_formation(
         3920.0,
@@ -278,7 +298,15 @@ _AIRBASE: Final = (
         )
     ),
     *column_formation(
-        7240.0, _TANK, 80.0, 3, 40.0, motion=_PATH, path="road_bend", pattern="aimed_slow"
+        7240.0,
+        _TANK,
+        80.0,
+        3,
+        40.0,
+        motion=_PATH,
+        path="road_bend",
+        pattern="aimed_slow",
+        drop=_MEDAL,
     ),
     *column_formation(
         7380.0,
@@ -299,7 +327,9 @@ _AIRBASE: Final = (
     *line_formation(
         7560.0, _HELI, 90.0, 3, 50.0, y=-14.0, motion=_PATH, path="hover_arc", pattern="aimed_slow"
     ),
-    *line_formation(7700.0, _TURRET, 120.0, 3, 80.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    *line_formation(
+        7700.0, _TURRET, 120.0, 3, 80.0, motion=_GROUND, vy=0.0, pattern="stream3", drop=_MEDAL
+    ),
     *column_formation(7800.0, _JET, -12.0, 4, 12.0, motion=_PATH, path="strafe", y=60.0),
     *column_formation(
         7860.0, _JET, 252.0, 4, 12.0, motion=_PATH, path="strafe", y=110.0, mirror=True

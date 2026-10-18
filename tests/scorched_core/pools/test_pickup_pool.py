@@ -5,7 +5,12 @@ import pytest
 from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.pools.pickup_pool import PickupPool
 from scorched_core.protocol import PICKUP_CAP, PICKUP_STRIDE, PLAYFIELD_H, PLAYFIELD_W
-from scorched_core.tuning import PICKUP_EXIT_SPEED, PICKUP_LIFE_TICKS, PICKUP_RADIUS
+from scorched_core.tuning import (
+    MEDAL_RESERVE,
+    PICKUP_EXIT_SPEED,
+    PICKUP_LIFE_TICKS,
+    PICKUP_RADIUS,
+)
 
 
 def test_a_new_pool_is_empty_and_preallocated_to_the_cap() -> None:
@@ -329,3 +334,13 @@ def test_pack_into_writes_the_medal_tier_as_the_colour_and_the_kind() -> None:
     out = array("f", [0.0] * (PICKUP_STRIDE * PICKUP_CAP))
     pool.pack_into(out)
     assert list(out[:PICKUP_STRIDE]) == [80.0, 100.0, 3.0, float(PickupKind.MEDAL)]
+
+
+def test_medals_cannot_take_the_last_reserved_slots_but_other_pickups_can() -> None:
+    pool = PickupPool()
+    usable = PICKUP_CAP - MEDAL_RESERVE
+    assert all(pool.spawn_medal(80.0, 50.0) for _ in range(usable))
+    assert not pool.spawn_medal(80.0, 50.0)
+    assert pool.n == usable
+    assert pool.spawn_crystal(50.0, 50.0)
+    assert pool.spawn(PickupKind.BOMB, 50.0, 50.0, 0.0, 0.5)

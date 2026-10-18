@@ -3537,6 +3537,7 @@ def _kill_tank_carrying(game: Game, drop: int, x: float = 80.0, y: float = 120.0
 
 
 def _drop_a_medal(game: Game) -> None:
+    game.ship.x, game.ship.y = 200.0, 280.0  # away from where the medal falls
     _kill_tank_carrying(game, PickupKind.MEDAL)
     _tick(game)
 
@@ -3570,9 +3571,10 @@ def test_catching_a_medal_pays_the_chain_value_and_pushes_one_medal_event() -> N
     game = Game(god=True)
     _drop_a_medal(game)
     _stand_on_the_medal(game)
+    before = game.score.score
     _tick(game)
     header = game.buffers["header"]
-    assert header[H_SCORE] == 100
+    assert header[H_SCORE] == before + 100
     assert (header[H_MEDAL_VALUE], header[H_MEDAL_CHAIN]) == (200.0, 1.0)
     kinds = _event_kinds(game)
     assert kinds.count(EV_MEDAL) == 1

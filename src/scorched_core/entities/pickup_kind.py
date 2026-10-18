@@ -7,7 +7,8 @@ class PickupKind(IntEnum):
     """Pickup types. Values never change: they are stored in the pools and cross the boundary.
 
     RED, BLUE and PURPLE are fixed-colour recovery pickups (plan 02-25) whose value equals the
-    ``WeaponKind`` they select; CRYSTAL cycles through those colours; BOMB stocks a bomb.
+    ``WeaponKind`` they select; CRYSTAL cycles through those colours; BOMB stocks a bomb; MEDAL
+    is a score chip that drifts with the scroll (plan 03-11).
     """
 
     RED = 0
@@ -15,3 +16,4 @@ class PickupKind(IntEnum):
     PURPLE = 2
     CRYSTAL = 3
     BOMB = 4
+    MEDAL = 5

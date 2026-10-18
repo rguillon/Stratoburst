@@ -8,9 +8,12 @@ from scorched_core.protocol import PICKUP_CAP, PICKUP_STRIDE, PLAYFIELD_H, PLAYF
 from scorched_core.tuning import (
     CRYSTAL_CYCLE_TICKS,
     CRYSTAL_SPEED,
+    GROUND_SCROLL_RATIO,
+    MEDAL_RESERVE,
     PICKUP_EXIT_SPEED,
     PICKUP_LIFE_TICKS,
     PICKUP_RADIUS,
+    SCROLL_SPEED,
 )
 
 # A crystal cycles through the three weapon colours: red, blue, purple.
@@ -25,6 +28,8 @@ _MAX_X = PLAYFIELD_W - PICKUP_RADIUS
 _MIN_Y = PICKUP_RADIUS
 _MAX_Y = PLAYFIELD_H - PICKUP_RADIUS
 _EXIT_BOTTOM = PLAYFIELD_H + 16.0
+# A medal falls with the ground, so the default drift is the cruise scroll at the ground ratio.
+_GROUND_SPEED = SCROLL_SPEED * GROUND_SCROLL_RATIO
 
 
 @dataclass(slots=True)
@@ -32,8 +37,8 @@ class PickupPool:
     """Up to ``PICKUP_CAP`` live pickups in preallocated columns.
 
     Removal swaps the last live pickup into the freed slot, so slot order carries no meaning.
-    A CRYSTAL's colour is a function of its age; every other kind has a fixed colour equal to
-    its kind value.
+    A CRYSTAL's colour is a function of its age; a MEDAL's colour is ``medal_tier``, the chain tier
+    its owner sets; every other kind has a fixed colour equal to its kind value.
     """
 
     x: array = field(init=False)
@@ -43,6 +48,7 @@ class PickupPool:
     kind: array = field(init=False)
     age: array = field(init=False)
     n: int = field(default=0, init=False)
+    medal_tier: int = field(default=0, init=False)
     _side: float = field(default=1.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -86,16 +92,32 @@ class PickupPool:
         self._side = -side
         return self.spawn(PickupKind.CRYSTAL, x, y, side * _LAUNCH_X, _LAUNCH_Y)
 
-    def step(self) -> None:
+    def spawn_medal(self, x: float, y: float) -> bool:
+        """Drop a MEDAL at ``(x, y)``; False once only ``MEDAL_RESERVE`` slots are left.
+
+        The reserve keeps weapon and bomb pickups spawnable when medals flood the pool.
+        """
+        if self.n >= PICKUP_CAP - MEDAL_RESERVE:
+            return False
+        return self.spawn(PickupKind.MEDAL, x, y, 0.0, 0.0)
+
+    def step(self, ground_speed: float = _GROUND_SPEED) -> None:
         """Advance one 60 Hz step.
 
         For ``PICKUP_LIFE_TICKS`` steps a pickup moves by its velocity and reflects off all four
         playfield edges. After that it stops bouncing, drifts straight down at
-        ``PICKUP_EXIT_SPEED`` and is removed once it is below the playfield.
+        ``PICKUP_EXIT_SPEED`` and is removed once it is below the playfield. A MEDAL never bounces
+        and never times out: it moves down by exactly ``ground_speed`` and leaves below the
+        playfield.
         """
         x, y, vx, vy, age = self.x, self.y, self.vx, self.vy, self.age
         for i in range(self.n - 1, -1, -1):
-            if age[i] < PICKUP_LIFE_TICKS:
+            if self.kind[i] == PickupKind.MEDAL:
+                y[i] += ground_speed
+                if y[i] > _EXIT_BOTTOM:
+                    self.remove_at(i)
+                    continue
+            elif age[i] < PICKUP_LIFE_TICKS:
                 x[i] += vx[i]
                 y[i] += vy[i]
                 if x[i] < _MIN_X:
@@ -118,10 +140,12 @@ class PickupPool:
             age[i] += 1
 
     def color_at(self, i: int) -> int:
-        """Return pickup ``i``'s colour index: the cycle position for a CRYSTAL, else its kind."""
+        """Return pickup ``i``'s colour: the cycle position, the chain tier (MEDAL) or its kind."""
         kind = self.kind[i]
         if kind == PickupKind.CRYSTAL:
             return (self.age[i] // CRYSTAL_CYCLE_TICKS) % _COLORS
+        if kind == PickupKind.MEDAL:
+            return self.medal_tier
         return kind
 
     def remove_at(self, i: int) -> None:

@@ -49,4 +49,4 @@ def test_a_stage_reset_zeroes_only_the_stage_count() -> None:
         chain.collect()
     chain.stage_reset()
     assert chain.collected == 0
-    assert (chain.value, chain.chain) == (500, 3)
+    assert (chain.value, chain.chain) == (1000, 3)

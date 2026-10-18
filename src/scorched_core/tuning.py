@@ -216,6 +216,14 @@ PICKUP_EXIT_SPEED: Final = 0.8
 # A bomb pickup (PLYR-09, D-19) is dropped by a killed AA turret and falls slowly straight down.
 BOMB_DROP_VY: Final = 0.5
 
+# Medals (SCOR-02, D-15, D-16): a destroyed ground target may drop a medal that drifts down with
+# the scroll at the ground speed and never bounces or times out. Catching one pays the chain value,
+# which climbs the ladder on every catch and stays at its last entry; a medal that scrolls off, or
+# a death, restarts the ladder. Medals may not take the last MEDAL_RESERVE pickup slots, so a flood
+# of medals never blocks a weapon or bomb pickup (RESEARCH Pitfall 14).
+MEDAL_LADDER: Final = (100, 200, 500, 1000, 2000, 5000, 10000)
+MEDAL_RESERVE: Final = 4
+
 # Death (PLYR-06, D-04, D-05): a death costs DEATH_LEVEL_PENALTY weapon levels (a reversible
 # tuning constant, floor 1) and leaves one fixed-colour recovery pickup at the death spot, drifting
 # up at RECOVERY_VY. The spot is clamped RECOVERY_MARGIN inside the pickup radius at the sides and
