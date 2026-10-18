@@ -161,7 +161,7 @@ Plans:
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
 
-**Plans:** 9/28 plans executed (19 waves)
+**Plans:** 10/28 plans executed (19 waves)
 
 Plans:
 **Wave 1**
@@ -188,7 +188,7 @@ Plans:
 - [x] 03-09-PLAN.md — (wave 7) Game-over overlay with final / best score and a tap or key restart
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 03-10-PLAN.md — (wave 8) Stage intro: fly-in under a STAGE 1 banner, rings cleared on stage start
+- [x] 03-10-PLAN.md — (wave 8) Stage intro: fly-in under a STAGE 1 banner, rings cleared on stage start
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 03-11-PLAN.md — (wave 9) Raiden II medals: chain ladder, drift, miss and death resets, popups
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
-| 3. Stage 1 Vertical Slice | 9/28 | In Progress | - |
+| 3. Stage 1 Vertical Slice | 10/28 | In Progress | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

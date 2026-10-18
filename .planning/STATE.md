@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-09-PLAN.md
-last_updated: "2026-10-18T17:09:37.691Z"
+stopped_at: Completed 03-10-PLAN.md
+last_updated: "2026-10-18T17:19:36.724Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 257a761357d50c907c9dcfadf923c77a9e433235
+state_head: 5a7cd131ded154a17bc80c624c898054cd2dba84
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 52
+  completed_plans: 53
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 10 of 28
+Plan: 11 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -109,6 +109,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P07 | 9 min | 2 tasks | 12 files |
 | Phase 03 P08 | 9 min | 2 tasks | 24 files |
 | Phase 03 P09 | 12 min | 2 tasks | 7 files |
+| Phase 03 P10 | 11 min | 2 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -220,6 +221,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-08: on the game-over step OUT is reached, then FLOW becomes GAME_OVER with one GAME_OVER event and a save request; Game.restart() resets in place, keeps the high score and replays ?at=
 - [Phase 03]: 03-09: the game-over overlay is state-driven from header FLOW, arms after 800 ms on the frame clock, and restarts through the held restart proxy on a fresh fire keydown or a tap whose pointerdown came after the arm
 - [Phase 03]: 03-09: #game-over sits outside #app at z-index 8 (below #paused) and carries data-no-steer; restart keys are the KEY_BINDINGS fire keys
+- [Phase 03]: 03-10: a stage run (and every restart) opens with the respawn fly-in via PlayerLife.begin_fly_in(ship, 0), so the intro grants no invulnerability while a death respawn keeps 150; StageFlow starts in INTRO, pushes STAGE_START once and reaches PLAY after INTRO_TICKS (120); header FLOW_T is the intro progress
+- [Phase 03]: 03-10: wreck and scorch rings clear on events.STAGE_START (guarded for older events tables) because the scroll restarts at 0; the banner overlay is state-driven from FLOW, STAGE and FLOW_T
 
 ### Pending Todos
 
@@ -243,6 +246,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T17:09:37.476Z
-Stopped at: Completed 03-09-PLAN.md
+Last session: 2026-10-18T17:19:36.514Z
+Stopped at: Completed 03-10-PLAN.md
 Resume file: None
