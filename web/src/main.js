@@ -18,6 +18,7 @@ import { enemyModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing } from './fx/wreck_ring.js';
+import { createDecalRing } from './fx/decal_ring.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -169,7 +170,17 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.groundLayer.group.add(wrecks.group);
-  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks] });
+  // Scorch marks of ground kills lie on the terrain below the shadows and the dim mask.
+  const decals = createDecalRing({
+    events: manifest.events,
+    blast: manifest.blast,
+    ratio: manifest.tuning.ground_scroll_ratio,
+    getScroll: () => scrollNow,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.groundLayer.group.add(decals.mesh);
+  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals] });
   let fxTime = 0;
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
@@ -290,6 +301,7 @@ async function main() {
       );
       rig.terrain.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
+      decals.update(scrollNow);
       fxTime += dt / 1000;
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
@@ -369,6 +381,9 @@ async function main() {
         },
         get wrecksSpawned() {
           return wrecks.spawned;
+        },
+        get decals() {
+          return decals.live;
         },
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).

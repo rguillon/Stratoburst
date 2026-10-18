@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { bootGame } from './helpers.js';
 
 // D-21 / STGE-04 / ENMY-08: ground targets are drawn on the terrain through the ray-compensating
-// ground layer, and a ground kill leaves a wreck. The production build runs under software GL, so
+// ground layer, and a ground kill leaves a wreck and a scorch mark. The production build runs under software GL, so
 // the waits are generous: the timing is not under test.
 test('the ground layer scale is in range and a ground kill leaves a wreck', async ({ page }) => {
   test.setTimeout(120_000);
@@ -25,5 +25,9 @@ test('the ground layer scale is in range and a ground kill leaves a wreck', asyn
   }
   await page.keyboard.up('Space');
   expect(await wrecks()).toBeGreaterThanOrEqual(1);
+  // The kill also scorched the terrain, and the mark is still on screen right after it.
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.decals), { timeout: 5_000 })
+    .toBeGreaterThanOrEqual(1);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
