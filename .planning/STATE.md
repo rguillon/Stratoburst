@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-12-PLAN.md
-last_updated: "2026-10-18T17:45:11.175Z"
+stopped_at: Completed 03-13-PLAN.md
+last_updated: "2026-10-18T18:17:06.729Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 1884c68fdb0e4ab59d30497e1418f02349cecac1
+state_head: bd6ed5835db379671c82422004e43ef952dde0c1
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 55
+  completed_plans: 56
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 13 of 28
+Plan: 14 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -112,6 +112,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P10 | 11 min | 2 tasks | 18 files |
 | Phase 03 P11 | 25 min | 2 tasks | 21 files |
 | Phase 03 P12 | 12 min | 2 tasks | 19 files |
+| Phase 03 P13 | 25 min | 2 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -228,6 +229,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-11: a medal stores no velocity; PickupPool.step(ground_speed) drifts it by the live ground speed, and only a medal leaving the playfield increments medals_missed (a refused spawn or an eviction is never a miss)
 - [Phase 03]: 03-11: Game._step_pickups drains medals_missed into chain.miss() after the catch callbacks, a confirmed death calls chain.miss(), stage_reset() zeroes only the stage catch count; the wreck ring takes only ground kinds with a JS model (hasModel)
 - [Phase 03]: 03-12: the city is road-grid data (CityBlock rows plus MAGLEV/RUNWAY_LIGHT CityFeature lines) expanded once in StageData into stride-6 placements that ship in the manifest; a feature corridor of 6 units skips any overlapping building, margin blocks fill columns -2, -1, 3 and 4, and stage 1 has 2609 placements under the 3000 cap
+- [Phase 03]: 03-13: the city and its road grid are children of the ground-layer group, streamed from the manifest through one fixed terrain window (8 aspects) with per-kind capacities; NDC identity with ground units is unit-tested at four aspects and terrain_ring.js is gone
+- [Phase 03]: 03-13: SIGN, TOWER, LOWRISE and RUNWAY_LIGHT glows are white and tinted per instance from PALETTE neon hues by variant; only boxes at least 0.2 thick are rounded to hold the high tier near 320k triangles
+- [Phase 03]: 03-13: the road grid scrolls by texture offset only (groundUv, wrapped to [0,1)); a looping stage whose length is not a multiple of the 80 pitch reports seamAligned false (the gallery's 9300) instead of throwing
 
 ### Pending Todos
 
@@ -251,6 +255,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T17:45:10.971Z
-Stopped at: Completed 03-12-PLAN.md
+Last session: 2026-10-18T18:17:06.520Z
+Stopped at: Completed 03-13-PLAN.md
 Resume file: None
