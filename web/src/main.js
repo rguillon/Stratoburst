@@ -19,6 +19,7 @@ import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing } from './fx/wreck_ring.js';
 import { createDecalRing } from './fx/decal_ring.js';
+import { createLightPool } from './fx/light_pool.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -187,7 +188,18 @@ async function main() {
   rig.groundLayer.group.add(decals.mesh);
   // The tier caps how many scorch marks are drawn; the ring keeps them all stored.
   const applyDecalLimit = (tierName) => decals.setLimit(TIERS[tierName].maxDecals);
-  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals] });
+  // Explosion lights: a fixed pool, added to the scene once and never removed, so no lit shader
+  // recompiles mid-game. Added before the second prewarm so every lit material compiles with the
+  // final light count. The tier only changes how many of them may flash.
+  const lightPool = createLightPool({
+    events: manifest.events,
+    blast: manifest.blast,
+    toWorld: (x, y, ground, out) =>
+      ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
+  });
+  for (const light of lightPool.lights) rig.scene.add(light);
+  const applyLights = (tierName) => lightPool.setEnabled(TIERS[tierName].lights);
+  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool] });
   let fxTime = 0;
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
@@ -210,6 +222,7 @@ async function main() {
     applyModelDetail('low');
   }
   applyDecalLimit(currentTier);
+  applyLights(currentTier);
   // Upload every detail level's geometry now, behind the loading screen, so a tier change
   // during play never uploads or compiles anything.
   for (const { modelDetail } of Object.values(TIERS)) {
@@ -283,6 +296,7 @@ async function main() {
         rig.applyTier(TIERS[q.tier]);
         applyModelDetail(q.tier);
         applyDecalLimit(q.tier);
+        applyLights(q.tier);
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }
@@ -312,6 +326,7 @@ async function main() {
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
       fxTime += dt / 1000;
+      lightPool.update(dt / 1000);
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
       rig.render();
@@ -400,6 +415,9 @@ async function main() {
         },
         get decals() {
           return decals.live;
+        },
+        get lightsFlashed() {
+          return lightPool.flashes;
         },
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).

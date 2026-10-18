@@ -25,3 +25,25 @@ test('tier low draws enemy bullets directly after the main scene', async ({ page
   expect(await readSlot(page, 'EBULLET_N')).toBeGreaterThanOrEqual(500);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// VISL-02: a MEDIUM or LARGE kill flashes one of the pooled explosion lights. The production build
+// runs under software GL, so the wait is generous: the timing is not under test.
+test('a heavy kill flashes a pooled explosion light', async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootGame(page, '?debug&weapon=vulcan&level=5&tier=high');
+  const flashed = () => page.evaluate(() => globalThis.__scorched.fx.lightsFlashed);
+  // Hold fire with the wide fan and sweep left and right until a carrier, helicopter, tank or
+  // turret goes down.
+  await page.keyboard.down('Space');
+  const deadline = Date.now() + 40_000;
+  let key = 'ArrowLeft';
+  while (Date.now() < deadline && (await flashed()) < 1) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(600);
+    await page.keyboard.up(key);
+    key = key === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
+  }
+  await page.keyboard.up('Space');
+  expect(await flashed()).toBeGreaterThanOrEqual(1);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
