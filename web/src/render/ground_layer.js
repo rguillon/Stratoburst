@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { altitudeScale } from './camera_fit.js';
-import { TERRAIN_DEPTH } from './terrain_ring.js';
+
+// Y of the terrain plane; the city, the roads and the ground-unit shadows all sit on it.
+export const TERRAIN_DEPTH = -40;
 
 // The ground layer (D-21, RESEARCH Pattern 14). Gameplay and bullets live on the y = 0 plane but
 // the terrain sits at TERRAIN_DEPTH, so a tank drawn at its logical (x, z) on the terrain would

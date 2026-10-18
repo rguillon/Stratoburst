@@ -18,6 +18,7 @@ import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
 import { createMissileInstances } from './render/missile_instances.js';
 import { createPickupInstances } from './render/pickup_instances.js';
+import { createCityLayer } from './render/city_layer.js';
 import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
@@ -97,7 +98,7 @@ async function main() {
   const touchPrimary = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
   const tier0 = initialTier({ forced: flags.tier, touchPrimary });
   rig.applyTier(TIERS[tier0]);
-  rig.prewarm(); // terrain and both render paths compile while the runtime downloads
+  rig.prewarm(); // both render paths compile while the runtime downloads
   rig.render();
 
   const pyodide = await runtimeP;
@@ -114,10 +115,25 @@ async function main() {
     detail: TIERS[tier0].modelDetail,
   });
   rig.scene.add(ship);
+  // The city (D-34): the layout Python shipped in the manifest, drawn in the ground layer so it
+  // shares one frame with the ground units, wrecks and scorch marks (RESEARCH Pattern 5).
+  const city = createCityLayer({
+    layout: manifest.stage.city,
+    stride: manifest.stage.city_stride,
+    kinds: manifest.scenery_kinds,
+    ratio: manifest.tuning.ground_scroll_ratio,
+    y0: manifest.tuning.ground_y0,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+    loop: manifest.stage.loop,
+    length: manifest.stage.length,
+    detail: TIERS[tier0].modelDetail,
+  });
+  rig.groundLayer.group.add(city.group);
   // Everything whose model detail follows the tier. A tier change only swaps cached geometries.
-  // rig.terrain was created inside the rig at its default detail; the starting tier is applied
-  // below, before the first frame.
-  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }, rig.terrain];
+  // The city was created at the starting tier's detail; every detail is applied below, before the
+  // first frame.
+  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }, city];
   const applyModelDetail = (tierName) => {
     for (const view of detailViews) view.setDetail(TIERS[tierName].modelDetail);
   };
@@ -538,7 +554,7 @@ async function main() {
       ship.visible = shipVisible;
       if (shipVisible) ship.userData.setHullVisible(hullVisibleFor(header[slots.INVULN]));
       shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);
-      rig.terrain.update(scrollNow);
+      city.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
       fxTime += effectClockDelta(dt, clockState);
@@ -652,6 +668,10 @@ async function main() {
       fx: {
         get particlesSpawned() {
           return fxLayers.additive.spawned + fxLayers.normal.spawned;
+        },
+        // City placements drawn this frame (e2e checks the city is on screen).
+        get cityDrawn() {
+          return city.drawn;
         },
         get wrecksSpawned() {
           return wrecks.spawned;

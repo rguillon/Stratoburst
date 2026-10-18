@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
-import { TERRAIN_DEPTH } from '../render/terrain_ring.js';
+import { TERRAIN_DEPTH } from '../render/ground_layer.js';
 
 // Blob shadows for everything that flies (VISL-06, RESEARCH Pattern 13): one InstancedMesh of soft
 // dark quads on the terrain, one per air enemy plus one for the ship. A shadow is displaced from
