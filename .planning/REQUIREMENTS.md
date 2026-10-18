@@ -86,7 +86,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Audio
 
-- [ ] **AUDI-01**: Player hears synthesized sound effects for shots, hits, explosions, pickups, bombs and deaths
+- [x] **AUDI-01**: Player hears synthesized sound effects for shots, hits, explosions, pickups, bombs and deaths
 - [ ] **AUDI-02**: Player hears code-synthesized music for title, each stage and bosses
 - [ ] **AUDI-03**: Audio works on iOS Safari after the start gesture
 - [ ] **AUDI-04**: Player can mute or adjust music and SFX volume
@@ -198,7 +198,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INPT-03 | Phase 2 | Pending |
 | INPT-04 | Phase 4 | Pending |
 | INPT-05 | Phase 4 | Pending |
-| AUDI-01 | Phase 2 | Pending |
+| AUDI-01 | Phase 2 | Complete |
 | AUDI-02 | Phase 4 | Pending |
 | AUDI-03 | Phase 2 | Pending |
 | AUDI-04 | Phase 4 | Pending |
