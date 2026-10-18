@@ -29,9 +29,9 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PLYR-04**: Player can collect colored weapon pickups: red (vulcan spread), blue (laser), purple (homing)
 - [x] **PLYR-05**: Collecting the same color as the current weapon raises its level (up to 5); a different color switches weapon type
 - [x] **PLYR-06**: On death the player loses weapon power and a recovery pickup drops nearby
-- [ ] **PLYR-07**: Player can trigger a bomb (limited stock) that clears enemy bullets, damages enemies and grants brief invulnerability
+- [x] **PLYR-07**: Player can trigger a bomb (limited stock) that clears enemy bullets, damages enemies and grants brief invulnerability
 - [x] **PLYR-08**: Player can bomb within a short grace window after being hit to cancel the death
-- [ ] **PLYR-09**: Player can collect bomb pickups to restock bombs
+- [x] **PLYR-09**: Player can collect bomb pickups to restock bombs
 - [x] **PLYR-10**: Player respawns with brief invulnerability (visibly blinking) after losing a life
 
 ### Enemies & Bosses
@@ -159,9 +159,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLYR-04 | Phase 2 | Complete |
 | PLYR-05 | Phase 2 | Complete |
 | PLYR-06 | Phase 2 | Complete |
-| PLYR-07 | Phase 2 | Pending |
+| PLYR-07 | Phase 2 | Complete |
 | PLYR-08 | Phase 2 | Complete |
-| PLYR-09 | Phase 2 | Pending |
+| PLYR-09 | Phase 2 | Complete |
 | PLYR-10 | Phase 2 | Complete |
 | ENMY-01 | Phase 3 | Pending |
 | ENMY-02 | Phase 3 | Pending |
