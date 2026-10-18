@@ -26,12 +26,13 @@ H_EVENT_N: Final = 12
 H_EVENT_DROPPED: Final = 13
 # Slots 14-29 are reserved by later Phase 2 plans (numbering table in 02-01-PLAN.md) and
 # slots 30-47 by Phase 3. Plan 02-08 takes the weapon slots; plan 02-10 takes PICKUP_N and
-# MAX_BONUS; plan 02-13 takes MISSILE_N.
+# MAX_BONUS; plan 02-13 takes MISSILE_N; plan 02-16 takes STORM_N.
 H_PICKUP_N: Final = 15
 H_WEAPON: Final = 16
 H_LEVEL: Final = 17
 H_MISSILE_N: Final = 19
 H_MAX_BONUS: Final = 20
+H_STORM_N: Final = 21
 
 FLAG_PAUSED: Final = 1
 FLAG_FIRING: Final = 2
@@ -42,6 +43,7 @@ PBULLET_CAP: Final = 128
 EBULLET_STRIDE: Final = 4
 EBULLET_MIN_CAP: Final = 600
 EBULLET_MAX_CAP: Final = 5000
+EBULLET_GAME_CAP: Final = 200  # gameplay enemy bullets, packed after the storm in one channel
 ENEMY_STRIDE: Final = 8
 ENEMY_CAP: Final = 48
 PICKUP_STRIDE: Final = 4  # x, y, colour index, kind

@@ -136,6 +136,25 @@ def test_pack_into_follows_a_changed_kind() -> None:
     assert (out[3], out[7]) == (3.0, 3.0)
 
 
+def test_pack_into_offset_writes_from_that_instance_and_leaves_earlier_ones_alone() -> None:
+    pool = filled(2)
+    out = array("f", [-7.0] * 24)
+    pool.pack_into(out, 1.0, offset=2)
+    angle = math.atan2(1.0, 2.0)
+    assert list(out[:8]) == [-7.0] * 8
+    assert list(out[8:16]) == pytest.approx([0.0, 10.0, angle, 1.0, 1.0, 11.0, angle, 1.0])
+    assert list(out[16:]) == [-7.0] * 8
+
+
+def test_pack_into_offset_zero_matches_the_default() -> None:
+    pool = filled(3)
+    default = array("f", [-1.0] * 16)
+    explicit = array("f", [-1.0] * 16)
+    pool.pack_into(default, 1.0)
+    pool.pack_into(explicit, 1.0, offset=0)
+    assert default == explicit
+
+
 def test_pack_into_an_empty_pool_writes_nothing() -> None:
     out = array("f", [9.0] * 8)
     BulletPool(4).pack_into(out, 1.0)

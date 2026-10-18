@@ -18,16 +18,16 @@ class FakeJsOptions:
 def test_dict_options() -> None:
     web = create_game({"seed": 5, "stress": 100})
     assert isinstance(web, WebGame)
-    assert web.manifest()["channels"]["ebullets"]["cap"] == 600
+    assert web.manifest()["channels"]["ebullets"]["cap"] == 800
 
 
 def test_options_with_to_py() -> None:
     web = create_game(FakeJsOptions())
-    assert web.manifest()["channels"]["ebullets"]["cap"] == 750
+    assert web.manifest()["channels"]["ebullets"]["cap"] == 950
 
 
 def test_none_options_use_defaults() -> None:
-    assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 600
+    assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 800
     assert create_game().manifest()["protocol"] == 2
 
 

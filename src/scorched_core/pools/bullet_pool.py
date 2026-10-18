@@ -71,14 +71,18 @@ class BulletPool:
             if not (min_x <= x[i] <= max_x and min_y <= y[i] <= max_y):
                 self.remove_at(i)
 
-    def pack_into(self, out: array, kind: float) -> None:
-        """Write ``x, y, angle, kind`` at stride 4 for the live bullets; the tail is untouched."""
+    def pack_into(self, out: array, kind: float, offset: int = 0) -> None:
+        """Write ``x, y, angle, kind`` at stride 4 from instance ``offset``.
+
+        Instances before ``offset`` and after the live bullets are left untouched.
+        """
         n = self.n
         if kind != self._kind:
             self._kinds = array("f", [kind]) * self.capacity
             self._kind = kind
-        end = n * 4
-        out[0:end:4] = self.x[:n]
-        out[1:end:4] = self.y[:n]
-        out[2:end:4] = self.angle[:n]
-        out[3:end:4] = self._kinds[:n]
+        start = offset * 4
+        end = start + n * 4
+        out[start:end:4] = self.x[:n]
+        out[start + 1 : end : 4] = self.y[:n]
+        out[start + 2 : end : 4] = self.angle[:n]
+        out[start + 3 : end : 4] = self._kinds[:n]

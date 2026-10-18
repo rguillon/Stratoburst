@@ -25,6 +25,7 @@ from scorched_core.protocol import (
     BLAST_LARGE,
     BLAST_MEDIUM,
     BLAST_SMALL,
+    EBULLET_GAME_CAP,
     EBULLET_MAX_CAP,
     EBULLET_MIN_CAP,
     EBULLET_STRIDE,
@@ -63,6 +64,7 @@ from scorched_core.protocol import (
     H_SHIP_Y,
     H_STEPS,
     H_STORM_HITS,
+    H_STORM_N,
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
@@ -119,6 +121,7 @@ _HEADER_SLOTS: dict[str, int] = {
     "LEVEL": H_LEVEL,
     "MAX_BONUS": H_MAX_BONUS,
     "MISSILE_N": H_MISSILE_N,
+    "STORM_N": H_STORM_N,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -147,6 +150,7 @@ class Game:
     """Pure simulation core; knows nothing about JS."""
 
     __slots__ = (
+        "_ebullet_channel_cap",
         "_firing",
         "_move_x",
         "_move_y",
@@ -174,6 +178,7 @@ class Game:
         "ship",
         "storm",
         "storm_hits",
+        "storm_pool",
         "stress",
         "terrain",
         "tick_count",
@@ -192,9 +197,11 @@ class Game:
         self.fault = fault
         self.rng = random.Random(seed)  # noqa: S311 - gameplay randomness, not security
         self.stress = min(max(stress, 0), EBULLET_MAX_CAP)
-        self.ebullet_cap = min(EBULLET_MAX_CAP, max(EBULLET_MIN_CAP, self.stress))
+        self.ebullet_cap = min(EBULLET_MAX_CAP, max(EBULLET_MIN_CAP, self.stress))  # storm only
+        self._ebullet_channel_cap = self.ebullet_cap + EBULLET_GAME_CAP  # storm, then gameplay
         self.ship = PlayerShip()
-        self.ebullets = BulletPool(self.ebullet_cap)
+        self.storm_pool = BulletPool(self.ebullet_cap)  # harmless stress load, never lethal
+        self.ebullets = BulletPool(EBULLET_GAME_CAP)  # gameplay enemy bullets
         self.pbullets = BulletPool(PBULLET_CAP)
         self.loadout = WeaponLoadout(kind=weapon, level=min(max(level, 1), MAX_LEVEL))
         self.vulcan = Vulcan()
@@ -208,7 +215,9 @@ class Game:
         self.gallery = GallerySpawner()
         self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, ENEMY_CAP)
         self._scratch = array("i", bytes(4 * ENEMY_CAP))
-        self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
+        self.storm = (
+            BulletStorm(self.storm_pool, self.stress, self.rng) if self.stress > 0 else None
+        )
         self.storm_hits = 0
         self.terrain = TerrainScroll()
         self.tick_count = 0
@@ -222,7 +231,7 @@ class Game:
         self.buffers: dict[str, array] = {
             "header": array("f", bytes(4 * HEADER_LEN)),
             "pbullets": array("f", bytes(4 * PBULLET_STRIDE * PBULLET_CAP)),
-            "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self.ebullet_cap)),
+            "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self._ebullet_channel_cap)),
             "enemies": array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP)),
             "pickups": array("f", bytes(4 * PICKUP_STRIDE * PICKUP_CAP)),
             "missiles": array("f", bytes(4 * MISSILE_STRIDE * MISSILE_CAP)),
@@ -237,7 +246,7 @@ class Game:
             "header": {"len": HEADER_LEN, "slots": dict(_HEADER_SLOTS)},
             "channels": {
                 "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
-                "ebullets": {"stride": EBULLET_STRIDE, "cap": self.ebullet_cap},
+                "ebullets": {"stride": EBULLET_STRIDE, "cap": self._ebullet_channel_cap},
                 "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
                 "pickups": {"stride": PICKUP_STRIDE, "cap": PICKUP_CAP},
                 "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
@@ -308,7 +317,8 @@ class Game:
             self.enemies.pack_into(self.buffers["enemies"])
             self.pickups.pack_into(self.buffers["pickups"])
             self.missiles.pack_into(self.buffers["missiles"])
-            self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
+            self.storm_pool.pack_into(self.buffers["ebullets"], 1.0)
+            self.ebullets.pack_into(self.buffers["ebullets"], 1.0, offset=self.storm_pool.n)
         return steps
 
     def _flags(self) -> int:
@@ -328,7 +338,8 @@ class Game:
         header[H_PICKUP_N] = self.pickups.n
         header[H_MISSILE_N] = self.missiles.n
         header[H_KILLS] = self.enemies.kills
-        header[H_EBULLET_N] = self.ebullets.n
+        header[H_EBULLET_N] = self.storm_pool.n + self.ebullets.n
+        header[H_STORM_N] = self.storm_pool.n
         header[H_STORM_HITS] = self.storm_hits
         header[H_EVENT_N] = self.events.n
         header[H_EVENT_DROPPED] = self.events.dropped

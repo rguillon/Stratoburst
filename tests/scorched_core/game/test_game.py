@@ -14,6 +14,7 @@ from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
 from scorched_core.protocol import (
+    EBULLET_GAME_CAP,
     EBULLET_STRIDE,
     ENEMY_CAP,
     ENEMY_STRIDE,
@@ -42,6 +43,7 @@ from scorched_core.protocol import (
     H_SHIP_Y,
     H_STEPS,
     H_STORM_HITS,
+    H_STORM_N,
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
@@ -81,12 +83,13 @@ def test_manifest_contract() -> None:
     assert header["slots"]["PICKUP_N"] == 15 == H_PICKUP_N
     assert header["slots"]["MAX_BONUS"] == 20 == H_MAX_BONUS
     assert header["slots"]["MISSILE_N"] == 19 == H_MISSILE_N
-    assert len(header["slots"]) == 19
+    assert header["slots"]["STORM_N"] == 21 == H_STORM_N
+    assert len(header["slots"]) == 20
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
-        "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
+        "ebullets": {"stride": EBULLET_STRIDE, "cap": 600 + EBULLET_GAME_CAP},
         "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
         "pickups": {"stride": 4, "cap": 16},
         "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
@@ -174,7 +177,7 @@ def test_stress_clamping(stress: int, stored: int, cap: int) -> None:
     game = Game(stress=stress)
     assert game.stress == stored
     assert game.ebullet_cap == cap
-    assert game.manifest()["channels"]["ebullets"]["cap"] == cap
+    assert game.manifest()["channels"]["ebullets"]["cap"] == cap + EBULLET_GAME_CAP
 
 
 def test_the_enemy_channel_is_named_enemies_and_no_drones_channel_exists() -> None:
@@ -189,7 +192,7 @@ def test_buffer_lengths_and_zero_fill() -> None:
     assert {name: len(buf) for name, buf in game.buffers.items()} == {
         "header": HEADER_LEN,
         "pbullets": PBULLET_STRIDE * PBULLET_CAP,
-        "ebullets": EBULLET_STRIDE * 750,
+        "ebullets": EBULLET_STRIDE * (750 + EBULLET_GAME_CAP),
         "enemies": ENEMY_STRIDE * ENEMY_CAP,
         "missiles": MISSILE_STRIDE * MISSILE_CAP,
         "pickups": PICKUP_STRIDE * PICKUP_CAP,
@@ -237,8 +240,10 @@ def test_no_stress_means_an_empty_storm() -> None:
     game = Game()
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.storm is None
+    assert game.storm_pool.n == 0
     assert game.ebullets.n == 0
     assert game.buffers["header"][H_EBULLET_N] == 0
+    assert game.buffers["header"][H_STORM_N] == 0
 
 
 def test_tick_with_no_stress_still_packs_without_error() -> None:
@@ -252,8 +257,11 @@ def test_tick_with_no_stress_still_packs_without_error() -> None:
 def test_stress_spawns_the_clamped_bullet_count(stress: int, count: int) -> None:
     game = Game(stress=stress)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.ebullets.n == count
-    assert game.buffers["header"][H_EBULLET_N] == count
+    header = game.buffers["header"]
+    assert game.storm_pool.n == count
+    assert game.ebullets.n == 0  # the storm never lands in the gameplay pool
+    assert header[H_EBULLET_N] == count
+    assert header[H_STORM_N] == count
 
 
 def test_stress_bullets_are_packed_with_kind_one() -> None:
@@ -261,15 +269,15 @@ def test_stress_bullets_are_packed_with_kind_one() -> None:
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     ebullets = game.buffers["ebullets"]
     assert [ebullets[3], ebullets[7], ebullets[11], ebullets[15]] == [1.0, 1.0, 1.0, 0.0]
-    assert ebullets[0] == game.ebullets.x[0]
+    assert ebullets[0] == game.storm_pool.x[0]
 
 
 def test_storm_hits_accumulate_in_the_header_and_do_nothing_else() -> None:
     game = Game(stress=1)
-    game.ebullets.x[0] = game.ship.x
-    game.ebullets.y[0] = game.ship.y
-    game.ebullets.vx[0] = 0.0
-    game.ebullets.vy[0] = 0.0
+    game.storm_pool.x[0] = game.ship.x
+    game.storm_pool.y[0] = game.ship.y
+    game.storm_pool.vx[0] = 0.0
+    game.storm_pool.vy[0] = 0.0
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.storm_hits == 2
