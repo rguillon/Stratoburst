@@ -45,6 +45,18 @@ class PlayerLife:
         """
         self.invuln = max(self.invuln, ticks)
 
+    def try_deathbomb(self) -> bool:
+        """Cancel a fatal hit while the grace window is open; False in any other phase (D-11).
+
+        The caller resolves the bomb press before ``step``, which is the call that lets the window
+        expire, so a press on the last grace step still saves the ship.
+        """
+        if self.phase != PlayerPhase.GRACE:
+            return False
+        self.phase = PlayerPhase.ALIVE
+        self.timer = 0
+        return True
+
     def hit(self, x: float, y: float, events: EventRing) -> bool:
         """Register a fatal hit at ``(x, y)``; return True when it opened the grace window.
 

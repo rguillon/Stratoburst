@@ -80,3 +80,37 @@ test('a detonation is displayed as a fireball and costs no error', async ({ page
   expect(await page.evaluate(() => globalThis.__scorched.fx.bombsShown)).toBe(1);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// PLYR-09, D-19: an AA turret drops an amber bomb pickup. The sweep holds the Lv5 vulcan fan until a
+// turret dies; a page-side recorder notes every frame that a bomb pickup was live, so catching it
+// (the ship sweeps through it) cannot hide it from the poll. The production build runs under
+// software GL, so the wait is generous.
+test('a shot-down AA turret drops a bomb pickup', async ({ page }) => {
+  test.setTimeout(150_000);
+  await bootGame(page, '?debug&weapon=vulcan&level=5&tier=low');
+  await page.evaluate(() => {
+    globalThis.__bombPickupSeen = 0;
+    globalThis.__pickupNSeen = 0;
+    const sample = () => {
+      const s = globalThis.__scorched;
+      globalThis.__bombPickupSeen = Math.max(globalThis.__bombPickupSeen, s.fx.bombPickups);
+      globalThis.__pickupNSeen = Math.max(globalThis.__pickupNSeen, s.header[s.slots.PICKUP_N]);
+      requestAnimationFrame(sample);
+    };
+    sample();
+  });
+  const seen = () => page.evaluate(() => globalThis.__bombPickupSeen);
+  await page.keyboard.down('Space');
+  const deadline = Date.now() + 60_000;
+  let key = 'ArrowLeft';
+  while (Date.now() < deadline && (await seen()) < 1) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(600);
+    await page.keyboard.up(key);
+    key = key === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
+  }
+  await page.keyboard.up('Space');
+  expect(await seen()).toBeGreaterThanOrEqual(1);
+  expect(await page.evaluate(() => globalThis.__pickupNSeen)).toBeGreaterThanOrEqual(1);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

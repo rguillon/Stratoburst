@@ -214,8 +214,11 @@ def test_only_turrets_and_carriers_drop_anything_and_crystals_stay_on_the_carrie
             assert drop == -1
 
 
-def test_both_carriers_carry_a_crystal_and_nothing_else_drops_anything() -> None:
+def test_both_carriers_carry_a_crystal_both_turrets_a_bomb_and_nothing_else_drops_anything() -> (
+    None
+):
     carriers = [entry for entry in GALLERY_SCRIPT if entry[1] == EnemyKind.CARRIER]
     assert len(carriers) == 2
     assert all(entry[7] == PickupKind.CRYSTAL for entry in carriers)
-    assert all(entry[7] == -1 for entry in GALLERY_SCRIPT if entry[1] != EnemyKind.CARRIER)
+    droppers = (EnemyKind.CARRIER, EnemyKind.TURRET)
+    assert all(entry[7] == -1 for entry in GALLERY_SCRIPT if entry[1] not in droppers)

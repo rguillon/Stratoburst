@@ -529,6 +529,15 @@ async function main() {
         get bombsShown() {
           return bombFx.shown;
         },
+        // How many of the live pickups are bomb pickups (e2e checks a turret kill drops one).
+        get bombPickups() {
+          const channel = bridge.channels.pickups;
+          let count = 0;
+          for (let i = 0; i < header[slots.PICKUP_N]; i += 1) {
+            if (channel[i * 4 + 3] === manifest.pickup_kinds.BOMB) count += 1;
+          }
+          return count;
+        },
       },
       // False exactly while the ship is dying (e2e checks the explosion hides it).
       get shipVisible() {

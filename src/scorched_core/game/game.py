@@ -99,9 +99,11 @@ from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import (
     BOMB_BLAST_TICKS,
+    BOMB_DROP_VY,
     BOMB_GROW_TICKS,
     BOMB_INVULN_TAIL_TICKS,
     BOMB_LAUNCH_TICKS,
+    BOMB_MAX_STOCK,
     BOMB_RADIUS_MAX,
     BOMB_RADIUS_MIN,
     BOMB_START_STOCK,
@@ -240,6 +242,7 @@ class Game:
         weapon: WeaponKind = WeaponKind.VULCAN,
         level: int = 1,
         god: bool = False,
+        bombs: int = BOMB_START_STOCK,
     ) -> None:
         self.fault = fault
         self.god = god  # test flag: hits are ignored so automated runs are never disturbed
@@ -256,7 +259,7 @@ class Game:
         self.vulcan = Vulcan()
         self.homing = HomingLauncher()
         self.laser = LaserBeam()
-        self.bomb = Bomb(stock=BOMB_START_STOCK)
+        self.bomb = Bomb(stock=min(max(bombs, 0), BOMB_MAX_STOCK))
         self._bomb_requested = False  # a press latched until a live step consumes it
         self.missiles = MissilePool()
         self.events = EventRing()
@@ -419,22 +422,35 @@ class Game:
         header[H_BOMB_Y] = bomb.y
         header[H_BOMB_T] = bomb.progress
 
-    def _drop_crystals(self) -> None:
-        """Spawn a crystal at the position of every enemy killed this step that drops one."""
+    def _drop_pickups(self) -> None:
+        """Spawn what every enemy killed this step drops at its kill position.
+
+        A CRYSTAL is launched up and sideways; a BOMB (an AA turret's drop) just falls slowly.
+        """
         enemies = self.enemies
         for k in range(enemies.kill_n):
-            if enemies.kill_drop[k] == PickupKind.CRYSTAL:
+            drop = enemies.kill_drop[k]
+            if drop == PickupKind.CRYSTAL:
                 self.pickups.spawn_crystal(enemies.kill_x[k], enemies.kill_y[k])
+            elif drop == PickupKind.BOMB:
+                self.pickups.spawn(
+                    PickupKind.BOMB, enemies.kill_x[k], enemies.kill_y[k], 0.0, BOMB_DROP_VY
+                )
 
     def _collect_pickup(self, kind: int, color: int, x: float, y: float) -> None:
-        """Apply a caught pickup to the loadout and announce it as one PICKUP event.
+        """Apply a caught pickup and announce it as one PICKUP event.
 
-        A BOMB is not a weapon colour; plan 02-26 adds its STOCKED path, and until then no BOMB
-        pickup is ever spawned.
+        A BOMB stocks one bomb up to ``BOMB_MAX_STOCK`` and is consumed even when the stock is
+        full (STOCKED); every other kind is a weapon colour for the loadout.
         """
-        outcome = self.loadout.collect(WeaponKind(color))
-        if outcome is PickupOutcome.MAXED:
-            self.max_bonus += 1  # D-06: recorded now, the points are awarded in Phase 3
+        if kind == PickupKind.BOMB:
+            bomb = self.bomb
+            bomb.stock = min(bomb.stock + 1, BOMB_MAX_STOCK)
+            outcome = PickupOutcome.STOCKED
+        else:
+            outcome = self.loadout.collect(WeaponKind(color))
+            if outcome is PickupOutcome.MAXED:
+                self.max_bonus += 1  # D-06: recorded now, the points are awarded in Phase 3
         self.events.push(EV_PICKUP, x, y, kind, outcome, color)
 
     def _on_death(self) -> None:
@@ -465,11 +481,18 @@ class Game:
         life = self.life
         if self._bomb_requested:
             self._bomb_requested = False  # consumed whether or not it launches
+            # Resolved before life.step, the call that lets the grace window expire: a press on the
+            # last grace step still saves the ship, a press one step later cannot (D-11).
             if life.can_control and self.bomb.try_launch(self.ship.x, self.ship.y):
+                if life.try_deathbomb():
+                    self.events.push(EV_DEATHBOMB_SAVE, self.ship.x, self.ship.y)
                 self.events.push(EV_BOMB_LAUNCH, self.ship.x, self.ship.y)
                 life.grant_invuln(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS)
+        was_dying = life.phase == PlayerPhase.DYING
         if life.step(self.ship, self.events):
             self._on_death()
+        if was_dying and life.phase == PlayerPhase.RESPAWN:
+            self.bomb.stock = max(self.bomb.stock, BOMB_START_STOCK)  # D-10: a new life restocks
         if life.can_control:
             self.ship.step(self._move_x, self._move_y)
         else:
@@ -524,7 +547,7 @@ class Game:
             radius=MISSILE_RADIUS,
         )
         self.enemies.remove_dead(self.events)
-        self._drop_crystals()
+        self._drop_pickups()
         self.pickups.step()
         if life.can_control:
             resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)

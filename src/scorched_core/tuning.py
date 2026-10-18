@@ -160,6 +160,7 @@ _GROUND: Final = MotionKind.GROUND
 _TANK: Final = EnemyKind.TANK
 _TURRET: Final = EnemyKind.TURRET
 _CRYSTAL: Final = PickupKind.CRYSTAL
+_BOMB: Final = PickupKind.BOMB
 GALLERY_SCRIPT: Final = (
     (30, _JET, 60.0, -12.0, _DIVE, 0.5, 2.2, -1),  # a V from the top
     (42, _JET, 120.0, -12.0, _DIVE, 0.0, 2.4, -1),
@@ -167,7 +168,7 @@ GALLERY_SCRIPT: Final = (
     (200, _HELI, 80.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (230, _HELI, 160.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (300, _TANK, 70.0, -16.0, _GROUND, 0.25, 0.0, -1),  # ground units crawl with the terrain
-    (340, _TURRET, 60.0, -16.0, _GROUND, 0.0, 0.0, -1),
+    (340, _TURRET, 60.0, -16.0, _GROUND, 0.0, 0.0, _BOMB),
     (400, _CARRIER, 120.0, -18.0, _SWAY, 0.0, 0.5, _CRYSTAL),
     (520, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),  # sweeping in from the left
     (535, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),
@@ -176,7 +177,7 @@ GALLERY_SCRIPT: Final = (
     (700, _JET, 252.0, 80.0, _DIVE, -2.4, 0.9, -1),  # and from the right
     (715, _JET, 252.0, 80.0, _DIVE, -2.4, 0.9, -1),
     (730, _JET, 252.0, 80.0, _DIVE, -2.4, 0.9, -1),
-    (780, _TURRET, 180.0, -16.0, _GROUND, 0.0, 0.0, -1),
+    (780, _TURRET, 180.0, -16.0, _GROUND, 0.0, 0.0, _BOMB),
     (860, _HELI, 120.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (900, _JET, 50.0, -12.0, _SWAY, 0.0, 1.1, -1),
     (900, _JET, 190.0, -12.0, _SWAY, 0.0, 1.1, -1),
@@ -197,6 +198,8 @@ PICKUP_RADIUS: Final = 6.0
 PICKUP_GRAB_RADIUS: Final = 10.0
 PICKUP_LIFE_TICKS: Final = 600
 PICKUP_EXIT_SPEED: Final = 0.8
+# A bomb pickup (PLYR-09, D-19) is dropped by a killed AA turret and falls slowly straight down.
+BOMB_DROP_VY: Final = 0.5
 
 # Death (PLYR-06, D-04, D-05): a death costs DEATH_LEVEL_PENALTY weapon levels (a reversible
 # tuning constant, floor 1) and leaves one fixed-colour recovery pickup at the death spot, drifting
