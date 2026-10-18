@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-21-PLAN.md
-last_updated: "2026-10-18T20:24:16.379Z"
+stopped_at: Completed 03-22-PLAN.md
+last_updated: "2026-10-18T20:32:43.463Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: b7ae54ed5a249bf4a5bc28a44cefaca95f85e60c
+state_head: 4b96977f8889374e9d2f3ba0cb0f3c63232d4ca2
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 64
+  completed_plans: 65
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 22 of 28
+Plan: 23 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -121,6 +121,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P19 | 12 min | 2 tasks | 17 files |
 | Phase 03 P20 | 16 min | 2 tasks | 21 files |
 | Phase 03 P21 | 25 min | 2 tasks | 14 files |
+| Phase 03 P22 | 14 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -262,6 +263,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-21: first tally line is paid on the first TALLY step, then one per 60 steps; 120 steps hold after the fourth
 - [Phase 03]: 03-21: the stage loop keeps save_requested up (only reset() for a new run clears it) so the STAGE_CLEAR high-score save cannot be lost
 - [Phase 03]: 03-21: the D-27 loop restarts at distance 0 even for an ?at=boss run (only a game-over restart honours ?at)
+- [Phase 03]: 03-22: a save request is always acknowledged by WebGame, with or without a store
+- [Phase 03]: 03-22: any truthy gameplay test flag (gallery, god, weapon, level, bombs, lives, at, stress, crash) makes the high-score store read-only; ?debug alone still saves
+- [Phase 03]: 03-22: storage values are trusted only as 1-8 ASCII digits clamped to SCORE_CAP; every storage access is inside a try
 
 ### Pending Todos
 
@@ -285,6 +289,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T20:24:16.149Z
-Stopped at: Completed 03-21-PLAN.md
+Last session: 2026-10-18T20:32:43.235Z
+Stopped at: Completed 03-22-PLAN.md
 Resume file: None
