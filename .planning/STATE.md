@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-12-PLAN.md
-last_updated: "2026-10-18T04:34:21.646Z"
+stopped_at: Completed 02-13-PLAN.md
+last_updated: "2026-10-18T04:42:05.983Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: d2cbc1ff065cf8d6a7565e2ac2b6c3c6a6c135f5
+state_head: d7eb0398f0db4960c306cc9e9bf36e34fdcdd571
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 22
+  completed_plans: 23
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 13 of 33
+Plan: 14 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -78,6 +78,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P10 | 4 min | 2 tasks | 11 files |
 | Phase 02 P11 | 9 min | 2 tasks | 12 files |
 | Phase 02 P12 | 7 min | 2 tasks | 11 files |
+| Phase 02 P13 | 14 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-11: BulletPool.angle = atan2(vx, -vy) set at spawn and packed in slot 2 of the pbullets channel (0 = straight up); the status readout writes textContent only, on change
 - [Phase 02]: 02-12: tanks and turrets draw inside a ray-compensating ground group (position = camera * (1 - k), scale k), verified by an NDC test at four aspects; ground explosions and hit sparks position through it
 - [Phase 02]: 02-12: wreck ring holds 12 low-detail charred hulls placed at y_at_kill + ratio * (scroll_now - scroll_at_kill) from one scrollNow per frame; explosion toWorld takes a ground flag
+- [Phase 02]: 02-13: uid-tracked homing missiles steer at 5 degrees per step, re-acquire every 8 steps or at once when the target is gone, ties to the lower pool index
+- [Phase 02]: 02-13: missile life is packed as the elapsed fraction life/90 in slot 3 of the missiles channel (stride 4, cap 48, header MISSILE_N = 19); missiles are invisible until 02-23
 
 ### Pending Todos
 
@@ -152,6 +155,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:34:21.567Z
-Stopped at: Completed 02-12-PLAN.md
+Last session: 2026-10-18T04:42:05.905Z
+Stopped at: Completed 02-13-PLAN.md
 Resume file: None
