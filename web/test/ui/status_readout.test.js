@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hueDistance, hueOf } from '../../src/fx/palette.js';
 import { BOMB_PIP, BOMB_PIPS_MAX, WEAPON_CSS, createStatusReadout } from '../../src/ui/status_readout.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
@@ -53,9 +54,11 @@ describe('createStatusReadout', () => {
     expect(level.textContent).toBe('Lv 3');
   });
 
-  it('colours every weapon differently and none pink', () => {
+  it('colours every weapon differently and none orange-yellow', () => {
     expect(new Set(Object.values(WEAPON_CSS)).size).toBe(3);
-    expect(WEAPON_CSS.VULCAN).toBe('rgb(255, 90, 60)');
+    expect(WEAPON_CSS.VULCAN).toBe('rgb(255, 28, 64)');
+    const [r, g, b] = WEAPON_CSS.VULCAN.match(/\d+/g).map(Number);
+    expect(hueDistance(hueOf([r, g, b]), 350)).toBeLessThanOrEqual(15);
     expect(WEAPON_CSS.LASER).toBe('rgb(80, 168, 255)');
     expect(WEAPON_CSS.HOMING).toBe('rgb(170, 110, 255)');
     expect(Object.isFrozen(WEAPON_CSS)).toBe(true);

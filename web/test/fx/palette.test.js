@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   BULLET_EXCLUSION_DEGREES,
@@ -137,5 +140,113 @@ describe('PALETTE', () => {
     expect(hueOf(PALETTE.LASER_GLOW.rgb)).toBeLessThan(235);
     expect(hueOf(PALETTE.MISSILE.rgb)).toBeGreaterThan(245);
     expect(hueOf(PALETTE.MISSILE.rgb)).toBeLessThan(270);
+  });
+});
+
+// The colour scan (RESEARCH Pitfall 10): PALETTE is only one of the places a colour lives, so the
+// reservation is also enforced over every module in web/src and over the page CSS. The scanner is
+// a pure function over a source string and a file name, so a fixture can prove it can fail.
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+// Colour channels are never negative, so a position such as [120, 200, -160] is not a colour.
+const NUMBER = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
+const CONSTANT = new RegExp(
+  String.raw`^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*=\s*\[\s*${NUMBER}\s*,\s*${NUMBER}\s*,\s*${NUMBER}\s*\]`,
+);
+const SET_RGB = new RegExp(String.raw`setRGB\(\s*${NUMBER}\s*,\s*${NUMBER}\s*,\s*${NUMBER}\s*[,)]`, 'g');
+// A line that hands a colour to three, a light, the fog, a canvas, a CSS colour or a background.
+const COLOUR_CONTEXT = /Color\(|\w*Light\(|Fog\(|FogExp2\(|fillStyle|\bcolor\s*:|background/;
+const HEX = /(?:0x|#)([0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])/g;
+const CSS_RGB = /rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/g;
+
+function offends(rgb) {
+  const bullet = hueOf(PALETTE.ENEMY_BULLET_HALO.rgb);
+  return (
+    saturationOf(rgb) >= BULLET_MIN_SATURATION && hueDistance(hueOf(rgb), bullet) < BULLET_EXCLUSION_DEGREES
+  );
+}
+
+function hexToRgb(digits) {
+  const full = digits.length === 3 ? [...digits].map((c) => c + c).join('') : digits;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+}
+
+// Returns "file:line: text" for every saturated colour inside the bullet band.
+function scanSource(source, file, { html = false } = {}) {
+  const found = [];
+  source.split('\n').forEach((text, index) => {
+    const where = `${file}:${index + 1}: ${text.trim()}`;
+    const rgbs = [];
+    if (!html) {
+      const constant = CONSTANT.exec(text.trim());
+      if (constant) {
+        const rgb = constant.slice(1, 4).map(Number);
+        if (Math.max(...rgb) > 1) rgbs.push(rgb);
+      }
+      for (const match of text.matchAll(SET_RGB)) {
+        const rgb = match.slice(1, 4).map(Number);
+        if (Math.max(...rgb) > 1) rgbs.push(rgb);
+      }
+    }
+    if (html || COLOUR_CONTEXT.test(text)) {
+      for (const match of text.matchAll(HEX)) rgbs.push(hexToRgb(match[1]));
+      for (const match of text.matchAll(CSS_RGB)) rgbs.push(match.slice(1, 4).map(Number));
+    }
+    if (rgbs.some(offends)) found.push(where);
+  });
+  return found;
+}
+
+function sourceFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return entry.name.endsWith('.js') ? [path] : [];
+  });
+}
+
+describe('colour scan', () => {
+  it('scan: reports a deliberately out-of-band fixture so the scan can fail', () => {
+    const fixture = [
+      'const FLAME = [3.4, 1.6, 0.4];',
+      'mesh.material.color.setRGB(3.0, 1.2, 0.4);',
+      'const lamp = new THREE.PointLight(0xffaa00, 1);',
+      "scene.fog = new THREE.FogExp2('#ff9a2e', 0.001);",
+      "ctx.fillStyle = '#ffb347';",
+      'const WARM = new THREE.Color(0xffa500);',
+    ].join('\n');
+    expect(scanSource(fixture, 'fixture.js')).toHaveLength(6);
+    const page = '  color: rgb(255, 191, 32);\n  background: rgba(255, 122, 20, 0.7);\n  border: 1px solid #ff8a3d;';
+    expect(scanSource(page, 'fixture.html', { html: true })).toHaveLength(3);
+  });
+
+  it('scan: passes in-band-safe colours: neon hues, greys, and LDR constants', () => {
+    const fixture = [
+      'const CYAN = [0.4, 3.2, 3.8];',
+      'const HULL = [0.82, 0.85, 0.9];',
+      'mesh.color.setRGB(1, 1, 1);',
+      'scene.background = new THREE.Color(0x07061a);',
+      "ctx.fillStyle = '#2b2b2d';",
+      'const seed = mulberry32(0xb0b0b0);',
+      'const LANES = [-80, 0, 80];',
+      'const FILL_POSITION = [120, 200, -160];',
+    ].join('\n');
+    expect(scanSource(fixture, 'safe.js')).toEqual([]);
+    expect(scanSource('color: #1bd7ff; background: rgba(7, 6, 26, 0.72); color: #fff;', 'safe.html', { html: true })).toEqual([]);
+  });
+
+  it('scan: no module in web/src has a saturated colour within 35 degrees of the enemy-bullet hue', () => {
+    const files = sourceFiles(join(ROOT, 'web/src'));
+    expect(files.length).toBeGreaterThan(30);
+    const offenders = files.flatMap((path) =>
+      scanSource(readFileSync(path, 'utf8'), relative(ROOT, path)),
+    );
+    expect(offenders, `colours in the enemy-bullet band:\n${offenders.join('\n')}`).toEqual([]);
+  });
+
+  it('scan: index.html has no amber or orange left: every page colour is outside the band', () => {
+    const page = readFileSync(join(ROOT, 'index.html'), 'utf8');
+    expect(page).toContain('rgb(57, 255, 35)');
+    const offenders = scanSource(page, 'index.html', { html: true });
+    expect(offenders, `colours in the enemy-bullet band:\n${offenders.join('\n')}`).toEqual([]);
   });
 });
