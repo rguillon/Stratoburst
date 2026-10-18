@@ -191,6 +191,48 @@
       #max-flash[hidden] {
         display: none;
       }
+      /* World score popups (D-20): a medal catch shows its value where the medal was, white with a cyan
+         glow like the HUD, rising and fading. Never orange-yellow (D-39). main.js positions each span with
+         left and top; the animation only moves it up. */
+      #popups {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      #popups .popup {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translate(-50%, -50%);
+        font: 900 clamp(14px, 3.6vmin, 24px) / 1 system-ui, sans-serif;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.06em;
+        color: #ffffff;
+        text-shadow:
+          0 0 6px rgba(27, 215, 255, 0.95),
+          0 0 14px rgba(27, 215, 255, 0.6),
+          0 1px 0 #06303a;
+        user-select: none;
+        animation: popup-rise 0.8s ease-out forwards;
+      }
+      #popups .popup[hidden] {
+        display: none;
+      }
+      @keyframes popup-rise {
+        from {
+          opacity: 1;
+          transform: translate(-50%, -50%);
+        }
+        70% {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+          transform: translate(-50%, calc(-50% - 44px));
+        }
+      }
       /* The stage banner (D-26): STAGE n over the playfield during the intro, driven by the header FLOW. Neon
          cyan like the HUD, never orange-yellow. */
       #banner {
@@ -344,6 +386,7 @@
         <div class="hud-top"><span class="score"></span><span class="hi"><span class="hi-label">HI</span> <span class="hiscore"></span></span></div>
         <div class="hud-bl"><span class="lives"></span> <span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
       </div>
+      <div id="popups"></div>
       <div id="max-flash" hidden>MAX</div>
       <div id="banner" hidden></div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>

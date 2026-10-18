@@ -18,7 +18,7 @@ import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
 import { createMissileInstances } from './render/missile_instances.js';
 import { createPickupInstances } from './render/pickup_instances.js';
-import { enemyModel, warmModels } from './render/models/enemy_models.js';
+import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing } from './fx/wreck_ring.js';
@@ -37,6 +37,7 @@ import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
 import { createGameOverOverlay } from './ui/game_over_overlay.js';
+import { createScorePopups } from './ui/score_popups.js';
 import { createBannerOverlay } from './ui/banner_overlay.js';
 import { createDebugSession } from './debug/debug_session.js';
 import { buildReport } from './debug/report.js';
@@ -187,8 +188,13 @@ async function main() {
   // Terrain scroll this frame (steps plus the sub-step alpha); the wrecks read it at a kill.
   let scrollNow = 0;
   // Charred wrecks of ground kills live in the ground layer and scroll away with the terrain.
+  // Only the ground kinds that already have a model leave a wreck: Python may add ground kinds (the
+  // mid-boss parts) before their JS models exist, and the ring builds a hull per kind it is given.
+  const wreckKinds = Object.fromEntries(
+    Object.entries(groundKindNames).filter(([name]) => hasModel(name)),
+  );
   const wrecks = createWreckRing({
-    kinds: groundKindNames,
+    kinds: wreckKinds,
     events: manifest.events,
     geometryFor: enemyModel,
     ratio: manifest.tuning.ground_scroll_ratio,
@@ -267,7 +273,9 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(pickups.mesh);
+  rig.scene.add(pickups.medalMesh);
   pickups.mesh.count = 1;
+  pickups.medalMesh.count = 1;
   // The nuke: a rising missile, then a fireball that fills the screen, with one burst, one light, one
   // scorch and one bloom pulse at the detonation. Python owns the bomb; this only draws it. Added
   // before the second prewarm so its shaders compile at load.
@@ -352,6 +360,20 @@ async function main() {
   // Shown while FLOW is INTRO (the stage start, D-26): STAGE n fading as the ship flies in.
   const banner = createBannerOverlay({ flowStates: manifest.flow_states });
   fx.add(readout); // the MAX flash listens for the MAXED pickup events
+  // A medal catch pops its value up where the medal was (D-20). The projection reuses one vector and
+  // one result object, so a catch allocates nothing here.
+  const popupPoint = new THREE.Vector3();
+  const popupAt = { x: 0, y: 0 };
+  const popups = createScorePopups({
+    events: manifest.events,
+    project(x, y) {
+      rig.toWorld(x, y, popupPoint).project(rig.camera);
+      popupAt.x = ((popupPoint.x + 1) / 2) * canvas.clientWidth;
+      popupAt.y = ((1 - popupPoint.y) / 2) * canvas.clientHeight;
+      return popupAt;
+    },
+  });
+  fx.add(popups);
   // Python picks the sound for each event; this plays it on the gate's AudioContext (null = silent).
   const sfxPlayer = createSfxPlayer({
     audio,
@@ -651,6 +673,13 @@ async function main() {
         },
         get pickupsDrawn() {
           return pickups.mesh.count;
+        },
+        // Medal chips drawn this frame, and medal popups started so far (e2e).
+        get medalsDrawn() {
+          return pickups.medalMesh.count;
+        },
+        get popupsShown() {
+          return popups.shown;
         },
         get bombsShown() {
           return bombFx.shown;
