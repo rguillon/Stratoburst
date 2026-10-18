@@ -222,6 +222,57 @@
       #bomb-button:active {
         background: rgba(57, 255, 35, 0.55);
       }
+      /* The game-over screen (D-28), shown while FLOW is GAME_OVER: above the HUD, below #paused. The night
+         palette only (magenta title, cyan text), never orange-yellow. data-no-steer keeps a tap on it from
+         ever becoming a ship drag. */
+      #game-over {
+        position: fixed;
+        inset: 0;
+        z-index: 8;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: rgba(7, 6, 26, 0.6);
+        color: rgb(27, 215, 255);
+        font: 700 clamp(14px, 3.2vmin, 26px) / 1.2 ui-monospace, Menlo, Consolas, monospace;
+        letter-spacing: 0.12em;
+        text-align: center;
+        text-shadow: 0 0 6px #000;
+        user-select: none;
+        touch-action: none;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      #game-over[hidden] {
+        display: none;
+      }
+      #game-over .title {
+        font: 800 clamp(36px, 10vmin, 96px) / 1 system-ui, sans-serif;
+        letter-spacing: 0.2em;
+        text-indent: 0.2em;
+        color: rgb(255, 30, 225);
+        text-shadow:
+          0 0 10px rgba(255, 30, 225, 0.8),
+          0 0 28px rgba(255, 30, 225, 0.5);
+      }
+      #game-over .final {
+        font-size: clamp(28px, 7vmin, 64px);
+        color: #ffffff;
+      }
+      #game-over .record {
+        color: rgb(255, 30, 225);
+        letter-spacing: 0.3em;
+      }
+      #game-over .record[hidden] {
+        display: none;
+      }
+      #game-over .hint {
+        margin-top: 12px;
+        font-size: clamp(12px, 2.6vmin, 20px);
+        opacity: 0.85;
+      }
       #paused {
         position: fixed;
         inset: 0;
@@ -271,6 +322,13 @@
       </div>
       <div id="max-flash" hidden>MAX</div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
+    </div>
+    <div id="game-over" role="dialog" aria-label="Game over" data-no-steer hidden>
+      <div class="title">GAME OVER</div>
+      <div class="final"></div>
+      <div class="best-line">BEST <span class="best"></span></div>
+      <div class="record" hidden>NEW RECORD</div>
+      <div class="hint">PRESS FIRE OR TAP</div>
     </div>
     <div id="paused" role="dialog" aria-label="Game paused" hidden>
       <div class="title">PAUSED</div>

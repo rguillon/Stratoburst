@@ -43,7 +43,8 @@ export async function startGame(pyodide, options) {
   }
 
   const tick = game.tick; // held once; called once per animation frame
-  return { tick, game, manifest, header, slots: manifest.header.slots, channels };
+  const restart = game.restart; // held once as well: a restart is a DOM handler's call, not a Python edge
+  return { tick, restart, game, manifest, header, slots: manifest.header.slots, channels };
 }
 
 // Runs `ticks` simulation steps on a throwaway game, so pool and heap growth happen before play

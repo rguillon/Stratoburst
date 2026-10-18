@@ -36,6 +36,7 @@ import { installAudioKeepalive } from './audio/audio_keepalive.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
+import { createGameOverOverlay } from './ui/game_over_overlay.js';
 import { createDebugSession } from './debug/debug_session.js';
 import { buildReport } from './debug/report.js';
 import * as THREE from 'three';
@@ -342,6 +343,11 @@ async function main() {
     maxed: manifest.outcomes.MAXED,
   });
   readout.show();
+  // Shown while FLOW is GAME_OVER; a fire key or a tap calls the held restart proxy (Pitfall 9).
+  const gameOver = createGameOverOverlay({
+    flowStates: manifest.flow_states,
+    onRestart: () => bridge.restart(),
+  });
   fx.add(readout); // the MAX flash listens for the MAXED pickup events
   // Python picks the sound for each event; this plays it on the gate's AudioContext (null = silent).
   const sfxPlayer = createSfxPlayer({
@@ -478,6 +484,7 @@ async function main() {
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
       readout.update(header, slots);
+      gameOver.update(header, slots, ts);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);
