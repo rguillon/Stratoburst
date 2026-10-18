@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-10-PLAN.md
-last_updated: "2026-10-18T04:19:53.525Z"
+stopped_at: Completed 02-11-PLAN.md
+last_updated: "2026-10-18T04:25:53.860Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 5dc0d5b6109eca25bc1e3c02dfe4a42f46ce8f0e
+state_head: b69b4517465ae28f71a153c26414db32ef4cb23d
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 20
+  completed_plans: 21
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 11 of 33
+Plan: 12 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -76,6 +76,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P08 | 10 min | 2 tasks | 14 files |
 | Phase 02 P09 | 8 min | 2 tasks | 7 files |
 | Phase 02 P10 | 4 min | 2 tasks | 11 files |
+| Phase 02 P11 | 9 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-09: tank and AA turret are { body, glow, top } models built only from model_kit parts, with the turret/gun as a pivot-centred top that follows the aux aim angle; all five gallery kinds now have builders
 - [Phase 02]: 02-10: pickups bounce with the pickup radius as edge margin, drift off the bottom after 600 steps, and a MAXED catch is only counted (game.max_bonus, header slot 20) for Phase 3 scoring
 - [Phase 02]: 02-10: the pickup colour is decided in Python (colour_at) and packed into the pickups channel; the collect callback is bound once so no closure is built per step
+- [Phase 02]: 02-11: ?weapon and ?level are allow-listed and clamped in JS and validated again in entrypoint.py; main.js spreads the whole parsed flags object into the Python options, so later flags need no main.js edit
+- [Phase 02]: 02-11: BulletPool.angle = atan2(vx, -vy) set at spawn and packed in slot 2 of the pbullets channel (0 = straight up); the status readout writes textContent only, on change
 
 ### Pending Todos
 
@@ -146,6 +149,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:19:53.449Z
-Stopped at: Completed 02-10-PLAN.md
+Last session: 2026-10-18T04:25:53.774Z
+Stopped at: Completed 02-11-PLAN.md
 Resume file: None
