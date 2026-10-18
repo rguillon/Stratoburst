@@ -1,10 +1,12 @@
-"""The player's ship: instant-response movement clamped to the playfield."""
+"""The player's ship: instant-response movement clamped to the playfield, and its fly-in."""
 
 import math
 from dataclasses import dataclass
 
 from scorched_core.protocol import PLAYFIELD_H, PLAYFIELD_W
 from scorched_core.tuning import (
+    RESPAWN_SPEED,
+    RESPAWN_START_Y,
     SHIP_HALF_H,
     SHIP_HALF_W,
     SHIP_SPEED,
@@ -34,6 +36,18 @@ class PlayerShip:
             scale = TOUCH_LAG_CAP / length
             self.pending_x *= scale
             self.pending_y *= scale
+
+    def respawn_start(self) -> None:
+        """Place the ship below the playfield, centred, with no touch drag owed (D-14)."""
+        self.x = SHIP_START_X
+        self.y = RESPAWN_START_Y
+        self.pending_x = 0.0
+        self.pending_y = 0.0
+
+    def fly_in(self) -> bool:
+        """Rise ``RESPAWN_SPEED`` towards the start position; return True once it has arrived."""
+        self.y = max(self.y - RESPAWN_SPEED, SHIP_START_Y)
+        return self.y <= SHIP_START_Y
 
     def step(self, move_x: float, move_y: float) -> None:
         """Advance one 60 Hz step from a move vector (each axis nominally -1..1).

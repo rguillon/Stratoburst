@@ -21,6 +21,14 @@ STORM_SPEED_MAX: Final = 2.0
 # Player hitbox core radius; plan 01-06 draws its marker.
 HITBOX_RADIUS: Final = 2.0
 
+# Player life cycle (PLYR-08, PLYR-10); every window counts 60 Hz simulation steps.
+DEATHBOMB_TICKS: Final = 8  # D-11: the grace window after a fatal hit, tunable
+DYING_TICKS: Final = 50  # no control and no fire while the wreck burns
+RESPAWN_START_Y: Final = PLAYFIELD_H + 24.0  # D-14: the fly-in starts below the playfield
+RESPAWN_SPEED: Final = 2.5  # units per step while flying in
+INVULN_RESPAWN_TICKS: Final = 150  # 2.5 s, inside D-14's 2-3 s
+ENEMY_BULLET_RADIUS: Final = 2.5
+
 # Terrain scroll in terrain units per 60 Hz step (about 48 units per second); STGE-02.
 SCROLL_SPEED: Final = 0.8
 

@@ -5,6 +5,8 @@ import pytest
 from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.protocol import PLAYFIELD_H, PLAYFIELD_W
 from scorched_core.tuning import (
+    RESPAWN_SPEED,
+    RESPAWN_START_Y,
     SHIP_HALF_H,
     SHIP_HALF_W,
     SHIP_SPEED,
@@ -191,3 +193,31 @@ def test_a_ship_standing_at_a_wall_with_no_drag_keeps_zero_pending() -> None:
         ship.step(-1.0, 0.0)
     ship.step(0.0, 0.0)
     assert (ship.pending_x, ship.pending_y) == (0.0, 0.0)
+
+
+def test_respawn_start_places_the_ship_below_the_field_and_clears_the_drag() -> None:
+    ship = PlayerShip(x=10.0, y=20.0)
+    ship.add_drag(5.0, 5.0)
+    ship.respawn_start()
+    assert (ship.x, ship.y) == (SHIP_START_X, RESPAWN_START_Y)
+    assert (ship.pending_x, ship.pending_y) == (0.0, 0.0)
+    assert RESPAWN_START_Y > PLAYFIELD_H
+
+
+def test_fly_in_rises_at_respawn_speed_and_reports_arrival() -> None:
+    ship = PlayerShip()
+    ship.respawn_start()
+    assert not ship.fly_in()
+    assert ship.y == pytest.approx(RESPAWN_START_Y - RESPAWN_SPEED)
+    steps = 1
+    while not ship.fly_in():
+        steps += 1
+        assert steps < 100
+    assert ship.y == SHIP_START_Y
+    assert ship.x == SHIP_START_X
+
+
+def test_fly_in_never_overshoots_the_start_position() -> None:
+    ship = PlayerShip(y=SHIP_START_Y + 1.0)
+    assert ship.fly_in()
+    assert ship.y == SHIP_START_Y
