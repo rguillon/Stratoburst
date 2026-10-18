@@ -68,6 +68,18 @@ class PickupPool:
         self.n = i + 1
         return True
 
+    def spawn_guaranteed(self, kind: int, x: float, y: float, vx: float, vy: float) -> None:
+        """Add a pickup that must exist: when the pool is full the oldest one makes room (D-05).
+
+        The pool never grows past ``PICKUP_CAP``; the evicted pickup is the one with the largest
+        age, the lowest slot on a tie.
+        """
+        if self.n >= PICKUP_CAP:
+            age = self.age
+            oldest = max(range(self.n), key=age.__getitem__)
+            self.remove_at(oldest)
+        self.spawn(kind, x, y, vx, vy)
+
     def spawn_crystal(self, x: float, y: float) -> bool:
         """Launch a CRYSTAL at ``(x, y)``, alternating left and right on each call."""
         side = self._side

@@ -198,6 +198,15 @@ PICKUP_GRAB_RADIUS: Final = 10.0
 PICKUP_LIFE_TICKS: Final = 600
 PICKUP_EXIT_SPEED: Final = 0.8
 
+# Death (PLYR-06, D-04, D-05): a death costs DEATH_LEVEL_PENALTY weapon levels (a reversible
+# tuning constant, floor 1) and leaves one fixed-colour recovery pickup at the death spot, drifting
+# up at RECOVERY_VY. The spot is clamped RECOVERY_MARGIN inside the pickup radius at the sides and
+# RECOVERY_BOTTOM_MARGIN above the bottom edge so the ship can always fly to it.
+DEATH_LEVEL_PENALTY: Final = 2
+RECOVERY_VY: Final = -0.5
+RECOVERY_MARGIN: Final = 4.0
+RECOVERY_BOTTOM_MARGIN: Final = 40.0
+
 # Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS or MISSILE_RADIUS must stay
 # at or below it so a 3x3 query suffices.
 GRID_CELL: Final = 32.0

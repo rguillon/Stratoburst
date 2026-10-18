@@ -113,6 +113,10 @@ from scorched_core.tuning import (
     HOMING_DAMAGE,
     MAX_LEVEL,
     MISSILE_RADIUS,
+    PICKUP_RADIUS,
+    RECOVERY_BOTTOM_MARGIN,
+    RECOVERY_MARGIN,
+    RECOVERY_VY,
     SCROLL_SPEED,
 )
 from scorched_core.weapons.bomb import Bomb
@@ -433,6 +437,19 @@ class Game:
             self.max_bonus += 1  # D-06: recorded now, the points are awarded in Phase 3
         self.events.push(EV_PICKUP, x, y, kind, outcome, color)
 
+    def _on_death(self) -> None:
+        """Cost the weapon its levels and leave a recovery pickup of its colour (PLYR-06).
+
+        The pickup is guaranteed (it evicts the oldest when the pool is full), clamped inside the
+        playfield and never cycles colour, so catching it is an ordinary +1 (D-04, D-05).
+        """
+        loadout = self.loadout
+        loadout.penalize()
+        edge = PICKUP_RADIUS + RECOVERY_MARGIN
+        x = min(max(self.ship.x, edge), PLAYFIELD_W - edge)
+        y = min(max(self.ship.y, edge), PLAYFIELD_H - RECOVERY_BOTTOM_MARGIN)
+        self.pickups.spawn_guaranteed(PickupKind(int(loadout.kind)), x, y, 0.0, RECOVERY_VY)
+
     def _lethal_contact(self) -> bool:
         """Return whether a gameplay enemy bullet or an air enemy body touches the hitbox core.
 
@@ -451,7 +468,8 @@ class Game:
             if life.can_control and self.bomb.try_launch(self.ship.x, self.ship.y):
                 self.events.push(EV_BOMB_LAUNCH, self.ship.x, self.ship.y)
                 life.grant_invuln(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS)
-        life.step(self.ship, self.events)
+        if life.step(self.ship, self.events):
+            self._on_death()
         if life.can_control:
             self.ship.step(self._move_x, self._move_y)
         else:

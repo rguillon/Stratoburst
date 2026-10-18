@@ -69,6 +69,8 @@ from scorched_core.protocol import (
     PBULLET_STRIDE,
     PICKUP_CAP,
     PICKUP_STRIDE,
+    PLAYFIELD_H,
+    PLAYFIELD_W,
 )
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.tuning import (
@@ -83,6 +85,9 @@ from scorched_core.tuning import (
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
     INVULN_RESPAWN_TICKS,
+    PICKUP_RADIUS,
+    SHIP_HALF_H,
+    SHIP_HALF_W,
     SHIP_SPEED,
     SHIP_START_X,
     SHIP_START_Y,
@@ -1973,3 +1978,97 @@ def _bomb_run(seed: int) -> bytes:
 
 def test_the_bomb_is_deterministic_for_one_seed_and_inputs_determinism() -> None:
     assert _bomb_run(7) == _bomb_run(7)
+
+
+def _die(game: Game) -> None:
+    """Hit the ship and tick until the death step has run."""
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.deaths == 1)
+
+
+def test_a_death_costs_two_weapon_levels_and_keeps_the_weapon_recovery() -> None:
+    game = _empty_game(weapon=WeaponKind.LASER, level=4)
+    _die(game)
+    assert (_header(game, H_WEAPON), _header(game, H_LEVEL)) == (int(WeaponKind.LASER), 2)
+
+
+def test_a_death_at_level_one_stays_at_level_one_recovery() -> None:
+    game = _empty_game()
+    _die(game)
+    assert _header(game, H_LEVEL) == 1
+
+
+def test_a_death_leaves_one_recovery_pickup_of_the_weapon_colour_at_the_spot_recovery() -> None:
+    game = _empty_game(weapon=WeaponKind.LASER, level=4)
+    x, y = game.ship.x, game.ship.y
+    _die(game)
+    pickups = game.pickups
+    assert pickups.n == 1
+    assert pickups.kind[0] == PickupKind.BLUE
+    assert pickups.x[0] == pytest.approx(x)
+    assert pickups.y[0] == pytest.approx(y - 0.5)  # it already drifted one step
+    assert pickups.vx[0] == 0.0
+    assert pickups.vy[0] == pytest.approx(-0.5)
+    assert _header(game, H_PICKUP_N) == 1
+
+
+@pytest.mark.parametrize(
+    ("weapon", "kind"),
+    [
+        (WeaponKind.VULCAN, PickupKind.RED),
+        (WeaponKind.LASER, PickupKind.BLUE),
+        (WeaponKind.HOMING, PickupKind.PURPLE),
+    ],
+)
+def test_the_recovery_pickup_matches_the_weapon_colour_and_never_cycles_recovery(
+    weapon: WeaponKind, kind: PickupKind
+) -> None:
+    game = _empty_game(weapon=weapon, level=3)
+    _die(game)
+    assert game.pickups.kind[0] == kind
+    for _ in range(400):
+        assert game.pickups.color_at(0) == int(weapon)
+        game.pickups.step()
+
+
+@pytest.mark.parametrize(
+    ("ship_x", "ship_y", "want_x", "want_y"),
+    [
+        (SHIP_HALF_W, PLAYFIELD_H - SHIP_HALF_H, PICKUP_RADIUS + 4.0, PLAYFIELD_H - 40.0),
+        (
+            PLAYFIELD_W - SHIP_HALF_W,
+            SHIP_HALF_H,
+            PLAYFIELD_W - PICKUP_RADIUS - 4.0,
+            PICKUP_RADIUS + 4.0,
+        ),
+    ],
+)
+def test_a_death_at_the_edge_clamps_the_recovery_pickup_inside_the_playfield_recovery(
+    ship_x: float, ship_y: float, want_x: float, want_y: float
+) -> None:
+    game = _empty_game()
+    game.ship.x = ship_x
+    game.ship.y = ship_y
+    _die(game)
+    assert game.pickups.x[0] == pytest.approx(want_x)
+    assert game.pickups.y[0] == pytest.approx(want_y - 0.5)  # it drifted one step already
+
+
+def test_the_recovery_pickup_is_guaranteed_even_when_the_pool_is_full_recovery() -> None:
+    game = _empty_game(weapon=WeaponKind.HOMING, level=3)
+    for i in range(PICKUP_CAP):
+        game.pickups.spawn(PickupKind.CRYSTAL, 20.0 + i, 20.0, 0.0, 0.0)
+    _die(game)
+    assert game.pickups.n == PICKUP_CAP
+    assert PickupKind.PURPLE in [game.pickups.kind[i] for i in range(game.pickups.n)]
+
+
+def test_catching_the_recovery_pickup_at_level_two_raises_it_to_level_three_recovery() -> None:
+    game = _empty_game(weapon=WeaponKind.LASER, level=4)
+    _die(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    game.ship.x = game.pickups.x[0]
+    game.ship.y = game.pickups.y[0]
+    _tick(game)
+    assert (_header(game, H_WEAPON), _header(game, H_LEVEL)) == (int(WeaponKind.LASER), 3)
+    assert game.pickups.n == 0

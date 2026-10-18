@@ -15,6 +15,16 @@ test('a mortal idle ship dies, flies back in and blinks invulnerable', async ({ 
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
 
+// D-04, D-05: a death costs two weapon levels, keeps the weapon type, and leaves a recovery pickup.
+test('a death at laser Lv4 drops to Lv2, keeps the laser and leaves a recovery pickup', async ({ page }) => {
+  await bootGame(page, '?debug&weapon=laser&level=4', { mortal: true });
+  await expect.poll(() => readSlot(page, 'DEATHS'), { timeout: 90_000, intervals: [250] }).toBeGreaterThanOrEqual(1);
+  expect(await readSlot(page, 'LEVEL')).toBe(2);
+  expect(await readSlot(page, 'WEAPON')).toBe(1);
+  expect(await readSlot(page, 'PICKUP_N')).toBeGreaterThanOrEqual(1);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
 test('a god ship never dies', async ({ page }) => {
   await bootGame(page, '?debug');
   await page.waitForTimeout(20_000);

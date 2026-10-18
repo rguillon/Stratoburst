@@ -46,6 +46,37 @@ def test_spawns_beyond_the_cap_are_refused_and_the_pool_never_grows() -> None:
     assert len(pool.x) == PICKUP_CAP
 
 
+def test_spawn_guaranteed_adds_a_pickup_like_spawn_when_there_is_room_guaranteed() -> None:
+    pool = PickupPool()
+    pool.spawn_guaranteed(PickupKind.PURPLE, 30.0, 40.0, 0.0, -0.5)
+    assert pool.n == 1
+    assert (pool.x[0], pool.y[0], pool.vy[0]) == (30.0, 40.0, -0.5)
+    assert (pool.kind[0], pool.age[0]) == (PickupKind.PURPLE, 0)
+
+
+def test_spawn_guaranteed_evicts_the_oldest_pickup_when_the_pool_is_full_guaranteed() -> None:
+    pool = PickupPool()
+    for i in range(PICKUP_CAP):
+        pool.spawn(PickupKind.CRYSTAL, float(i), 50.0, 0.0, 0.0)
+        pool.age[i] = i + 1
+    pool.age[5] = 999  # the oldest
+    pool.spawn_guaranteed(PickupKind.BLUE, 7.5, 8.5, 0.0, -0.5)
+    assert pool.n == PICKUP_CAP
+    assert len(pool.x) == PICKUP_CAP
+    assert 5.0 not in [pool.x[i] for i in range(pool.n)]
+    assert pool.kind[pool.n - 1] == PickupKind.BLUE
+    assert (pool.x[pool.n - 1], pool.y[pool.n - 1], pool.age[pool.n - 1]) == (7.5, 8.5, 0)
+
+
+def test_spawn_guaranteed_evicts_the_lowest_slot_on_an_age_tie_guaranteed() -> None:
+    pool = PickupPool()
+    for i in range(PICKUP_CAP):
+        pool.spawn(PickupKind.CRYSTAL, float(i), 50.0, 0.0, 0.0)
+    pool.spawn_guaranteed(PickupKind.RED, 99.0, 99.0, 0.0, 0.0)
+    assert 0.0 not in [pool.x[i] for i in range(pool.n)]
+    assert 99.0 in [pool.x[i] for i in range(pool.n)]
+
+
 def test_step_moves_every_pickup_by_its_velocity_and_ages_it() -> None:
     pool = PickupPool()
     pool.spawn(PickupKind.RED, 100.0, 100.0, 0.5, -0.25)
