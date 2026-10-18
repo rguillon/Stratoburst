@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-08-PLAN.md
-last_updated: "2026-10-18T04:03:58.731Z"
+stopped_at: Completed 02-09-PLAN.md
+last_updated: "2026-10-18T04:14:09.035Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 1cf3323b9a27194c38a01ce3bda23fd74c18f51d
+state_head: ff185e7f2220f853254fe4ac2a0d2145318d4da5
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 18
+  completed_plans: 19
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 9 of 33
+Plan: 10 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -74,6 +74,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P06 | 14 min | 2 tasks | 9 files |
 | Phase 02 P07 | 8 min | 2 tasks | 13 files |
 | Phase 02 P08 | 10 min | 2 tasks | 14 files |
+| Phase 02 P09 | 8 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-07: a HELI top spins by angle + timeS * ROTOR_RATE (30 rad/s) and any other top follows the absolute aux aim angle; kinds without a builder (TANK, TURRET until 02-09) keep tinted primitives
 - [Phase 02]: 02-08: TwinShot is deleted; Lv1 of the VULCAN_STREAMS tables reproduces it exactly (parity test), and Game clamps the starting level to 1..5 itself
 - [Phase 02]: 02-08: every weapon is stepped every step with fire gated by loadout.kind, so cooldowns keep running and a switch is immediate; LASER and HOMING fire nothing until 02-21 and 02-13
+- [Phase 02]: 02-09: tank and AA turret are { body, glow, top } models built only from model_kit parts, with the turret/gun as a pivot-centred top that follows the aux aim angle; all five gallery kinds now have builders
 
 ### Pending Todos
 
@@ -141,6 +143,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:03:58.653Z
-Stopped at: Completed 02-08-PLAN.md
+Last session: 2026-10-18T04:14:08.959Z
+Stopped at: Completed 02-09-PLAN.md
 Resume file: None

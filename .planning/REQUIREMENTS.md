@@ -69,7 +69,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Visuals & Feel
 
-- [ ] **VISL-01**: All ship, enemy, boss and terrain models are generated procedurally in code
+- [x] **VISL-01**: All ship, enemy, boss and terrain models are generated procedurally in code
 - [ ] **VISL-02**: Scene uses dynamic lighting and bloom/glow on emissive elements (bullets, engines, explosions)
 - [ ] **VISL-03**: Explosions use particle effects (fire, smoke, debris) sized by enemy class
 - [ ] **VISL-04**: Big events (boss parts, boss death, bombs, player death) trigger screen shake and short hitstop
@@ -187,7 +187,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCOR-06 | Phase 4 | Pending |
 | SCOR-07 | Phase 4 | Pending |
 | SCOR-08 | Phase 3 | Pending |
-| VISL-01 | Phase 2 | Pending |
+| VISL-01 | Phase 2 | Complete |
 | VISL-02 | Phase 2 | Pending |
 | VISL-03 | Phase 2 | Pending |
 | VISL-04 | Phase 2 | Pending |
