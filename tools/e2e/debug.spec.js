@@ -23,6 +23,11 @@ test('?debug shows a live overlay and Copy report yields the device report', asy
       return page.evaluate(() => navigator.clipboard.readText());
     })
     .toContain('pyodide: 314.0.7');
+  // The report states the audio context's health (the gate's tap unlocked it).
+  const reportText = await page.evaluate(
+    () => document.getElementById('report-text')?.value ?? navigator.clipboard.readText(),
+  );
+  expect(reportText).toMatch(/^audio: running$/m);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
 

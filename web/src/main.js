@@ -32,6 +32,7 @@ import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { SFX_TABLE } from './audio/sfx_table.js';
 import { createSfxBank, synthesizeAll } from './audio/sfx_bank.js';
 import { createSfxPlayer } from './audio/sfx_player.js';
+import { installAudioKeepalive } from './audio/audio_keepalive.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
@@ -54,6 +55,8 @@ const panel = installErrorPanel();
 // exists, otherwise the same report layout with only what is known without one. Registered
 // before main() so even a load failure produces it.
 let debugSession = null;
+// The AudioContext state for the report; replaced once the start gate has made the context.
+let getAudioState = () => undefined;
 function reportText(flags) {
   if (debugSession) return debugSession.reportText();
   return buildReport({
@@ -65,6 +68,7 @@ function reportText(flags) {
     three: __THREE_VERSION__,
     build: __BUILD_HASH__,
     flags,
+    audioState: getAudioState(),
   });
 }
 
@@ -328,6 +332,9 @@ async function main() {
   loading.showGate();
   const app = document.getElementById('app');
   const { audio, pointerType } = await waitForStartGesture(app);
+  // iOS: play through the silent switch, and resume a suspended or interrupted context on later gestures.
+  installAudioKeepalive({ audio });
+  getAudioState = () => audio?.state ?? 'none';
   loading.hide();
   const readout = createStatusReadout({
     weapons: manifest.weapons,
@@ -358,6 +365,7 @@ async function main() {
         tierLog,
         getTier: () => currentTier,
         getLockReason: () => (controller.locked ? controller.reason : null),
+        getAudioState,
         versions: { build: __BUILD_HASH__, pyodide: PYODIDE_VERSION, three: __THREE_VERSION__ },
         startMs: performance.now(),
         timeToGateMs,
@@ -547,7 +555,7 @@ async function main() {
       started: true,
       timeToGateMs,
       get audioState() {
-        return audio?.state ?? 'none';
+        return getAudioState();
       },
       header,
       slots,

@@ -19,6 +19,14 @@ function flagsLine(flags) {
   );
 }
 
+// The AudioContext state ('running', 'suspended', 'interrupted' or 'none' without a context). Anything
+// but running gets the iOS hint, because the ringer switch is the usual reason a phone is silent.
+function audioLine(state) {
+  const line = `audio: ${text(state)}`;
+  if (state === undefined || state === null || state === 'running') return line;
+  return `${line} (no sound on iPhone? check the silent switch)`;
+}
+
 function tierLines(info) {
   const log = info.tierLog ?? [];
   if (log.length === 0) return ['tier log: none'];
@@ -53,6 +61,7 @@ export function buildReport(info) {
     `three: ${text(info.three)}`,
     `build: ${text(info.build)}`,
     `flags: ${flagsLine(info.flags)}`,
+    audioLine(info.audioState),
     `tier: ${tier}`,
     `time to gate: ${Number.isFinite(info.timeToGateMs) ? `${num(info.timeToGateMs / 1000, 1)} s` : NA}`,
     `elapsed: ${num(info.elapsedMin, 1)} min`,
