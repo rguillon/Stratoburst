@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createSfxPlayer } from '../../src/audio/sfx_player.js';
 
 const EVENTS = { SFX: 12, EXPLOSION: 1 };
-const SFX_IDS = { EXPLODE_SMALL: 0, EXPLODE_LARGE: 2 };
+const SFX_IDS = { EXPLODE_SMALL: 0, EXPLODE_LARGE: 2, VULCAN: 3, HIT: 4, BOMB_BLAST: 5 };
 const TABLE = {
-  EXPLODE_SMALL: { volume: 0.7 },
-  EXPLODE_LARGE: { volume: 1 },
-  LASER_HUM: { volume: 0.25 },
+  EXPLODE_SMALL: { volume: 0.7, cooldownMs: 0, priority: 5 },
+  EXPLODE_LARGE: { volume: 1, cooldownMs: 0, priority: 5 },
+  VULCAN: { volume: 0.3, cooldownMs: 60, priority: 1 },
+  HIT: { volume: 0.25, cooldownMs: 40, priority: 1 },
+  BOMB_BLAST: { volume: 1, cooldownMs: 0, priority: 10 },
+  LASER_HUM: { volume: 0.25, cooldownMs: 0, priority: 3 },
 };
 
 // An AudioParam that records its automation calls.
@@ -53,12 +56,12 @@ function fakeAudio({ startThrows = false } = {}) {
         loop: false,
         started: 0,
         stopped: [],
+        stop(t) {
+          this.stopped.push(t);
+        },
         start() {
           if (startThrows) throw new Error('closed');
           this.started += 1;
-        },
-        stop(t) {
-          this.stopped.push(t);
         },
       }),
   };
@@ -66,11 +69,19 @@ function fakeAudio({ startThrows = false } = {}) {
 
 function make({
   audio = fakeAudio(),
-  bankNames = ['EXPLODE_SMALL', 'EXPLODE_LARGE', 'LASER_HUM'],
+  bankNames = ['EXPLODE_SMALL', 'EXPLODE_LARGE', 'VULCAN', 'HIT', 'BOMB_BLAST', 'LASER_HUM'],
 } = {}) {
   const bank = new Map(bankNames.map((name) => [name, { buffer: name }]));
-  const player = createSfxPlayer({ audio, bank, table: TABLE, sfxIds: SFX_IDS, events: EVENTS });
-  return { audio, bank, player };
+  const clock = { t: 0 };
+  const player = createSfxPlayer({
+    audio,
+    bank,
+    table: TABLE,
+    sfxIds: SFX_IDS,
+    events: EVENTS,
+    now: () => clock.t,
+  });
+  return { audio, bank, clock, player };
 }
 
 describe('createSfxPlayer', () => {
@@ -384,5 +395,189 @@ describe('muted', () => {
     }).not.toThrow();
     expect(player.laser).toBe(false);
     expect(player.muted).toBe(false);
+  });
+});
+
+describe('voice limiter', () => {
+  const oneShots = (audio) =>
+    audio.nodes.filter((n) => n.kind === 'source' && !n.loop);
+
+  // Twenty explosions, each with its own start time so "oldest" is well defined.
+  function fillVoices(player, clock) {
+    for (let i = 0; i < 20; i += 1) {
+      clock.t = i;
+      expect(player.play('EXPLODE_SMALL')).toBe(true);
+    }
+  }
+
+  it('plays at most 20 voices: an equal-priority request steals the oldest voice', () => {
+    const { audio, clock, player } = make();
+    fillVoices(player, clock);
+    const voices = oneShots(audio);
+
+    clock.t = 100;
+    expect(player.play('EXPLODE_LARGE')).toBe(true);
+
+    expect(voices[0].stopped).toHaveLength(1);
+    expect(voices.slice(1).every((v) => v.stopped.length === 0)).toBe(true);
+    expect(oneShots(audio)).toHaveLength(21);
+    expect(player.played).toBe(21);
+  });
+
+  it('steal picks the lowest-priority voice first, even when it is newer', () => {
+    const { audio, clock, player } = make();
+    clock.t = 0;
+    for (let i = 0; i < 19; i += 1) player.play('BOMB_BLAST');
+    clock.t = 5;
+    player.play('VULCAN');
+    const voices = oneShots(audio);
+    const shot = voices[19];
+
+    clock.t = 100;
+    expect(player.play('EXPLODE_SMALL')).toBe(true);
+
+    expect(shot.stopped).toHaveLength(1);
+    expect(voices.slice(0, 19).every((v) => v.stopped.length === 0)).toBe(true);
+  });
+
+  it('steal drops a lower-priority request when every voice outranks it', () => {
+    const { audio, clock, player } = make();
+    for (let i = 0; i < 20; i += 1) player.play('EXPLODE_SMALL');
+    const before = oneShots(audio).length;
+
+    clock.t = 100;
+    expect(player.play('HIT')).toBe(false);
+
+    expect(oneShots(audio)).toHaveLength(before);
+    expect(player.played).toBe(20);
+  });
+
+  it('a stolen voice ending later does not free the slot of its replacement', () => {
+    const { audio, clock, player } = make();
+    fillVoices(player, clock);
+    const voices = oneShots(audio);
+    clock.t = 100;
+    player.play('EXPLODE_LARGE');
+    const replacement = oneShots(audio)[20];
+
+    voices[0].onended();
+
+    // All 20 slots are still taken: a low-priority request is still dropped.
+    clock.t = 200;
+    expect(player.play('HIT')).toBe(false);
+    expect(replacement.disconnected).toBe(false);
+  });
+
+  it('releases a voice on ended, so its slot is free again', () => {
+    const { audio, clock, player } = make();
+    for (let i = 0; i < 20; i += 1) player.play('EXPLODE_SMALL');
+    clock.t = 100;
+    expect(player.play('HIT')).toBe(false);
+
+    oneShots(audio)[3].onended();
+
+    clock.t = 200;
+    expect(player.play('HIT')).toBe(true);
+  });
+
+  it('survives a voice that refuses to stop when it is stolen', () => {
+    const { audio, clock, player } = make();
+    fillVoices(player, clock);
+    oneShots(audio)[0].stop = () => {
+      throw new Error('already stopped');
+    };
+
+    clock.t = 100;
+    expect(player.play('EXPLODE_LARGE')).toBe(true);
+  });
+
+  it('does not count the laser hum against the voice limit', () => {
+    const { clock, player } = make();
+    player.setLaser(true);
+
+    fillVoices(player, clock);
+
+    expect(player.played).toBe(20);
+  });
+
+  it('a failed start leaves its slot free', () => {
+    const { audio, player } = make({ audio: fakeAudio({ startThrows: true }) });
+    for (let i = 0; i < 25; i += 1) player.play('EXPLODE_SMALL');
+
+    expect(player.played).toBe(0);
+    expect(audio.nodes.filter((n) => n.kind === 'source')).toHaveLength(25);
+  });
+});
+
+describe('cooldown', () => {
+  it('a second play of the same id inside its cooldown is dropped', () => {
+    const { clock, player } = make();
+    clock.t = 1000;
+    expect(player.play('VULCAN')).toBe(true);
+
+    clock.t = 1059;
+    expect(player.play('VULCAN')).toBe(false);
+    expect(player.played).toBe(1);
+  });
+
+  it('after the cooldown the sound plays again', () => {
+    const { clock, player } = make();
+    clock.t = 1000;
+    player.play('VULCAN');
+
+    clock.t = 1060;
+    expect(player.play('VULCAN')).toBe(true);
+    expect(player.played).toBe(2);
+  });
+
+  it('cooldowns are per id: another sound plays inside it', () => {
+    const { clock, player } = make();
+    clock.t = 1000;
+    player.play('VULCAN');
+
+    clock.t = 1001;
+    expect(player.play('HIT')).toBe(true);
+  });
+
+  it('a burst of identical events plays once', () => {
+    const { clock, player } = make();
+    clock.t = 5000;
+
+    for (let i = 0; i < 10; i += 1) player.handle(EVENTS.SFX, 0, 0, 3);
+
+    expect(player.played).toBe(1);
+  });
+
+  it('a dropped request does not restart the cooldown', () => {
+    const { clock, player } = make();
+    clock.t = 1000;
+    player.play('VULCAN');
+    clock.t = 1050;
+    player.play('VULCAN');
+
+    clock.t = 1060;
+    expect(player.play('VULCAN')).toBe(true);
+  });
+
+  it('a sound with a zero cooldown plays on every request', () => {
+    const { clock, player } = make();
+    clock.t = 1000;
+
+    expect(player.play('EXPLODE_SMALL')).toBe(true);
+    expect(player.play('EXPLODE_SMALL')).toBe(true);
+  });
+});
+
+describe('table volume', () => {
+  it('scales each voice gain by the table volume', () => {
+    const { audio, clock, player } = make();
+    clock.t = 1000;
+    player.play('VULCAN');
+    player.play('EXPLODE_LARGE');
+
+    const gains = audio.nodes
+      .filter((n) => n.kind === 'source')
+      .map((n) => n.connections[0].gain.value);
+    expect(gains).toEqual([0.3, 1]);
   });
 });
