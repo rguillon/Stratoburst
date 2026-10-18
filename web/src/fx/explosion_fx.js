@@ -23,8 +23,9 @@ export function mulberry32(seed) {
 // Emitter fields: layer, count (at full quality), life [min, max] s, speed [min, max] world
 // units/s, size [start, end], HDR colour, gravity scale (negative rises) and spread (share of the
 // speed thrown upward; 0 keeps the burst flat on the ground plane).
-function emitter(layer, count, life, speed, size, color, gravity = 0, spread = 0) {
-  return Object.freeze({ layer, count, life, speed, size, color, gravity, spread });
+// A `ring` emitter spaces its particles evenly around the circle instead of at random angles.
+function emitter(layer, count, life, speed, size, color, gravity = 0, spread = 0, ring = false) {
+  return Object.freeze({ layer, count, life, speed, size, color, gravity, spread, ring });
 }
 
 const CORE = (size, life, color) => emitter('additive', 1, [life, life], [0, 0], size, color);
@@ -60,6 +61,14 @@ export const RECIPES = Object.freeze({
 export const HIT_RECIPE = Object.freeze([
   emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], PALETTE.HIT_SPARK.rgb),
 ]);
+
+// The player's ship (PLYR-06): a fatal hit flashes a quick white ring as the grace-window warning,
+// and the death is a LARGE-sized fireball plus a bigger ring of 16 white sparks. Counts scale with
+// the tier like every recipe; the sizes never do.
+const WHITE_RING = (count, life, speed) =>
+  emitter('additive', count, life, speed, [2.5, 0.5], PALETTE.HIT_SPARK.rgb, 0, 0, true);
+export const PLAYER_HIT_RECIPE = Object.freeze([WHITE_RING(10, [0.15, 0.22], [35, 45])]);
+export const PLAYER_DEATH_RECIPE = Object.freeze([...RECIPES.LARGE, WHITE_RING(16, [0.5, 0.7], [55, 70])]);
 
 // Catching a pickup: a short ring of sparkles that flies outward flat on the plane. The colour is the
 // caught pickup's, so the recipe's own colour is only a placeholder that `colorFor` replaces.
@@ -100,7 +109,7 @@ export function createExplosionFx({
       const layer = layers[e.layer];
       const count = Math.max(1, Math.round(e.count * scale));
       for (let i = 0; i < count; i += 1) {
-        const angle = rng() * TWO_PI;
+        const angle = e.ring ? (i / count) * TWO_PI : rng() * TWO_PI;
         const speed = between(e.speed);
         layer.emit(
           scratch.x,
@@ -136,6 +145,10 @@ export function createExplosionFx({
       burst(HIT_RECIPE, x, y, groundKinds.has(a) ? 1 : 0);
     } else if (type === events.PICKUP) {
       burst(PICKUP_RECIPE, x, y, 0, pickupColor(a, c));
+    } else if (type === events.PLAYER_HIT) {
+      burst(PLAYER_HIT_RECIPE, x, y, 0);
+    } else if (type === events.PLAYER_DEATH) {
+      burst(PLAYER_DEATH_RECIPE, x, y, 0);
     }
   }
 

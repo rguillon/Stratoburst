@@ -163,6 +163,13 @@ function hitboxMarker(hitboxRadius) {
   return marker;
 }
 
+// The respawn blink (PLYR-10, D-15): the hull is shown for four invulnerable steps, hidden for
+// four, and always shown once the invulnerability is spent. Only the hull blinks (Pitfall 9).
+const BLINK_STEPS = 4;
+export function hullVisibleFor(invuln) {
+  return invuln <= 0 || Math.floor(invuln / BLINK_STEPS) % 2 === 0;
+}
+
 export function createShipModel({ hitboxRadius = 2, detail = 'high' } = {}) {
   // Every detail level is built once, here, so a tier change only swaps cached geometries: no
   // generator runs and no buffer is allocated mid-game (T-02-08, Pitfall 8).
@@ -178,7 +185,8 @@ export function createShipModel({ hitboxRadius = 2, detail = 'high' } = {}) {
 
   const group = new THREE.Group();
   group.name = 'ship';
-  group.add(fuselage, canopy, engineGlowMesh(), hitboxMarker(hitboxRadius));
+  const engineGlow = engineGlowMesh();
+  group.add(fuselage, canopy, engineGlow, hitboxMarker(hitboxRadius));
   group.userData.detail = normalizeDetail(detail);
   group.userData.setDetail = (next) => {
     const level = normalizeDetail(next);
@@ -186,6 +194,13 @@ export function createShipModel({ hitboxRadius = 2, detail = 'high' } = {}) {
     fuselage.geometry = geometries.fuselage;
     canopy.geometry = geometries.canopy;
     group.userData.detail = level;
+  };
+  // The blink hides the hull, the canopy and the engine glow, never the hitbox marker: the
+  // player must always see the one spot that can hurt (Pitfall 9).
+  group.userData.setHullVisible = (visible) => {
+    fuselage.visible = visible;
+    canopy.visible = visible;
+    engineGlow.visible = visible;
   };
   return group;
 }

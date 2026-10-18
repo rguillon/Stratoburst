@@ -10,7 +10,7 @@ import { createKeyboardInput } from './input/keyboard_input.js';
 import { createTouchInput } from './input/touch_input.js';
 import { createInputSampler } from './input/input_sampler.js';
 import { createRendererRig } from './render/renderer_rig.js';
-import { createShipModel } from './render/ship_model.js';
+import { createShipModel, hullVisibleFor } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
@@ -383,8 +383,12 @@ async function main() {
         fxTime,
         header[slots.ALPHA] * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
       );
-      // The ship stays visible in this plan; the respawn plan passes false while it is hidden.
-      shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], true);
+      // A dying ship is gone: its model, hitbox marker and shadow all hide. Otherwise only the hull
+      // blinks while invulnerable (hitbox marker always shown, Pitfall 9) and control is untouched.
+      const shipVisible = header[slots.PLAYER_PHASE] !== manifest.phases.DYING;
+      ship.visible = shipVisible;
+      if (shipVisible) ship.userData.setHullVisible(hullVisibleFor(header[slots.INVULN]));
+      shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);
       rig.terrain.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
@@ -494,6 +498,10 @@ async function main() {
         get pickupsDrawn() {
           return pickups.mesh.count;
         },
+      },
+      // False exactly while the ship is dying (e2e checks the explosion hides it).
+      get shipVisible() {
+        return ship.visible;
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).
       get groundLayerK() {
