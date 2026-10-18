@@ -7,7 +7,7 @@ PYTEST_GATE := uv run pytest --cov --cov-branch --cov-fail-under=100
 VITEST_FILES := $(wildcard web/test/*/*.test.js)
 
 .PHONY: help install install-python install-web browsers browsers-ci lint format test \
-	test-python test-web build perf dev preview e2e e2e-live live-url wait-deploy check clean
+	test-python test-web build perf perf-stage dev preview e2e e2e-live live-url wait-deploy check clean
 
 # Inputs for the deploy-verification targets (override on the command line).
 SHA ?= $(shell git rev-parse HEAD)
@@ -55,8 +55,11 @@ test-web: ## vitest only
 build: ## Production build into dist/
 	npm run build
 
-perf: ## Python tick budget: 500 stress bullets, gallery enemies and enemy fire with every weapon at Lv5 in Pyodide-on-Node, fails above 3 ms average
+perf: ## Python tick budget in Pyodide-on-Node: the gallery runs (500 stress bullets, every weapon at Lv5) then the stage runs, fails above 3 ms average
 	npm run perf --if-present
+
+perf-stage: ## Python tick budget over stage 1's boss fight (every weapon at Lv5, bombs) in Pyodide-on-Node, fails above 3 ms average
+	npm run perf:stage
 
 dev: ## Vite dev server
 	npm run dev
