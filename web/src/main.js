@@ -14,6 +14,9 @@ import { createShipModel } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { createDroneInstances } from './render/drone_instances.js';
+import { createParticleLayer } from './fx/particle_system.js';
+import { createExplosionFx } from './fx/explosion_fx.js';
+import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createDebugSession } from './debug/debug_session.js';
@@ -103,6 +106,22 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(drones.mesh);
+  // GPU particle layers for explosions and sparks: spawn records only, motion and fade run in
+  // the vertex shader. Added before the second prewarm so their shaders compile at load.
+  const fxLayers = {
+    additive: createParticleLayer({ capacity: 2048, blending: 'additive', name: 'fx-additive' }),
+    normal: createParticleLayer({ capacity: 1024, blending: 'normal', name: 'fx-normal' }),
+  };
+  rig.scene.add(fxLayers.additive.mesh);
+  rig.scene.add(fxLayers.normal.mesh);
+  const explosionFx = createExplosionFx({
+    layers: fxLayers,
+    events: manifest.events,
+    blast: manifest.blast,
+    toWorld: (x, y, out) => rig.toWorld(x, y, out),
+  });
+  const fx = createFxDispatcher({ handlers: [explosionFx] });
+  let fxTime = 0;
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
   rig.prewarm();
@@ -191,6 +210,7 @@ async function main() {
       const tickStart = debug ? performance.now() : 0;
       tick(dt, input.buttons, input.moveX, input.moveY, input.dragX, input.dragY);
       const tickEnd = debug ? performance.now() : 0;
+      fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
       pause.sync(header[slots.FLAGS]);
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
@@ -201,6 +221,9 @@ async function main() {
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz.
       rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);
+      fxTime += dt / 1000;
+      fxLayers.additive.update(fxTime);
+      fxLayers.normal.update(fxTime);
       rig.render();
       if (debug) {
         const renderEnd = performance.now();
@@ -270,6 +293,11 @@ async function main() {
       },
       get tier() {
         return currentTier;
+      },
+      fx: {
+        get particlesSpawned() {
+          return fxLayers.additive.spawned + fxLayers.normal.spawned;
+        },
       },
       get lockReason() {
         return controller.locked ? controller.reason : null;

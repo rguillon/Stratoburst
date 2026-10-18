@@ -32,5 +32,7 @@ test('drones appear and can be shot down', async ({ page }) => {
   }
   await page.keyboard.up('Space');
   expect(await readSlot(page, 'DRONES_DOWN')).toBeGreaterThanOrEqual(1);
+  // The kill's EXPLOSION event became GPU particles.
+  expect(await page.evaluate(() => globalThis.__scorched.fx.particlesSpawned)).toBeGreaterThan(0);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
