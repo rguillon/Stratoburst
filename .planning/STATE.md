@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-17-PLAN.md
-last_updated: "2026-10-18T19:05:54.031Z"
+stopped_at: Completed 03-18-PLAN.md
+last_updated: "2026-10-18T19:38:41.525Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 09cadcd9fe3ac7f80f948c886c61b01bfd9abbce
+state_head: b2cd69940d09b58621160e02c0c6476b2a53d8e7
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 59
+  completed_plans: 61
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 18 of 28
+Plan: 19 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -117,6 +117,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P15 | 7 min | 2 tasks | 17 files |
 | Phase 03 P16 | 7 min | 2 tasks | 12 files |
 | Phase 03 P17 | 6 min | 2 tasks | 11 files |
+| Phase 03 P18 | 29 min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -246,6 +247,10 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-17: the mid-boss starts once when the scroll is inside MIDBOSS_TRIGGER_WINDOW (80 units) past its marker, so a ?at=boss jump never starts a fight it skipped; StageFlow owns the BossController (slot 1) and drops it on end or game over
 - [Phase 03]: 03-17: MIDBOSS_1 keeps the plan's turret offsets (dx 0, dy -22/+22); the aft turret is shadowed from bolts and missiles by the hull circle, only the laser and the bomb reach it (fore turret verified hit by a real Lv1 vulcan)
 - [Phase 03]: 03-17: boss points from settle() go through score.award at the spec's x / hold_y; header BOSS_ACTIVE carries the boss slot (1 for the mid-boss), BOSS_HP the hull fraction and BOSS_TIMER_S -1 when quiet; manifest stage.bosses lists slot, name and phase_fracs for midboss and boss data
+- [Phase 03]: 03-18: the train stays at ground level with wide-set guns (barrels at x +-4.4), because the elevated maglev deck (6 wide, about 20 units up) hides a narrow centred gun from the camera and lifting the train would break its footprint alignment with the hit circle
+- [Phase 03]: 03-18: the boss bar is a pure function of the header (BOSS_ACTIVE shows, BOSS_HP scales the fill, BOSS_TIMER_S >= 0 shows ceil seconds), with phase ticks built once per boss from manifest stage.bosses and every DOM write guarded by a cached value
+- [Phase 03]: 03-18: stump smoulder keeps one clock per effect and a round of puffs from every live stump row (no flame window, reset while no stump exists so a new stump never bursts); SHAKE_PART is 2.0 / 0.35 s inside the 3.0 / 0.5 s ceilings
+- [Phase 03]: 03-18: the train hull now leaves a charred wreck on death (ENEMY_WRECK marks it, and it finally has a model); gun cars and stumps leave none
 
 ### Pending Todos
 
@@ -269,6 +274,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T19:05:53.795Z
-Stopped at: Completed 03-17-PLAN.md
+Last session: 2026-10-18T19:38:41.294Z
+Stopped at: Completed 03-18-PLAN.md
 Resume file: None
