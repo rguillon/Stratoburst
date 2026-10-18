@@ -148,16 +148,16 @@ export function createWreckRing({
     );
   }
 
-  // One wreck's share of the trickle for a frame of `dt` seconds at `scale` quality.
-  function smoulder(i, x, y, dt, scale, timeS) {
+  // One wreck's share of the trickle for a frame of `dt` seconds at `quality` (the tier's scale).
+  function smoulder(i, x, y, dt, quality, timeS) {
     toWorld(x, y, spot);
-    smokeDue[i] += dt * scale;
+    smokeDue[i] += dt * quality;
     while (smokeDue[i] >= SMOKE_INTERVAL) {
       smokeDue[i] -= SMOKE_INTERVAL;
       puffSmoke(spot.x, spot.y, spot.z);
     }
     if (timeS - wreckBorn[i] >= FLAME_WINDOW) return;
-    flameDue[i] += dt * scale;
+    flameDue[i] += dt * quality;
     while (flameDue[i] >= FLAME_INTERVAL) {
       flameDue[i] -= FLAME_INTERVAL;
       flicker(spot.x, spot.y, spot.z);
@@ -169,7 +169,7 @@ export function createWreckRing({
   function update(scrollNow, timeS = 0) {
     const dt = Math.min(Math.max(timeS - clock, 0), MAX_DT);
     clock = timeS;
-    const scale = layers === null ? 0 : getScale();
+    const quality = layers === null ? 0 : getScale();
     written.fill(0);
     live = 0;
     for (let i = 0; i < capacity; i++) {
@@ -177,7 +177,7 @@ export function createWreckRing({
       if (kind < 0) continue;
       const y = wreckY[i] + ratio * (scrollNow - wreckScroll[i]);
       if (y > playfieldH + EXIT_MARGIN) continue;
-      if (layers !== null && y >= 0 && y <= playfieldH) smoulder(i, wreckX[i], y, dt, scale, timeS);
+      if (layers !== null && y >= 0 && y <= playfieldH) smoulder(i, wreckX[i], y, dt, quality, timeS);
       position.set(wreckX[i] - halfW, 0, y - halfH);
       quaternion.setFromAxisAngle(UP, wreckYaw[i]);
       matrix.compose(position, quaternion, scale);
