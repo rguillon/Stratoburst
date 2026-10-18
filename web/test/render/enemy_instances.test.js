@@ -139,6 +139,114 @@ describe('createEnemyInstances', () => {
   });
 });
 
+function colourOf(mesh, i) {
+  const c = new THREE.Color();
+  mesh.getColorAt(i, c);
+  return [c.r, c.g, c.b];
+}
+
+describe('createEnemyInstances hit flash and bad data', () => {
+  it('colours a resting enemy with its kind base colour and a flashing one HDR white', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, flash: 0, kind: KINDS.TANK });
+    setEnemy(data, 1, { x: 20, y: 20, flash: 1, kind: KINDS.TANK });
+    setEnemy(data, 2, { x: 30, y: 30, flash: 0.17, kind: KINDS.TANK });
+    enemies.update(3);
+    const tank = byName['enemy-tank'];
+    expect(colourOf(tank, 0).map((v) => Math.round(v * 100) / 100)).toEqual([0.62, 0.52, 0.34]);
+    expect(colourOf(tank, 1).map((v) => Math.round(v * 10) / 10)).toEqual([2.2, 2.2, 2.2]);
+    expect(colourOf(tank, 2).map((v) => Math.round(v * 10) / 10)).toEqual([2.2, 2.2, 2.2]);
+  });
+
+  it('gives every kind a military base colour below 1.0 in every channel', () => {
+    const { data, enemies, byName } = build();
+    Object.values(KINDS).forEach((kind, i) => setEnemy(data, i, { x: 10 * i, y: 10, kind }));
+    enemies.update(5);
+    for (const mesh of Object.values(byName)) {
+      expect(colourOf(mesh, 0).every((v) => v < 1)).toBe(true);
+    }
+    expect(new Set(enemies.meshes.map((mesh) => colourOf(mesh, 0).join())).size).toBe(5);
+  });
+
+  it('an enemy that stops flashing goes back to the base colour', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, flash: 1, kind: KINDS.JET });
+    enemies.update(1);
+    setEnemy(data, 0, { x: 10, y: 10, flash: 0, kind: KINDS.JET });
+    enemies.update(1);
+    expect(colourOf(byName['enemy-jet'], 0)[0]).toBeLessThan(1);
+  });
+
+  it('flags the instance buffers for upload only on meshes that were written', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: KINDS.HELI });
+    const before = Object.fromEntries(
+      Object.entries(byName).map(([name, mesh]) => [
+        name,
+        [mesh.instanceMatrix.version, mesh.instanceColor.version],
+      ]),
+    );
+    enemies.update(1);
+    const heli = byName['enemy-heli'];
+    expect(heli.instanceMatrix.version).toBeGreaterThan(before['enemy-heli'][0]);
+    expect(heli.instanceColor.version).toBeGreaterThan(before['enemy-heli'][1]);
+    for (const name of ['enemy-jet', 'enemy-carrier', 'enemy-tank', 'enemy-turret']) {
+      expect(byName[name].instanceMatrix.version).toBe(before[name][0]);
+      expect(byName[name].instanceColor.version).toBe(before[name][1]);
+    }
+  });
+
+  it('does not upload a mesh again once its last instance has left', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: KINDS.HELI });
+    enemies.update(1);
+    const version = byName['enemy-heli'].instanceMatrix.version;
+    enemies.update(0);
+    expect(byName['enemy-heli'].count).toBe(0);
+    expect(byName['enemy-heli'].instanceMatrix.version).toBe(version);
+  });
+
+  it('skips an instance whose kind value is not in the manifest map (T-02-06)', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: 99 });
+    setEnemy(data, 1, { x: 20, y: 20, kind: -1 });
+    setEnemy(data, 2, { x: 30, y: 30, kind: 2.5 });
+    setEnemy(data, 3, { x: 40, y: 40, kind: Number.NaN });
+    setEnemy(data, 4, { x: 50, y: 50, kind: KINDS.TURRET });
+    enemies.update(5);
+    expect(enemies.meshes.reduce((total, mesh) => total + mesh.count, 0)).toBe(1);
+    expect(byName['enemy-turret'].count).toBe(1);
+    expect(positionOf(byName['enemy-turret'], 0).toArray()).toEqual([-70, 0, -110]);
+  });
+
+  it('clamps the count to the capacity', () => {
+    const { data, enemies, byName } = build(4);
+    for (let i = 0; i < 4; i++) setEnemy(data, i, { x: i, y: i, kind: KINDS.JET });
+    enemies.update(99);
+    expect(byName['enemy-jet'].count).toBe(4);
+    enemies.update(0);
+    expect(byName['enemy-jet'].count).toBe(0);
+  });
+
+  it('allocates nothing per update: meshes and attribute arrays keep their identity', () => {
+    const { data, enemies } = build();
+    setEnemy(data, 0, { x: 10, y: 10, flash: 1, kind: KINDS.JET });
+    setEnemy(data, 1, { x: 20, y: 20, kind: KINDS.TANK });
+    enemies.update(2);
+    const meshes = [...enemies.meshes];
+    const matrixArrays = meshes.map((mesh) => mesh.instanceMatrix.array);
+    const colourArrays = meshes.map((mesh) => mesh.instanceColor.array);
+    enemies.update(2);
+    enemies.update(2);
+    expect(enemies.meshes).toEqual(meshes);
+    enemies.meshes.forEach((mesh, k) => {
+      expect(mesh).toBe(meshes[k]);
+      expect(mesh.instanceMatrix.array).toBe(matrixArrays[k]);
+      expect(mesh.instanceColor.array).toBe(colourArrays[k]);
+    });
+  });
+});
+
 describe('basicEnemyGeometry', () => {
   it('gives each gallery kind its own primitive and a box for anything else', () => {
     expect(basicEnemyGeometry('JET').type).toBe('ConeGeometry');
