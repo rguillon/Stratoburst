@@ -10,6 +10,7 @@ from typing import Any, Final
 from scorched_core.tuning import SCORE_CAP
 
 KEY: Final = "scorched:best:1"
+_MAX_DIGITS: Final = 8
 
 
 def browser_storage() -> Any:  # noqa: ANN401 - a JsProxy
@@ -19,12 +20,24 @@ def browser_storage() -> Any:  # noqa: ANN401 - a JsProxy
     return js.localStorage
 
 
+def _parse(raw: object) -> int:
+    """A stored value is trusted only as 1 to 8 ASCII digits, clamped to the score cap.
+
+    Anything else (another type, signs, spaces, exponents, other scripts' digits, too long) is
+    junk and reads as 0: nothing is evaluated and nothing but a digit string is ever accepted.
+    """
+    if isinstance(raw, str) and raw.isascii() and raw.isdigit() and len(raw) <= _MAX_DIGITS:
+        return min(int(raw), SCORE_CAP)
+    return 0
+
+
 class HighScoreStore:
     """Reads and writes the best score through an injected storage getter."""
 
     __slots__ = ("_best", "_enabled", "_get_storage")
 
     def __init__(self, get_storage: Callable[[], Any], *, enabled: bool) -> None:
+        """``enabled=False`` makes the store read-only: a test-flag run never saves (IN-05)."""
         self._get_storage = get_storage
         self._enabled = enabled
         self._best = 0
@@ -33,17 +46,16 @@ class HighScoreStore:
         """Return the stored best score; anything missing, broken or unparsable reads as 0."""
         try:
             raw = self._get_storage().getItem(KEY)
-            best = min(max(int(str(raw)), 0), SCORE_CAP) if raw is not None else 0
         # Storage is optional: JsException, AttributeError, ImportError, ValueError all expected.
         except Exception:
             return 0
-        self._best = best
-        return best
+        self._best = _parse(raw)
+        return self._best
 
     def save(self, score: int) -> bool:
         """Store ``score`` if it beats the best known; return whether it was written."""
         value = min(max(int(score), 0), SCORE_CAP)
-        if value <= self._best:
+        if not self._enabled or value <= self._best:
             return False
         try:
             self._get_storage().setItem(KEY, str(value))

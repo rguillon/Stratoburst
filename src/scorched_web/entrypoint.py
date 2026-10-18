@@ -1,7 +1,7 @@
 """The only symbol the JS side imports."""
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Final
 
 from scorched_core.game.fault_mode import FaultMode
@@ -21,6 +21,19 @@ from scorched_web.web_game import WebGame
 
 _WEAPONS: Final = {kind.name.lower(): kind for kind in WeaponKind}
 _AT_MARKERS: Final = frozenset({"midboss", "boss"})
+# A run that used any of these never writes a best score: cheat and test runs must not appear as
+# the player's best (Phase 2 IN-05). ``debug`` alone is not a gameplay flag.
+_TEST_FLAGS: Final = (
+    "gallery",
+    "god",
+    "weapon",
+    "level",
+    "bombs",
+    "lives",
+    "at",
+    "stress",
+    "crash",
+)
 
 
 def create_game(
@@ -36,7 +49,7 @@ def create_game(
         options = options.to_py()
     opts = options or {}
     gallery = _flag(opts.get("gallery"))
-    store = HighScoreStore(get_storage, enabled=True)
+    store = HighScoreStore(get_storage, enabled=not _test_run(opts))
     game = Game(
         seed=int(opts.get("seed", 1)),
         stress=int(opts.get("stress", 0)),
@@ -51,6 +64,11 @@ def create_game(
         high_score=store.load(),
     )
     return WebGame(game, RenderSink(game.buffers), store)
+
+
+def _test_run(opts: Mapping[str, object]) -> bool:
+    """Whether any test flag is set (not None, False, 0 or empty); the URL is untrusted input."""
+    return any(opts.get(name) for name in _TEST_FLAGS)
 
 
 def _fault_mode(value: object) -> FaultMode:
