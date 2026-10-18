@@ -284,3 +284,69 @@ def test_the_default_storage_getter_is_the_browser_one_and_never_breaks_a_native
     web = create_game({})
     assert web._game.score.high_score == 0
     web.set_paused(True)
+
+
+TEST_FLAG_RUNS = [
+    {"gallery": True},
+    {"god": True},
+    {"weapon": "laser"},
+    {"weapon": "bogus"},
+    {"level": 2},
+    {"bombs": 5},
+    {"lives": 2},
+    {"at": "boss"},
+    {"stress": 100},
+    {"crash": "py"},
+    {"debug": True, "seed": 4, "god": True},
+]
+
+
+@pytest.mark.parametrize("opts", TEST_FLAG_RUNS, ids=",".join)
+def test_a_run_with_any_test_flag_is_read_only_and_never_writes_a_best(
+    opts: dict[str, object],
+) -> None:
+    storage = FakeStorage({KEY: "100"})
+    web = create_game(opts, lambda: storage)
+    assert web._game.score.high_score == 100
+    web._game.score.high_score = 90_000
+    web.set_paused(True)
+    assert storage.writes == []
+
+
+@pytest.mark.parametrize(
+    "opts",
+    [
+        {"debug": True},
+        {"seed": 7},
+        {"god": False, "gallery": False, "stress": 0, "weapon": None, "level": None},
+        {"bombs": None, "lives": None, "at": None, "crash": None, "tier": "low"},
+        {"weapon": "", "at": ""},
+    ],
+)
+def test_debug_and_unset_flags_alone_keep_writes_enabled(opts: dict[str, object]) -> None:
+    storage = FakeStorage()
+    web = create_game(opts, lambda: storage)
+    web._game.score.high_score = 640
+    web.set_paused(True)
+    assert storage.writes == [(KEY, "640")]
+
+
+def test_the_only_key_ever_written_holds_a_digits_only_string() -> None:
+    storage = FakeStorage()
+    web = create_game({"debug": True}, lambda: storage)
+    web._game.score.high_score = 1234
+    web.set_paused(True)
+    web._game.score.high_score = 5678
+    web.set_paused(True)
+    assert [(key, value.isdigit()) for key, value in storage.writes] == [(KEY, True), (KEY, True)]
+
+
+def test_a_broken_storage_never_stops_a_game_from_starting_or_pausing() -> None:
+    def blocked() -> object:
+        msg = "localStorage is disabled"
+        raise RuntimeError(msg)
+
+    web = create_game({}, blocked)
+    assert web._game.score.high_score == 0
+    web._game.score.high_score = 10
+    web.set_paused(True)

@@ -42,3 +42,20 @@ test('the best score of a flag-free run survives a reload', async ({ page }) => 
   expect(await readSlot(page, 'HIGH_SCORE')).toBeGreaterThanOrEqual(score);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// A cheat run must never become the best score (Phase 2 IN-05): the default helper flags
+// (god and gallery are appended) mark the session as a test run, so the store is read-only.
+test('a god-flagged run never saves a best score', async ({ page }) => {
+  test.setTimeout(150_000);
+  await bootGame(page, '?debug', { stage: true });
+  const score = await scoreSomething(page);
+  expect(score).toBeGreaterThan(0);
+
+  await page.keyboard.press('Escape');
+  await expect.poll(() => isPaused(page), WAIT).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem('scorched:best:1'))).toBeNull();
+
+  await bootGame(page, '?debug', { stage: true });
+  expect(await readSlot(page, 'HIGH_SCORE')).toBe(0);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
