@@ -4,6 +4,7 @@ import { buildHeli } from './heli.js';
 import { buildCarrier } from './carrier.js';
 import { buildTank } from './tank.js';
 import { buildTurret } from './turret.js';
+import { buildBillboard, buildDepot, buildFuelTank, buildHouse } from './city_targets.js';
 
 // The enemy model registry (VISL-01, D-25). Each builder takes a detail level and returns
 // `{ body, glow, top }`: the lit hull, the HDR accents that bloom, and an optional part that
@@ -17,6 +18,11 @@ export const BUILDERS = {
   CARRIER: buildCarrier,
   TANK: buildTank,
   TURRET: buildTurret,
+  // The destructible city targets (D-34), drawn in the ground layer like the other ground kinds.
+  HOUSE: buildHouse,
+  FUEL_TANK: buildFuelTank,
+  DEPOT: buildDepot,
+  BILLBOARD: buildBillboard,
 };
 
 const cache = new Map();

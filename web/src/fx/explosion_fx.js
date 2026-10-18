@@ -58,6 +58,14 @@ export const RECIPES = Object.freeze({
   ]),
 });
 
+// A destroyed city target (D-33, D-40) throws electrical sparks on top of its blast: a white-hot flash,
+// cyan sparks and magenta embers. Counts scale with the tier like every recipe (T-03-21).
+export const CITY_SPARKS = Object.freeze([
+  CORE([14, 26], 0.2, PALETTE.FIRE_CORE.rgb),
+  emitter('additive', 24, [0.4, 0.8], [35, 80], [2.8, 0.5], PALETTE.SPARK.rgb, 0.3, 0.6),
+  emitter('additive', 12, [0.6, 1.0], [12, 30], [2.4, 0.6], PALETTE.EMBER.rgb, 0.3, 0.5),
+]);
+
 export const HIT_RECIPE = Object.freeze([
   emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], PALETTE.HIT_SPARK.rgb),
 ]);
@@ -83,6 +91,7 @@ const CRYSTAL_COLORS = Object.freeze([PALETTE.CRYSTAL_RED, PALETTE.CRYSTAL_BLUE,
 // event, or in the ground layer (on the terrain, where the unit was drawn) when `ground` is set.
 // `groundKinds` is the Set of kind values drawn in the ground layer; a HIT carries its kind.
 // `pickupKinds` is the manifest's pickup name -> value map; only BOMB needs a colour of its own.
+// `cityKinds` is the Set of kind values that are city targets: their EXPLOSION adds CITY_SPARKS.
 export function createExplosionFx({
   layers,
   events,
@@ -92,7 +101,9 @@ export function createExplosionFx({
   getScale = () => 1,
   rng = mulberry32(0x5c0c7ed),
   groundKinds = new Set(),
+  cityKinds = new Set(),
 }) {
+  let cityBursts = 0;
   const byBlast = new Map(Object.keys(RECIPES).map((name) => [blast[name], RECIPES[name]]));
 
   function between(range) {
@@ -140,7 +151,13 @@ export function createExplosionFx({
   function handle(type, x, y, a, b, c) {
     if (type === events.EXPLOSION) {
       const emitters = byBlast.get(a);
-      if (emitters) burst(emitters, x, y, b);
+      if (emitters) {
+        burst(emitters, x, y, b);
+        if (cityKinds.has(c)) {
+          burst(CITY_SPARKS, x, y, b);
+          cityBursts += 1;
+        }
+      }
     } else if (type === events.HIT) {
       burst(HIT_RECIPE, x, y, groundKinds.has(a) ? 1 : 0);
     } else if (type === events.PICKUP) {
@@ -154,5 +171,11 @@ export function createExplosionFx({
     }
   }
 
-  return { handle };
+  return {
+    handle,
+    // City target bursts played so far (e2e).
+    get cityBursts() {
+      return cityBursts;
+    },
+  };
 }

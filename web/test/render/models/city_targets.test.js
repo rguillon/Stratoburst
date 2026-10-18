@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../../src/fx/palette.js';
 import {
+  CITY_TARGET_KINDS,
   buildBillboard,
   buildDepot,
   buildFuelTank,
@@ -79,6 +80,13 @@ describe.each(Object.entries(BUILDERS))('%s', (name, build) => {
         Array.from(b[part].getAttribute('position').array),
       );
     }
+  });
+});
+
+describe('CITY_TARGET_KINDS', () => {
+  it('names the four city targets, each with a registered builder', () => {
+    expect(CITY_TARGET_KINDS).toEqual(['HOUSE', 'FUEL_TANK', 'DEPOT', 'BILLBOARD']);
+    expect(Object.keys(BUILDERS)).toHaveLength(CITY_TARGET_KINDS.length);
   });
 });
 

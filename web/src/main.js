@@ -22,6 +22,7 @@ import { createCityLayer } from './render/city_layer.js';
 import { createCityGround } from './render/city_ground.js';
 import { warmScenery } from './render/models/scenery_models.js';
 import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
+import { CITY_TARGET_KINDS } from './render/models/city_targets.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing } from './fx/wreck_ring.js';
@@ -206,6 +207,10 @@ async function main() {
   };
   rig.scene.add(fxLayers.additive.mesh);
   rig.scene.add(fxLayers.normal.mesh);
+  // The destructible city targets (D-34): their destruction adds electrical sparks to the blast.
+  const cityKinds = new Set(
+    CITY_TARGET_KINDS.filter((name) => name in manifest.enemy_kinds).map((name) => manifest.enemy_kinds[name]),
+  );
   const explosionFx = createExplosionFx({
     layers: fxLayers,
     events: manifest.events,
@@ -216,6 +221,7 @@ async function main() {
       ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
     getScale: () => TIERS[currentTier].particleScale,
     groundKinds,
+    cityKinds,
   });
   // Terrain scroll this frame (steps plus the sub-step alpha); the wrecks read it at a kill.
   let scrollNow = 0;
@@ -689,6 +695,10 @@ async function main() {
         // City placements drawn this frame (e2e checks the city is on screen).
         get cityDrawn() {
           return city.drawn;
+        },
+        // City target bursts played so far (e2e checks a destroyed building sparks).
+        get cityBursts() {
+          return explosionFx.cityBursts;
         },
         get wrecksSpawned() {
           return wrecks.spawned;
