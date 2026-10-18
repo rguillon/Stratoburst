@@ -5,11 +5,11 @@ from array import array
 from types import SimpleNamespace
 
 import pytest
-from scorched_core.paths.path_spec import PathSpec
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
+from scorched_core.paths.path_spec import PathSpec
 from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.patterns.pattern_library import PATTERN_TABLE, pattern_index
 from scorched_core.patterns.pattern_spec import PatternSpec

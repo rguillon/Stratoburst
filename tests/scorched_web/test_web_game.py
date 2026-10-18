@@ -47,3 +47,10 @@ def test_set_paused_false_delegates_too_resume() -> None:
     web.set_paused(False)
     game.set_paused.assert_called_once_with(False)
     sink.flush.assert_called_once_with(bulk=False)
+
+
+def test_restart_restarts_the_game_and_flushes_every_channel() -> None:
+    web, game, sink = make()
+    web.restart()
+    game.restart.assert_called_once_with()
+    sink.flush.assert_called_once_with(bulk=True)

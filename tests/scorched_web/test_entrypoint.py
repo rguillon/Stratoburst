@@ -7,7 +7,7 @@ from scorched_core.game.fault_mode import FaultMode
 from scorched_core.protocol import H_FLOW
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.stage_1 import STAGE_1
-from scorched_core.tuning import AT_LEAD, BOMB_START_STOCK
+from scorched_core.tuning import AT_LEAD, BOMB_START_STOCK, LIVES_START
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_web.entrypoint import create_game
 from scorched_web.web_game import WebGame
@@ -149,6 +149,49 @@ def test_the_bombs_option_is_truncated_and_clamped_and_junk_means_three(
 
 def test_no_bombs_option_means_the_default_stock() -> None:
     assert create_game({"seed": 1})._game.bomb.stock == BOMB_START_STOCK
+
+
+@pytest.mark.parametrize(
+    ("lives", "expected"),
+    [
+        (1, 1),
+        (0, 1),
+        (5, 5),
+        ("4", 4),
+        (9, 9),
+        (99, 9),
+        (-2, 1),
+        (2.9, 2),
+        ("6.8", 6),
+        (math.nan, 3),
+        (math.inf, 3),
+        (-math.inf, 3),
+        ("nan", 3),
+        ("x", 3),
+        ("", 3),
+        (None, 3),
+        (True, 3),
+        ([5], 3),
+    ],
+)
+def test_the_lives_option_is_truncated_and_clamped_and_junk_means_three(
+    lives: object, expected: int
+) -> None:
+    game = create_game({"lives": lives})._game
+    assert game.score.lives == expected
+    assert game.flow is not None
+    assert game.flow.state is FlowState.PLAY
+
+
+def test_no_lives_option_means_three_lives() -> None:
+    assert create_game({"seed": 1})._game.score.lives == LIVES_START
+
+
+def test_the_lives_option_is_what_a_restart_returns_to() -> None:
+    web = create_game({"lives": 2})
+    web._game.score.lives = 0
+    web._game.restart()
+    assert web._game.score.lives == 2
 
 
 @pytest.mark.parametrize(
