@@ -4,6 +4,7 @@ import { buildHeli } from './heli.js';
 import { buildCarrier } from './carrier.js';
 import { buildTank } from './tank.js';
 import { buildTurret } from './turret.js';
+import { buildTrain, buildTrainStump, buildTrainTurret } from './train.js';
 import { buildBillboard, buildDepot, buildFuelTank, buildHouse } from './city_targets.js';
 
 // The enemy model registry (VISL-01, D-25). Each builder takes a detail level and returns
@@ -18,6 +19,11 @@ export const BUILDERS = {
   CARRIER: buildCarrier,
   TANK: buildTank,
   TURRET: buildTurret,
+  // The mid-boss armored train (D-02): the hull, a gun car that tracks the player and the burnt
+  // stump a shot-off gun car leaves behind.
+  TRAIN: buildTrain,
+  TRAIN_TURRET: buildTrainTurret,
+  TRAIN_STUMP: buildTrainStump,
   // The destructible city targets (D-34), drawn in the ground layer like the other ground kinds.
   HOUSE: buildHouse,
   FUEL_TANK: buildFuelTank,

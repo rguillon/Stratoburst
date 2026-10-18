@@ -472,12 +472,19 @@ describe('wreckKindsFor (data-driven wreck kinds)', () => {
   const NAMES = { TANK: 3, TURRET: 4, TRAIN: 5, TRAIN_TURRET: 6, TRAIN_STUMP: 7, HOUSE: 8 };
   const WRECK = [0, 0, 0, 1, 1, 1, 0, 0, 1];
 
-  it('keeps ground kinds whose wreck entry is 1 and that have a model', () => {
-    expect(wreckKindsFor(NAMES, WRECK, hasModel)).toEqual({ TANK: 3, TURRET: 4, HOUSE: 8 });
+  it('keeps ground kinds whose wreck entry is 1 and that have a model: the train hull burns out in place', () => {
+    expect(wreckKindsFor(NAMES, WRECK, hasModel)).toEqual({ TANK: 3, TURRET: 4, TRAIN: 5, HOUSE: 8 });
   });
 
   it('drops a wreck kind without a model, so the ring never builds a hull for it', () => {
-    expect(wreckKindsFor(NAMES, WRECK, hasModel)).not.toHaveProperty('TRAIN');
+    const withoutTrain = (name) => name !== 'TRAIN' && hasModel(name);
+    expect(wreckKindsFor(NAMES, WRECK, withoutTrain)).toEqual({ TANK: 3, TURRET: 4, HOUSE: 8 });
+  });
+
+  it('never leaves a second wreck for a gun car or a stump, which have models but no wreck entry', () => {
+    const kinds = wreckKindsFor(NAMES, WRECK, hasModel);
+    expect(kinds).not.toHaveProperty('TRAIN_TURRET');
+    expect(kinds).not.toHaveProperty('TRAIN_STUMP');
   });
 
   it('drops a model kind whose wreck entry is 0 (train turrets and stumps)', () => {

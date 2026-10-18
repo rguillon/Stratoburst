@@ -233,6 +233,60 @@
           transform: translate(-50%, calc(-50% - 44px));
         }
       }
+      /* The boss HP bar (D-25): a thin bar under the score band while a boss is up, driven by the header
+         BOSS_ACTIVE, BOSS_HP and BOSS_TIMER_S. Magenta fill with cyan phase ticks and a cyan countdown,
+         never orange-yellow (D-39). It lets every touch through. */
+      #boss-bar {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 14px + clamp(14px, 3.4vmin, 22px) * 1.2);
+        left: calc(env(safe-area-inset-left, 0px) + 14%);
+        right: calc(env(safe-area-inset-right, 0px) + 14%);
+        height: 8px;
+        z-index: 4;
+        pointer-events: none;
+        border: 1px solid rgb(27, 215, 255);
+        border-radius: 2px;
+        background: rgba(7, 6, 26, 0.6);
+        box-shadow: 0 0 6px rgba(27, 215, 255, 0.5);
+        user-select: none;
+      }
+      #boss-bar[hidden] {
+        display: none;
+      }
+      #boss-bar .fill {
+        height: 100%;
+        background: rgb(255, 30, 225);
+        box-shadow: 0 0 8px rgba(255, 30, 225, 0.8);
+        transform-origin: left center;
+      }
+      #boss-bar .ticks {
+        position: absolute;
+        inset: 0;
+      }
+      #boss-bar .tick {
+        position: absolute;
+        top: -2px;
+        bottom: -2px;
+        width: 2px;
+        margin-left: -1px;
+        background: rgb(27, 215, 255);
+      }
+      #boss-bar .tick[hidden] {
+        display: none;
+      }
+      #boss-bar .timer {
+        position: absolute;
+        right: 0;
+        top: 12px;
+        font: 800 clamp(14px, 3.4vmin, 22px) / 1 ui-monospace, Menlo, Consolas, monospace;
+        letter-spacing: 0.08em;
+        font-variant-numeric: tabular-nums;
+        color: rgb(27, 215, 255);
+        text-shadow: 0 0 6px rgba(27, 215, 255, 0.8), 0 0 3px #000;
+      }
+      #boss-bar .timer[hidden] {
+        display: none;
+      }
       /* The stage banner (D-26): STAGE n over the playfield during the intro, driven by the header FLOW. Neon
          cyan like the HUD, never orange-yellow. */
       #banner {
@@ -387,6 +441,7 @@
         <div class="hud-bl"><span class="lives"></span> <span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
       </div>
       <div id="popups"></div>
+      <div id="boss-bar" hidden><div class="fill"></div><div class="ticks"></div><span class="timer" hidden></span></div>
       <div id="max-flash" hidden>MAX</div>
       <div id="banner" hidden></div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
