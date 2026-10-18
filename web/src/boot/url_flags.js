@@ -2,6 +2,8 @@
 //   debug, stress, tier, crash (Phase 1), the weapon test flags weapon and level, god
 // (presence only; the ship ignores hits so automated runs are never disturbed) and bombs.
 // gallery (presence only) brings back the Phase 2 shooting gallery: stage 1 is the default game.
+// at (midboss or boss, allow-listed, else null) starts stage 1 just before that marker; Python
+// validates it again and ignores it in the gallery.
 // weapon is an allow-listed lowercase name (else null, the default); level is truncated and
 // clamped to 1..5 and bombs (the starting stock) to 0..7, both null when absent or not a number.
 // Python validates all three again.
@@ -12,6 +14,7 @@ export const STRESS_MAX = 5000;
 const TIERS = new Set(['low', 'mid', 'high']);
 const CRASHES = new Set(['py', 'js']);
 const WEAPONS = new Set(['vulcan', 'laser', 'homing']);
+const AT_MARKERS = new Set(['midboss', 'boss']);
 
 export const LEVEL_MIN = 1;
 export const LEVEL_MAX = 5;
@@ -56,5 +59,6 @@ export function parseUrlFlags(search) {
     god: params.has('god'),
     bombs: parseBombs(params),
     gallery: params.has('gallery'),
+    at: pick(params, 'at', AT_MARKERS),
   });
 }

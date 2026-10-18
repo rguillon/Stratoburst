@@ -12,6 +12,7 @@ from scorched_web.bridge.render_sink import RenderSink
 from scorched_web.web_game import WebGame
 
 _WEAPONS: Final = {kind.name.lower(): kind for kind in WeaponKind}
+_AT_MARKERS: Final = frozenset({"midboss", "boss"})
 
 
 def create_game(options: Any = None) -> WebGame:  # noqa: ANN401 - dict or JsProxy
@@ -23,6 +24,7 @@ def create_game(options: Any = None) -> WebGame:  # noqa: ANN401 - dict or JsPro
     if options is not None and hasattr(options, "to_py"):
         options = options.to_py()
     opts = options or {}
+    gallery = _flag(opts.get("gallery"))
     game = Game(
         seed=int(opts.get("seed", 1)),
         stress=int(opts.get("stress", 0)),
@@ -31,7 +33,8 @@ def create_game(options: Any = None) -> WebGame:  # noqa: ANN401 - dict or JsPro
         level=_level(opts.get("level")),
         god=_flag(opts.get("god")),
         bombs=_bombs(opts.get("bombs")),
-        stage=None if _flag(opts.get("gallery")) else STAGE_1,
+        stage=None if gallery else STAGE_1,
+        at=None if gallery else _at(opts.get("at")),
     )
     return WebGame(game, RenderSink(game.buffers))
 
@@ -75,6 +78,13 @@ def _bombs(value: object) -> int:
     if not math.isfinite(number):
         return BOMB_START_STOCK
     return min(max(int(number), 0), BOMB_MAX_STOCK)
+
+
+def _at(value: object) -> str | None:
+    """The requested start marker; only ``midboss`` and ``boss`` count (untrusted input)."""
+    if isinstance(value, str) and value in _AT_MARKERS:
+        return value
+    return None
 
 
 def _flag(value: object) -> bool:

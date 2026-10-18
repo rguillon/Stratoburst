@@ -30,3 +30,21 @@ test('?gallery brings back the shooting gallery: no flow and stage 0', async ({ 
   expect(await readSlot(page, 'STAGE')).toBe(0);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// D-30: ?at= starts the stage just before a marker (AT_LEAD = 320 units); anything else is ignored.
+test('?at=boss starts the stage just before the boss marker', async ({ page }) => {
+  await bootGame(page, '?debug&at=boss', { stage: true });
+
+  const boss = await page.evaluate(() => globalThis.__scorched.manifest.stage.markers.boss);
+  const start = await readSlot(page, 'STAGE_DIST');
+  expect(start).toBeGreaterThanOrEqual(boss - 320);
+  expect(start).toBeLessThan(boss - 320 + 64);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('an unknown ?at= value is ignored and the stage starts at the beginning', async ({ page }) => {
+  await bootGame(page, '?debug&at=bogus', { stage: true });
+
+  expect(await readSlot(page, 'STAGE_DIST')).toBeLessThan(200);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

@@ -465,9 +465,10 @@ async function main() {
       sfxPlayer.setLaser(header[slots.BEAM_W] > 0 && !paused);
       if (hitstop) hitstopFrames += 1;
       const alpha = hitstop ? 0 : header[slots.ALPHA];
-      // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
-      // while the simulation stays at 60 Hz. One value drives the terrain and the wrecks.
-      scrollNow = header[slots.SCROLL_Y] + alpha * manifest.tuning.scroll_speed;
+      // Extrapolation by the step alpha keeps the ground smooth at 120/144 Hz while the simulation
+      // stays at 60 Hz. It uses the live scroll rate, so a crawl or a stop never stutters. One value
+      // drives the terrain and the wrecks.
+      scrollNow = header[slots.SCROLL_Y] + alpha * header[slots.SCROLL_RATE];
       fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
       readout.tick(ts);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
@@ -493,7 +494,7 @@ async function main() {
       enemies.update(
         header[slots.ENEMY_N],
         fxTime,
-        alpha * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
+        alpha * header[slots.SCROLL_RATE] * manifest.tuning.ground_scroll_ratio,
       );
       // A dying ship is gone: its model, hitbox marker and shadow all hide. Otherwise only the hull
       // blinks while invulnerable (hitbox marker always shown, Pitfall 9) and control is untouched.
