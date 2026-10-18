@@ -73,7 +73,7 @@ class Bomb:
         self.timer = 0
         self.start_x = self.x = x
         self.start_y = self.y = y
-        self.target_y = max(y - BOMB_RISE, BOMB_MIN_Y)
+        self.target_y = min(y, max(y - BOMB_RISE, BOMB_MIN_Y))  # never travel downward
         return True
 
     def step(self, enemies: EnemyPool, bullets: BulletPool, events: EventRing) -> bool:
