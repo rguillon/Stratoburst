@@ -85,6 +85,25 @@ def test_the_target_never_rises_above_y_90() -> None:
     assert bomb.y == BOMB_MIN_Y
 
 
+def test_the_missile_never_travels_downward_from_near_the_top_of_the_screen() -> None:
+    top_y = BOMB_MIN_Y - 20.0
+    bomb = Bomb(stock=3)
+    assert bomb.try_launch(SHIP_X, top_y)
+    assert bomb.target_y <= top_y
+    previous = bomb.y
+    for _ in range(BOMB_LAUNCH_TICKS):
+        bomb.step(EnemyPool(), BulletPool(1), EventRing())
+        assert bomb.y <= previous
+        previous = bomb.y
+    assert bomb.y <= top_y
+
+
+def test_the_normal_launch_still_rises_the_full_distance() -> None:
+    bomb = Bomb(stock=3)
+    assert bomb.try_launch(SHIP_X, SHIP_Y)
+    assert bomb.target_y == SHIP_Y - BOMB_RISE
+
+
 @pytest.mark.parametrize("phase", [BombPhase.LAUNCH, BombPhase.BLAST])
 def test_a_second_launch_while_a_bomb_is_active_is_refused(phase: BombPhase) -> None:
     bomb = Bomb(stock=3, phase=phase)
