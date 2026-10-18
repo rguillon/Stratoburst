@@ -1,10 +1,13 @@
 import * as THREE from 'three';
+import { enemyModel, hasModel } from './models/enemy_models.js';
+import { tint } from './models/model_kit.js';
 
 const STRIDE = 8; // x, y, angle, flash, hp_frac, kind, aux, spare
 const ANGLE = 2;
+const FLASH = 3;
 const KIND = 5;
 
-// Military tones, every channel below 1.0 so a resting enemy never crosses the bloom threshold.
+// Military tones for the primitive stand-ins, every channel below 1.0.
 const BASE_COLORS = {
   JET: [0.36, 0.42, 0.24], // olive
   HELI: [0.55, 0.5, 0.34], // khaki
@@ -13,9 +16,15 @@ const BASE_COLORS = {
   TURRET: [0.4, 0.44, 0.38], // grey-green
 };
 const FALLBACK_COLOR = [0.45, 0.45, 0.4];
-const FLASH = 3;
-// HDR white, so a hit enemy crosses the bloom threshold while it flashes (ENMY-08).
-const FLASH_COLOR = [2.2, 2.2, 2.2];
+
+// The body colour comes from the model's vertex colours; the instance colour only scales it. A hit
+// multiplies by 6, which pushes the desaturated military colours past the bloom threshold: the
+// Phase 1 HDR flash mechanism (ENMY-08).
+const REST_COLOR = [1, 1, 1];
+const FLASH_COLOR = [6, 6, 6];
+
+// How fast a helicopter rotor spins, in radians per second of the effect clock.
+export const ROTOR_RATE = 30;
 
 // Collision radii of the Python kinds (tuning.ENEMY_RADIUS); the primitive shapes are sized to them.
 const RADII = { JET: 9, HELI: 10, CARRIER: 14, TANK: 11, TURRET: 10 };
@@ -25,12 +34,13 @@ const FALLBACK_RADIUS = 10;
 const matrix = new THREE.Matrix4();
 const position = new THREE.Vector3();
 const quaternion = new THREE.Quaternion();
+const topQuaternion = new THREE.Quaternion();
 const scale = new THREE.Vector3(1, 1, 1);
 const color = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 
-// The simple shape of each kind, pointing +Z (the direction an angle of 0 heads). Plans 02-07 and
-// 02-09 pass the smooth code-built models through the same `geometryFor` seam.
+// The simple shape of each kind, pointing +Z (the direction an angle of 0 heads). It stands in for
+// every kind that has no code-built model yet.
 export function basicEnemyGeometry(kindName) {
   const r = RADII[kindName] ?? FALLBACK_RADIUS;
   switch (kindName) {
@@ -49,42 +59,84 @@ export function basicEnemyGeometry(kindName) {
   }
 }
 
-// One InstancedMesh per enemy kind (one draw call each). `data` is the Float32Array Python assigns
-// into (stride 8); `kinds` is the manifest's name -> kind value map. Each instance is routed to its
-// kind's mesh, placed at (x - W/2, 0, y - H/2) and turned about Y by its heading angle.
+// The default model source: the code-built model when the kind has one, else a tinted primitive
+// (built once per kind, so a detail change never generates anything).
+function defaultGeometryFor() {
+  const primitives = new Map();
+  return (kindName, detail) => {
+    if (hasModel(kindName)) return enemyModel(kindName, detail);
+    if (!primitives.has(kindName)) {
+      const body = tint(basicEnemyGeometry(kindName), BASE_COLORS[kindName] ?? FALLBACK_COLOR);
+      primitives.set(kindName, { body, glow: null, top: null });
+    }
+    return primitives.get(kindName);
+  };
+}
+
+// Each enemy kind is drawn by a body InstancedMesh (lit hull), a glow InstancedMesh (HDR accents,
+// when the model has any) written with the same matrix, and a third mesh for a part that turns
+// (when the model has one). `data` is the Float32Array Python assigns into (stride 8); `kinds` is
+// the manifest's name -> kind value map. Each instance is routed to its kind's meshes, placed at
+// (x - W/2, 0, y - H/2) and turned about Y by its heading angle.
 export function createEnemyInstances({
   data,
   capacity,
   kinds,
   playfieldW,
   playfieldH,
-  geometryFor = basicEnemyGeometry,
+  detail = 'high',
+  geometryFor = defaultGeometryFor(),
 }) {
-  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.2 });
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.55,
+    metalness: 0.25,
+  });
+  const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
   const entries = []; // indexed by the kind value in the channel
   const meshes = [];
-  for (const [name, value] of Object.entries(kinds)) {
-    const baseColor = BASE_COLORS[name] ?? FALLBACK_COLOR;
-    const mesh = new THREE.InstancedMesh(geometryFor(name), material, capacity);
-    mesh.name = `enemy-${name.toLowerCase()}`;
+
+  function instanced(geometry, material, name) {
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+    mesh.name = name;
     mesh.frustumCulled = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    // Allocate instanceColor up front so the first update never reshapes the buffers.
-    mesh.setColorAt(0, color.setRGB(baseColor[0], baseColor[1], baseColor[2]));
-    mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     mesh.count = 0;
-    entries[value] = { mesh, baseColor, index: meshes.length };
     meshes.push(mesh);
+    return mesh;
   }
-  const counts = new Int32Array(meshes.length);
+
+  for (const [name, value] of Object.entries(kinds)) {
+    const model = geometryFor(name, detail);
+    const lower = name.toLowerCase();
+    const body = instanced(model.body, bodyMaterial, `enemy-${lower}`);
+    // Allocate instanceColor up front so the first update never reshapes the buffers.
+    body.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
+    body.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    const glow = model.glow === null ? null : instanced(model.glow, glowMaterial, `enemy-${lower}-glow`);
+    entries[value] = { name, body, glow, index: value };
+  }
+  const slotCount = entries.length;
+  const counts = new Int32Array(slotCount);
+  const live = entries.filter((entry) => entry !== undefined);
 
   const halfW = playfieldW / 2;
   const halfH = playfieldH / 2;
 
+  // Swaps the geometries of the existing meshes for the cached ones of `next`; creates no mesh and
+  // generates nothing (T-02-09).
+  function setDetail(next) {
+    for (const entry of live) {
+      const model = geometryFor(entry.name, next);
+      entry.body.geometry = model.body;
+      if (entry.glow !== null) entry.glow.geometry = model.glow;
+    }
+  }
+
   function update(n) {
-    const live = Math.min(n, capacity);
+    const count = Math.min(n, capacity);
     counts.fill(0);
-    for (let i = 0; i < live; i++) {
+    for (let i = 0; i < count; i++) {
       const base = i * STRIDE;
       const entry = entries[data[base + KIND]];
       if (entry === undefined) continue;
@@ -92,18 +144,22 @@ export function createEnemyInstances({
       quaternion.setFromAxisAngle(UP, data[base + ANGLE]);
       matrix.compose(position, quaternion, scale);
       const slot = counts[entry.index]++;
-      entry.mesh.setMatrixAt(slot, matrix);
-      const rgb = data[base + FLASH] > 0 ? FLASH_COLOR : entry.baseColor;
-      entry.mesh.setColorAt(slot, color.setRGB(rgb[0], rgb[1], rgb[2]));
+      entry.body.setMatrixAt(slot, matrix);
+      if (entry.glow !== null) entry.glow.setMatrixAt(slot, matrix);
+      const rgb = data[base + FLASH] > 0 ? FLASH_COLOR : REST_COLOR;
+      entry.body.setColorAt(slot, color.setRGB(rgb[0], rgb[1], rgb[2]));
     }
-    for (let k = 0; k < meshes.length; k++) {
-      const mesh = meshes[k];
-      mesh.count = counts[k];
-      if (counts[k] === 0) continue; // nothing was written, so nothing to upload
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.instanceColor.needsUpdate = true;
+    for (let k = 0; k < live.length; k++) {
+      const entry = live[k];
+      const written = counts[entry.index];
+      entry.body.count = written;
+      if (entry.glow !== null) entry.glow.count = written;
+      if (written === 0) continue; // nothing was written, so nothing to upload
+      entry.body.instanceMatrix.needsUpdate = true;
+      entry.body.instanceColor.needsUpdate = true;
+      if (entry.glow !== null) entry.glow.instanceMatrix.needsUpdate = true;
     }
   }
 
-  return { meshes, update };
+  return { meshes, update, setDetail };
 }

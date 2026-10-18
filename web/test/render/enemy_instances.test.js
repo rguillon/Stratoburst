@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { basicEnemyGeometry, createEnemyInstances } from '../../src/render/enemy_instances.js';
+import { enemyModel } from '../../src/render/models/enemy_models.js';
 
 const STRIDE = 8;
 const KINDS = { JET: 0, HELI: 1, CARRIER: 2, TANK: 3, TURRET: 4 };
@@ -41,6 +42,7 @@ describe('createEnemyInstances', () => {
     const { enemies } = build();
     expect(enemies.meshes.map((mesh) => mesh.name)).toEqual([
       'enemy-jet',
+      'enemy-jet-glow',
       'enemy-heli',
       'enemy-carrier',
       'enemy-tank',
@@ -53,19 +55,28 @@ describe('createEnemyInstances', () => {
     }
   });
 
-  it('shares one MeshStandardMaterial with roughness 0.6 and metalness 0.2', () => {
-    const { enemies } = build();
-    const [first] = enemies.meshes;
-    expect(first.material.isMeshStandardMaterial).toBe(true);
-    expect(first.material.roughness).toBeCloseTo(0.6);
-    expect(first.material.metalness).toBeCloseTo(0.2);
-    expect(enemies.meshes.every((mesh) => mesh.material === first.material)).toBe(true);
+  it('shares one vertex-coloured MeshStandardMaterial across the bodies', () => {
+    const { enemies, byName } = build();
+    const material = byName['enemy-jet'].material;
+    expect(material.isMeshStandardMaterial).toBe(true);
+    expect(material.vertexColors).toBe(true);
+    expect(material.roughness).toBeCloseTo(0.55);
+    expect(material.metalness).toBeCloseTo(0.25);
+    const bodies = enemies.meshes.filter((mesh) => !mesh.name.endsWith('-glow'));
+    expect(bodies.every((mesh) => mesh.material === material)).toBe(true);
+  });
+
+  it('draws the glow with one vertex-coloured MeshBasicMaterial', () => {
+    const { byName } = build();
+    const material = byName['enemy-jet-glow'].material;
+    expect(material.isMeshBasicMaterial).toBe(true);
+    expect(material.vertexColors).toBe(true);
   });
 
   it('draws nothing until told how many enemies are live', () => {
     const { enemies } = build();
     enemies.update(0);
-    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0]);
+    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   it('routes each instance to its kind mesh and counts per kind', () => {
@@ -112,15 +123,18 @@ describe('createEnemyInstances', () => {
     expect(byName['enemy-turret'].count).toBe(1);
   });
 
-  it('asks geometryFor for every kind name', () => {
+  it('asks geometryFor for every kind name at the starting detail', () => {
     const asked = [];
     build(8, {
-      geometryFor: (name) => {
-        asked.push(name);
-        return new THREE.BoxGeometry(1, 1, 1);
+      detail: 'mid',
+      geometryFor: (name, detail) => {
+        asked.push([name, detail]);
+        return { body: new THREE.BoxGeometry(1, 1, 1), glow: null, top: null };
       },
     });
-    expect(asked).toEqual(['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET']);
+    expect(asked).toEqual(
+      ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET'].map((name) => [name, 'mid']),
+    );
   });
 
   it('gives a kind it has no colour for a neutral fallback', () => {
@@ -134,7 +148,7 @@ describe('createEnemyInstances', () => {
     });
     setEnemy(data, 0, { x: 5, y: 5, kind: 0 });
     enemies.update(1);
-    expect(enemies.meshes[0].name).toBe('enemy-mystery');
+    expect(enemies.meshes.map((mesh) => mesh.name)).toEqual(['enemy-mystery']);
     expect(enemies.meshes[0].count).toBe(1);
   });
 });
@@ -146,26 +160,34 @@ function colourOf(mesh, i) {
 }
 
 describe('createEnemyInstances hit flash and bad data', () => {
-  it('colours a resting enemy with its kind base colour and a flashing one HDR white', () => {
+  it('colours a resting enemy (1, 1, 1) and a flashing one (6, 6, 6)', () => {
     const { data, enemies, byName } = build();
     setEnemy(data, 0, { x: 10, y: 10, flash: 0, kind: KINDS.TANK });
     setEnemy(data, 1, { x: 20, y: 20, flash: 1, kind: KINDS.TANK });
     setEnemy(data, 2, { x: 30, y: 30, flash: 0.17, kind: KINDS.TANK });
     enemies.update(3);
     const tank = byName['enemy-tank'];
-    expect(colourOf(tank, 0).map((v) => Math.round(v * 100) / 100)).toEqual([0.62, 0.52, 0.34]);
-    expect(colourOf(tank, 1).map((v) => Math.round(v * 10) / 10)).toEqual([2.2, 2.2, 2.2]);
-    expect(colourOf(tank, 2).map((v) => Math.round(v * 10) / 10)).toEqual([2.2, 2.2, 2.2]);
+    expect(colourOf(tank, 0)).toEqual([1, 1, 1]);
+    expect(colourOf(tank, 1)).toEqual([6, 6, 6]);
+    expect(colourOf(tank, 2)).toEqual([6, 6, 6]);
   });
 
-  it('gives every kind a military base colour below 1.0 in every channel', () => {
-    const { data, enemies, byName } = build();
-    Object.values(KINDS).forEach((kind, i) => setEnemy(data, i, { x: 10 * i, y: 10, kind }));
-    enemies.update(5);
-    for (const mesh of Object.values(byName)) {
-      expect(colourOf(mesh, 0).every((v) => v < 1)).toBe(true);
+  it('keeps every body vertex colour below 1.0 so only the flash crosses the bloom threshold', () => {
+    const { byName } = build();
+    for (const [name, mesh] of Object.entries(byName)) {
+      if (name.endsWith('-glow')) continue;
+      const colours = mesh.geometry.getAttribute('color').array;
+      expect(colours.length).toBeGreaterThan(0);
+      expect(colours.every((v) => v < 1)).toBe(true);
     }
-    expect(new Set(enemies.meshes.map((mesh) => colourOf(mesh, 0).join())).size).toBe(5);
+  });
+
+  it('tints the primitive stand-ins with a distinct military colour per kind', () => {
+    const { byName } = build();
+    const first = (name) => Array.from(byName[name].geometry.getAttribute('color').array.slice(0, 3));
+    expect(first('enemy-tank')).toEqual([expect.closeTo(0.62), expect.closeTo(0.52), expect.closeTo(0.34)]);
+    expect(new Set(['enemy-heli', 'enemy-carrier', 'enemy-tank', 'enemy-turret'].map((n) => first(n).join()))
+      .size).toBe(4);
   });
 
   it('an enemy that stops flashing goes back to the base colour', () => {
@@ -174,7 +196,7 @@ describe('createEnemyInstances hit flash and bad data', () => {
     enemies.update(1);
     setEnemy(data, 0, { x: 10, y: 10, flash: 0, kind: KINDS.JET });
     enemies.update(1);
-    expect(colourOf(byName['enemy-jet'], 0)[0]).toBeLessThan(1);
+    expect(colourOf(byName['enemy-jet'], 0)).toEqual([1, 1, 1]);
   });
 
   it('flags the instance buffers for upload only on meshes that were written', () => {
@@ -183,17 +205,25 @@ describe('createEnemyInstances hit flash and bad data', () => {
     const before = Object.fromEntries(
       Object.entries(byName).map(([name, mesh]) => [
         name,
-        [mesh.instanceMatrix.version, mesh.instanceColor.version],
+        [mesh.instanceMatrix.version, mesh.instanceColor?.version],
       ]),
     );
     enemies.update(1);
     const heli = byName['enemy-heli'];
     expect(heli.instanceMatrix.version).toBeGreaterThan(before['enemy-heli'][0]);
     expect(heli.instanceColor.version).toBeGreaterThan(before['enemy-heli'][1]);
-    for (const name of ['enemy-jet', 'enemy-carrier', 'enemy-tank', 'enemy-turret']) {
+    for (const name of ['enemy-jet', 'enemy-jet-glow', 'enemy-carrier', 'enemy-tank', 'enemy-turret']) {
       expect(byName[name].instanceMatrix.version).toBe(before[name][0]);
-      expect(byName[name].instanceColor.version).toBe(before[name][1]);
+      expect(byName[name].instanceColor?.version).toBe(before[name][1]);
     }
+  });
+
+  it('uploads the glow matrices together with the body matrices', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: KINDS.JET });
+    const before = byName['enemy-jet-glow'].instanceMatrix.version;
+    enemies.update(1);
+    expect(byName['enemy-jet-glow'].instanceMatrix.version).toBeGreaterThan(before);
   });
 
   it('does not upload a mesh again once its last instance has left', () => {
@@ -235,15 +265,81 @@ describe('createEnemyInstances hit flash and bad data', () => {
     enemies.update(2);
     const meshes = [...enemies.meshes];
     const matrixArrays = meshes.map((mesh) => mesh.instanceMatrix.array);
-    const colourArrays = meshes.map((mesh) => mesh.instanceColor.array);
+    const colourArrays = meshes.map((mesh) => mesh.instanceColor?.array);
     enemies.update(2);
     enemies.update(2);
     expect(enemies.meshes).toEqual(meshes);
     enemies.meshes.forEach((mesh, k) => {
       expect(mesh).toBe(meshes[k]);
       expect(mesh.instanceMatrix.array).toBe(matrixArrays[k]);
-      expect(mesh.instanceColor.array).toBe(colourArrays[k]);
+      expect(mesh.instanceColor?.array).toBe(colourArrays[k]);
     });
+  });
+});
+
+describe('createEnemyInstances models', () => {
+  const matrixOf = (mesh, i) => {
+    const m = new THREE.Matrix4();
+    mesh.getMatrixAt(i, m);
+    return m.toArray();
+  };
+
+  it('draws a kind with a model by a body mesh and a glow mesh with the same matrices', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 100, y: 50, angle: 0.7, kind: KINDS.JET });
+    setEnemy(data, 1, { x: 30, y: 200, angle: 2, kind: KINDS.JET });
+    enemies.update(2);
+    const body = byName['enemy-jet'];
+    const glow = byName['enemy-jet-glow'];
+    expect(body.count).toBe(2);
+    expect(glow.count).toBe(2);
+    for (let i = 0; i < 2; i++) expect(matrixOf(glow, i)).toEqual(matrixOf(body, i));
+  });
+
+  it('builds the jet from the code-built model and keeps primitives for kinds without one', () => {
+    const { byName } = build();
+    expect(byName['enemy-jet'].geometry).toBe(enemyModel('JET', 'high').body);
+    expect(byName['enemy-jet-glow'].geometry).toBe(enemyModel('JET', 'high').glow);
+    expect(byName['enemy-tank'].geometry.type).toBe('BoxGeometry');
+    expect(byName['enemy-turret'].geometry.type).toBe('CylinderGeometry');
+    expect(byName['enemy-tank-glow']).toBeUndefined();
+  });
+
+  it('starts at the requested detail', () => {
+    const { byName } = build(8, { detail: 'low' });
+    expect(byName['enemy-jet'].geometry).toBe(enemyModel('JET', 'low').body);
+  });
+
+  it('setDetail swaps the cached geometries on the existing meshes, creating nothing', () => {
+    const { enemies, byName } = build();
+    const meshes = [...enemies.meshes];
+    const primitive = byName['enemy-tank'].geometry;
+    for (const detail of ['low', 'mid', 'high']) {
+      enemies.setDetail(detail);
+      expect(byName['enemy-jet'].geometry).toBe(enemyModel('JET', detail).body);
+      expect(byName['enemy-jet-glow'].geometry).toBe(enemyModel('JET', detail).glow);
+      expect(byName['enemy-tank'].geometry).toBe(primitive);
+      expect(enemies.meshes).toHaveLength(meshes.length);
+      enemies.meshes.forEach((mesh, k) => expect(mesh).toBe(meshes[k]));
+    }
+  });
+
+  it('gives a lower detail fewer vertices on the drawn jet', () => {
+    const { enemies, byName } = build();
+    const count = () => byName['enemy-jet'].geometry.getAttribute('position').count;
+    enemies.setDetail('high');
+    const high = count();
+    enemies.setDetail('low');
+    expect(count()).toBeLessThan(high);
+  });
+
+  it('draws nothing for zero live enemies after drawing some', () => {
+    const { data, enemies, byName } = build();
+    setEnemy(data, 0, { x: 10, y: 10, kind: KINDS.JET });
+    enemies.update(1);
+    enemies.update(0);
+    expect(byName['enemy-jet'].count).toBe(0);
+    expect(byName['enemy-jet-glow'].count).toBe(0);
   });
 });
 
