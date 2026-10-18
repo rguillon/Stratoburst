@@ -125,6 +125,7 @@ from scorched_core.tuning import (
     LIVES_CAP,
     LIVES_START,
     MAX_BONUS_POINTS,
+    MEDAL_RESERVE,
     PICKUP_RADIUS,
     RESPAWN_START_Y,
     SCORE_CAP,
@@ -3614,3 +3615,99 @@ def test_the_medal_tier_packed_for_the_renderer_is_the_chain_tier() -> None:
     _tick(game)
     _drop_a_medal(game)
     assert game.buffers["pickups"][2] == 1.0
+
+
+def _catch_medals(game: Game, count: int) -> None:
+    for _ in range(count):
+        _drop_a_medal(game)
+        _stand_on_the_medal(game)
+        _tick(game)
+
+
+def test_seven_catches_pay_the_whole_ladder_and_an_eighth_pays_the_cap_again() -> None:
+    game = Game(god=True)
+    paid = []
+    for _ in range(8):
+        _drop_a_medal(game)
+        _stand_on_the_medal(game)
+        before = game.score.score
+        _tick(game)
+        paid.append(game.score.score - before)
+    assert paid == [100, 200, 500, 1000, 2000, 5000, 10000, 10000]
+    assert _header(game, H_MEDAL_VALUE) == 10000
+    assert _header(game, H_MEDAL_CHAIN) == 8
+
+
+def test_a_medal_scrolling_off_the_bottom_resets_the_chain_to_the_base_value() -> None:
+    game = Game(god=True)
+    _catch_medals(game, 3)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (1000, 3)
+    game.ship.x, game.ship.y = 200.0, 100.0
+    game.pickups.spawn_medal(20.0, PLAYFIELD_H + 15.9)
+    _tick(game)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+    assert game.pickups.medals_missed == 0  # drained
+    _drop_a_medal(game)
+    _stand_on_the_medal(game)
+    before = game.score.score
+    _tick(game)
+    assert game.score.score - before == 100
+    assert _header(game, H_MEDAL_CHAIN) == 1
+
+
+def test_a_medal_caught_on_the_step_another_scrolls_off_pays_before_the_reset() -> None:
+    game = Game(god=True)
+    _catch_medals(game, 2)
+    _drop_a_medal(game)
+    _stand_on_the_medal(game)
+    game.pickups.spawn_medal(20.0, PLAYFIELD_H + 15.9)  # leaves on the very step of the catch
+    before = game.score.score
+    _tick(game)
+    assert game.score.score - before == 500  # the catch paid the climbing value
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+
+
+def test_dying_resets_the_chain_but_the_stage_count_keeps_its_catches() -> None:
+    game = _empty_game(god=False)
+    _catch_medals(game, 2)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (500, 2)
+    game.ship.x, game.ship.y = 120.0, 272.0
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+    assert game.chain.collected == 2
+
+
+def test_a_hit_inside_the_grace_window_does_not_reset_the_chain() -> None:
+    game = _empty_game(god=False)
+    _catch_medals(game, 2)
+    game.ship.x, game.ship.y = 120.0, 272.0
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert game.life.phase is PlayerPhase.GRACE
+    assert _header(game, H_MEDAL_CHAIN) == 2
+
+
+def test_a_medal_the_pool_refused_is_never_counted_as_a_miss() -> None:
+    game = Game(god=True)
+    _catch_medals(game, 1)
+    for _ in range(PICKUP_CAP - MEDAL_RESERVE):
+        game.pickups.spawn(PickupKind.CRYSTAL, 30.0, 30.0, 0.0, 0.0)
+    _kill_tank_carrying(game, PickupKind.MEDAL)
+    _tick(game)
+    assert game.pickups.n == PICKUP_CAP - MEDAL_RESERVE  # the medal was refused
+    _tick_n(game, 5)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (200, 1)
+
+
+def test_a_restart_starts_the_chain_and_the_stage_count_over() -> None:
+    game = Game(stage=STAGE_1, lives=1)
+    _tick_n(game, INTRO_TICKS)
+    game.chain.collect()
+    game.chain.collect()
+    _run_until_out(game)
+    assert game.chain.chain == 0
+    assert game.chain.collected == 2
+    game.restart()
+    assert game.chain.collected == 0
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
