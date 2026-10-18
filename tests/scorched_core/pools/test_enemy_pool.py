@@ -1,7 +1,12 @@
+import dataclasses
 import math
+import random
 from array import array
+from types import SimpleNamespace
 
 import pytest
+from scorched_core.patterns.pattern_library import PATTERN_TABLE, pattern_index
+from scorched_core.patterns.pattern_spec import PatternSpec
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -32,7 +37,6 @@ from scorched_core.tuning import (
     ENEMY_HP,
     ENEMY_MAX_ALIVE,
     ENEMY_RADIUS,
-    ENEMY_RING_COUNT,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
     GROUND_SCROLL_RATIO,
@@ -761,20 +765,20 @@ def test_the_fire_timer_follows_its_enemy_through_a_swap_remove() -> None:
 def test_a_corrupt_fire_pattern_fails_loudly_instead_of_standing_silent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(enemy_pool, "ENEMY_FIRE_PATTERN", (99, 99, 99, 99, 99))
+    bogus = SimpleNamespace(shape=99, delay=ENEMY_FIRE_DELAY, interval=10, burst=1, burst_gap=1)
+    monkeypatch.setattr(enemy_pool, "PATTERN_TABLE", (bogus,))
     pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
-    shooter(pool, EnemyKind.TURRET)
+    assert pool.spawn(EnemyKind.TURRET, 120.0, 100.0, MotionKind.GROUND, 0.0, 0.0, pattern=0)
     pool.fire_timer[0] = 1
-    with pytest.raises(ValueError, match="unknown fire pattern 99"):
+    with pytest.raises(ValueError, match="unknown pattern shape 99"):
         pool.fire(bullets, SHIP_X, SHIP_Y, ring)
 
 
 def test_a_helicopter_fires_a_ring_of_eight_at_its_speed_after_the_delay() -> None:
     pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
     shooter(pool, EnemyKind.HELI)
-    pool.age[0] = ENEMY_FIRE_DELAY
     assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(ENEMY_FIRE_DELAY)) == 8
-    assert bullets.n == ENEMY_RING_COUNT == 8
+    assert bullets.n == 8
     assert all(
         math.hypot(bullets.vx[k], bullets.vy[k]) == pytest.approx(1.3) for k in range(bullets.n)
     )
@@ -786,18 +790,12 @@ def test_a_helicopter_fires_a_ring_of_eight_at_its_speed_after_the_delay() -> No
 def test_consecutive_rings_are_rotated_by_half_a_step_so_they_interleave() -> None:
     pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
     shooter(pool, EnemyKind.HELI)
-    pool.fire_timer[0] = 1
-    pool.age[0] = ENEMY_FIRE_DELAY
-    pool.fire(bullets, SHIP_X, SHIP_Y, ring)
-    pool.fire_timer[0] = 1
-    pool.age[0] = ENEMY_FIRE_DELAY + 150
-    pool.fire(bullets, SHIP_X, SHIP_Y, ring)
-    pool.fire_timer[0] = 1
-    pool.age[0] = ENEMY_FIRE_DELAY + 300
-    pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    for _ in range(3):
+        pool.fire_timer[0] = 1
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)
     assert bullets.n == 24
     assert bullets.angle[0] == pytest.approx(0.0)
-    assert bullets.angle[8] == pytest.approx(math.pi / ENEMY_RING_COUNT)
+    assert bullets.angle[8] == pytest.approx(math.pi / 8)
     assert bullets.angle[16] == pytest.approx(0.0)
 
 
@@ -829,3 +827,134 @@ def test_an_enemy_below_the_fire_band_holds_fire() -> None:
 
 def test_the_fire_band_is_the_top_seventy_percent_of_the_playfield() -> None:
     assert pytest.approx(PLAYFIELD_H * 0.7) == ENEMY_FIRE_MAX_Y
+
+
+def _spec(name: str) -> PatternSpec:
+    return PATTERN_TABLE[pattern_index(name)]
+
+
+def test_spawn_takes_the_kind_default_pattern_when_none_is_given() -> None:
+    pool = EnemyPool()
+    for kind, name in (
+        (EnemyKind.JET, "jet_aimed"),
+        (EnemyKind.HELI, "heli_ring"),
+        (EnemyKind.TANK, "tank_aimed"),
+        (EnemyKind.TURRET, "turret_aimed"),
+    ):
+        assert pool.spawn(kind, 120.0, 100.0, MotionKind.GROUND, 0.0, 0.0)
+        assert pool.pattern[pool.n - 1] == pattern_index(name)
+
+
+def test_a_carrier_defaults_to_no_pattern() -> None:
+    pool = EnemyPool()
+    shooter(pool, EnemyKind.CARRIER)
+    assert pool.pattern[0] == -1
+    assert pool.fire_timer[0] == ENEMY_FIRE_DELAY
+
+
+def test_spawn_with_pattern_minus_one_never_fires() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    assert pool.spawn(EnemyKind.TURRET, 120.0, 100.0, MotionKind.GROUND, 0.0, 0.0, pattern=-1)
+    assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(500)) == 0
+    assert (bullets.n, ring.n) == (0, 0)
+
+
+def test_spawn_with_a_pattern_index_fires_that_pattern_and_arms_its_delay() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    index = pattern_index("spread3")
+    assert pool.spawn(EnemyKind.CARRIER, 120.0, 100.0, MotionKind.GROUND, 0.0, 0.0, pattern=index)
+    assert pool.pattern[0] == index
+    assert pool.fire_timer[0] == _spec("spread3").delay
+    fired = sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(_spec("spread3").delay))
+    assert fired == 3
+    assert (ring.buf[0], ring.buf[3]) == (EV_ENEMY_FIRE, float(FirePattern.SPREAD))
+    assert pool.fire_timer[0] == _spec("spread3").interval
+
+
+def test_a_fresh_enemy_has_volley_and_burst_counters_at_zero() -> None:
+    pool = EnemyPool()
+    pool.volley[0] = 5
+    pool.burst_left[0] = 2
+    shooter(pool, EnemyKind.TURRET)
+    assert (pool.volley[0], pool.burst_left[0]) == (0, 0)
+
+
+def test_each_volley_advances_the_row_volley_counter() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TURRET)
+    for expected in (1, 2, 3):
+        pool.fire_timer[0] = 1
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+        assert pool.volley[0] == expected
+
+
+def test_a_stream_fires_its_burst_a_gap_apart_then_waits_the_interval() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    assert pool.spawn(
+        EnemyKind.TURRET,
+        120.0,
+        100.0,
+        MotionKind.GROUND,
+        0.0,
+        0.0,
+        pattern=pattern_index("stream3"),
+    )
+    spec = _spec("stream3")
+    assert (spec.burst, spec.burst_gap) == (3, 8)
+    total = spec.delay + spec.burst_gap * 2 + spec.interval + 1
+    fired_on = [call for call in range(1, total) if pool.fire(bullets, SHIP_X, SHIP_Y, ring) == 1]
+    first = spec.delay
+    assert fired_on == [first, first + 8, first + 16, first + 16 + spec.interval]
+    assert pool.burst_left[0] == 2  # the next burst has started
+
+
+def test_a_burst_reloads_the_gap_while_it_lasts_and_the_interval_when_it_ends() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    assert pool.spawn(
+        EnemyKind.TURRET,
+        120.0,
+        100.0,
+        MotionKind.GROUND,
+        0.0,
+        0.0,
+        pattern=pattern_index("stream3"),
+    )
+    spec = _spec("stream3")
+    timers = []
+    for _ in range(3):
+        pool.fire_timer[0] = 1
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+        timers.append((int(pool.fire_timer[0]), int(pool.burst_left[0])))
+    assert timers == [(spec.burst_gap, 2), (spec.burst_gap, 1), (spec.interval, 0)]
+
+
+def test_columns_cover_every_array_field_except_the_kill_buffer() -> None:
+    pool = EnemyPool()
+    arrays = {f.name for f in dataclasses.fields(pool) if isinstance(getattr(pool, f.name), array)}
+    kill_buffer = {"kill_x", "kill_y", "kill_kind", "kill_drop"}
+    assert set(enemy_pool._COLUMNS) == arrays - kill_buffer
+    assert len(enemy_pool._COLUMNS) == len(set(enemy_pool._COLUMNS))
+    assert {"pattern", "volley", "burst_left", "fire_timer"} <= set(enemy_pool._COLUMNS)
+
+
+def test_a_randomized_spawn_and_remove_sequence_keeps_every_column_in_step() -> None:
+    rng = random.Random(7)  # noqa: S311 - seeded test sequence, not security
+    pool = EnemyPool()
+    model: list[dict[str, float]] = []
+    for step in range(400):
+        if model and rng.random() < 0.45:
+            i = rng.randrange(len(model))
+            pool._remove_at(i)
+            model[i] = model[-1]
+            model.pop()
+        else:
+            kind = rng.choice(list(EnemyKind))
+            if pool.spawn(kind, float(step), 1.0, MotionKind.SWAY, 0.0, 1.0, drop=step % 3 - 1):
+                i = pool.n - 1
+                for name in enemy_pool._COLUMNS:  # stamp a distinct value into every column
+                    getattr(pool, name)[i] = step + 1
+                model.append({name: float(getattr(pool, name)[i]) for name in enemy_pool._COLUMNS})
+        assert pool.n == len(model)
+        for i, row in enumerate(model):
+            for name in enemy_pool._COLUMNS:
+                assert getattr(pool, name)[i] == row[name]

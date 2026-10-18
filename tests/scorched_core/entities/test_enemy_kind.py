@@ -1,9 +1,12 @@
+from scorched_core.patterns.pattern_library import PATTERNS
+
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL
 from scorched_core.tuning import (
     ENEMY_BLAST,
     ENEMY_GROUND,
     ENEMY_HP,
+    ENEMY_PATTERN,
     ENEMY_RADIUS,
     GRID_CELL,
     MISSILE_RADIUS,
@@ -27,7 +30,7 @@ def test_a_kind_is_usable_as_an_integer_index() -> None:
 
 
 def test_every_per_kind_table_has_one_row_per_kind() -> None:
-    for table in (ENEMY_RADIUS, ENEMY_HP, ENEMY_BLAST, ENEMY_GROUND):
+    for table in (ENEMY_RADIUS, ENEMY_HP, ENEMY_BLAST, ENEMY_GROUND, ENEMY_PATTERN):
         assert len(table) == len(EnemyKind)
 
 
@@ -55,3 +58,9 @@ def test_every_enemy_plus_a_missile_fits_in_one_grid_cell() -> None:
 def test_a_hit_needs_at_least_one_bolt_and_every_hp_is_positive() -> None:
     assert all(hp > 0 for hp in ENEMY_HP)
     assert all(radius > 0 for radius in ENEMY_RADIUS)
+
+
+def test_each_kind_names_its_default_pattern_and_the_carrier_has_none() -> None:
+    assert ENEMY_PATTERN == ("jet_aimed", "heli_ring", None, "tank_aimed", "turret_aimed")
+    assert ENEMY_PATTERN[EnemyKind.CARRIER] is None
+    assert all(name in PATTERNS for name in ENEMY_PATTERN if name is not None)

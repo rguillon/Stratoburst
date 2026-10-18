@@ -1489,7 +1489,13 @@ def test_the_enemy_fire_event_reaches_the_event_ring_once() -> None:
 
 
 def test_the_manifest_publishes_the_fire_patterns_by_name() -> None:
-    assert Game().manifest()["fire_patterns"] == {"NONE": 0, "AIMED": 1, "RING": 2}
+    assert Game().manifest()["fire_patterns"] == {
+        "NONE": 0,
+        "AIMED": 1,
+        "RING": 2,
+        "SPREAD": 3,
+        "STREAM": 4,
+    }
 
 
 def _gallery_run(seed: int, steps: int) -> tuple[int, bytes]:
@@ -2755,6 +2761,24 @@ def test_the_gallery_is_byte_identical_to_the_phase_two_core_over_1200_steps() -
     # Recorded from the core before the variable scroll speed and the stage director landed.
     expected = "3cf3728aa65ef07d368e01ba7cdc355a7b12c67eb39727defb64609cc468d2b4"
     assert _gallery_digest(1200) == expected
+
+
+def _gallery_fire_digest(ticks: int) -> str:
+    """Hash the enemy-bullet floats and the event records of every tick of a fixed gallery run."""
+    game = Game(seed=1, god=True)
+    sha = hashlib.sha256()
+    for i in range(ticks):
+        game.tick(STEP_MS, Button.FIRE, math.sin(i / 40.0), math.cos(i / 55.0), 0.0, 0.0)
+        live = (game.storm_pool.n + game.ebullets.n) * EBULLET_STRIDE
+        sha.update(game.buffers["ebullets"][:live].tobytes())
+        sha.update(game.events.buf[: game.events.n * EVENT_STRIDE].tobytes())
+    return sha.hexdigest()
+
+
+def test_the_gallery_enemy_fire_matches_the_pre_pattern_digest() -> None:
+    # Recorded from the core before enemy fire became PatternSpec data (7770 bullet-steps).
+    expected = "190cd5b18ad6041f099ccc943de2f321513adf551dffa4699f4eee187bdbf3b8"
+    assert _gallery_fire_digest(1200) == expected
 
 
 def _spaced_stage() -> StageData:
