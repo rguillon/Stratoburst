@@ -21,6 +21,7 @@ from scorched_core.protocol import (
     ENEMY_STRIDE,
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
+    EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
     EV_HIT,
@@ -78,7 +79,9 @@ from scorched_core.tuning import (
     BOMB_DAMAGE,
     BOMB_INVULN_TAIL_TICKS,
     BOMB_LAUNCH_TICKS,
+    BOMB_MAX_STOCK,
     BOMB_RADIUS_MIN,
+    BOMB_START_STOCK,
     DEATHBOMB_TICKS,
     DYING_TICKS,
     ENEMY_FIRE_DELAY,
@@ -93,6 +96,7 @@ from scorched_core.tuning import (
     SHIP_START_Y,
 )
 from scorched_core.weapons.bomb_phase import BombPhase
+from scorched_core.weapons.pickup_outcome import PickupOutcome
 from scorched_core.weapons.weapon_kind import WeaponKind
 
 
@@ -2072,3 +2076,245 @@ def test_catching_the_recovery_pickup_at_level_two_raises_it_to_level_three_reco
     _tick(game)
     assert (_header(game, H_WEAPON), _header(game, H_LEVEL)) == (int(WeaponKind.LASER), 3)
     assert game.pickups.n == 0
+
+
+# --- the deathbomb, bomb pickups and the respawn refill (plan 02-26) ---------------------------
+
+
+def _hit_and_wait(game: Game, steps_after_hit: int) -> None:
+    """Put a bullet on the ship, run the hit step, then ``steps_after_hit`` more steps."""
+    _put_bullet_on_ship(game)
+    _tick(game)  # step k: the hit
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    _tick_n(game, steps_after_hit)
+
+
+@pytest.mark.parametrize("wait", range(DEATHBOMB_TICKS))
+def test_deathbomb_a_press_on_any_step_k_plus_1_to_k_plus_8_saves_the_ship(wait: int) -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, wait)  # the press arrives on step k + wait + 1
+    _press_bomb(game)
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert game.life.deaths == 0
+    assert EV_PLAYER_DEATH not in _event_kinds(game)
+    assert _event_kinds(game) == [EV_DEATHBOMB_SAVE, EV_BOMB_LAUNCH]
+    assert _header(game, H_BOMBS) == 2
+    assert game.bomb.phase == BombPhase.LAUNCH
+    _tick_n(game, DEATHBOMB_TICKS + 2)  # the window would have long closed: the ship lives
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert game.life.deaths == 0
+    assert game.life.invuln > 0
+
+
+def test_deathbomb_last_grace_step_still_saves_the_ship() -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, DEATHBOMB_TICKS - 1)  # step k + 8 is the next one
+    assert game.life.phase == PlayerPhase.GRACE
+    _press_bomb(game)
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert _header(game, H_DEATHS) == 0
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_deathbomb_one_step_late_the_ship_is_destroyed() -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, DEATHBOMB_TICKS)  # step k + 8 ran: the ship is destroyed
+    assert game.life.phase == PlayerPhase.DYING
+    _press_bomb(game)  # step k + 9
+    assert game.life.phase == PlayerPhase.DYING
+    assert game.life.deaths == 1
+    assert game.bomb.phase == BombPhase.NONE
+    assert EV_DEATHBOMB_SAVE not in _event_kinds(game)
+
+
+def test_deathbomb_the_save_event_is_at_the_ship_and_grants_the_bomb_invulnerability() -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, 2)
+    x, y = game.ship.x, game.ship.y
+    _press_bomb(game)
+    events = game.events.buf
+    assert (events[0], events[1], events[2]) == (EV_DEATHBOMB_SAVE, x, y)
+    assert (
+        _header(game, H_INVULN) == BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS - 1
+    )
+    _put_bullet_on_ship(game)
+    _tick_n(game, 5)
+    assert game.life.phase == PlayerPhase.ALIVE  # a bullet on the hitbox no longer hurts
+
+
+def test_deathbomb_a_press_latched_on_a_zero_step_frame_inside_the_window_still_saves() -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, DEATHBOMB_TICKS - 2)  # step k + 8 is two steps away
+    steps = game.tick(STEP_MS / 2, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
+    assert steps == 0
+    assert game.life.phase == PlayerPhase.GRACE
+    steps = game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)  # step k + 7 resolves the latch
+    assert steps == 1
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert EV_DEATHBOMB_SAVE in _event_kinds(game)
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_deathbomb_with_no_stock_a_press_in_grace_does_not_save() -> None:
+    game = _bomb_game(bombs=0)
+    _hit_and_wait(game, 2)
+    _press_bomb(game)
+    assert game.life.phase == PlayerPhase.GRACE
+    assert EV_DEATHBOMB_SAVE not in _event_kinds(game)
+    _tick_n(game, DEATHBOMB_TICKS)
+    assert game.life.deaths == 1
+
+
+def test_deathbomb_while_a_bomb_is_still_burning_the_press_is_refused() -> None:
+    game = _bomb_game()
+    _press_bomb(game)  # a bomb in the air makes the ship invulnerable, so force the grace window
+    game.life.phase = PlayerPhase.GRACE
+    game.life.timer = DEATHBOMB_TICKS
+    _press_bomb(game)
+    assert game.life.phase == PlayerPhase.GRACE
+    assert EV_DEATHBOMB_SAVE not in _event_kinds(game)
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_a_plain_bomb_while_alive_pushes_no_deathbomb_save() -> None:
+    game = _bomb_game()
+    _press_bomb(game)
+    assert _event_kinds(game) == [EV_BOMB_LAUNCH]
+
+
+def test_deathbomb_is_deterministic_for_one_seed_and_inputs() -> None:
+    def run() -> bytes:
+        game = _bomb_game(seed=5)
+        _hit_and_wait(game, 3)
+        _press_bomb(game)
+        out = b""
+        for _ in range(40):
+            _tick(game)
+            out += bytes(game.buffers["header"]) + bytes(game.buffers["events"])
+        return out
+
+    assert run() == run()
+
+
+# --- bomb pickups -----------------------------------------------------------------------------
+
+
+def _kill_turret(game: Game, x: float, y: float) -> None:
+    """Park a one-hp turret carrying a bomb above a bolt that reaches it next step."""
+    enemies = game.enemies
+    enemies.n = 0
+    enemies.spawn(EnemyKind.TURRET, x, y, MotionKind.GROUND, 0.0, 0.0, PickupKind.BOMB)
+    enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def test_a_killed_turret_drops_a_bomb_pickup_that_falls_half_a_unit_per_step() -> None:
+    game = _bomb_game()
+    _kill_turret(game, 120.0, 80.0)
+    _tick(game)
+    pickups = game.pickups
+    assert pickups.n == 1
+    assert pickups.kind[0] == PickupKind.BOMB
+    assert pickups.x[0] == pytest.approx(120.0, abs=3.0)
+    y = pickups.y[0]
+    assert pickups.vx[0] == 0.0
+    assert pickups.vy[0] == pytest.approx(0.5)
+    _tick(game)
+    assert pickups.y[0] == pytest.approx(y + 0.5)
+    assert game.buffers["pickups"][3] == float(PickupKind.BOMB)
+
+
+def test_a_crystal_carrier_still_drops_a_crystal_and_a_turret_never_one() -> None:
+    game = _bomb_game()
+    _kill_carrier(game, 120.0, 80.0)
+    _tick(game)
+    assert game.pickups.kind[0] == PickupKind.CRYSTAL
+    game = _bomb_game()
+    _kill_turret(game, 120.0, 80.0)
+    _tick(game)
+    assert [game.pickups.kind[i] for i in range(game.pickups.n)] == [PickupKind.BOMB]
+
+
+def _stand_on_bomb_pickup(game: Game) -> None:
+    game.pickups.spawn(PickupKind.BOMB, game.ship.x, game.ship.y, 0.0, 0.0)
+
+
+def test_stocked_catching_a_bomb_pickup_adds_one_bomb_and_pushes_stocked() -> None:
+    game = _bomb_game()
+    game.bomb.stock = 2
+    _stand_on_bomb_pickup(game)
+    _tick(game)
+    assert _header(game, H_BOMBS) == 3
+    assert game.pickups.n == 0
+    events = game.buffers["events"]
+    assert events[0] == EV_PICKUP
+    assert (events[3], events[4]) == (float(PickupKind.BOMB), float(PickupOutcome.STOCKED))
+    assert game.max_bonus == 0
+    assert game.loadout.level == 1  # the weapon is untouched
+
+
+def test_stocked_a_bomb_pickup_at_seven_is_consumed_without_raising_the_stock() -> None:
+    game = _bomb_game()
+    game.bomb.stock = BOMB_MAX_STOCK
+    _stand_on_bomb_pickup(game)
+    _tick(game)
+    assert _header(game, H_BOMBS) == BOMB_MAX_STOCK == 7
+    assert game.pickups.n == 0
+    events = game.buffers["events"]
+    assert (events[0], events[4]) == (EV_PICKUP, float(PickupOutcome.STOCKED))
+
+
+def test_stocked_a_far_bomb_pickup_is_not_caught() -> None:
+    game = _bomb_game()
+    game.pickups.spawn(PickupKind.BOMB, 20.0, 20.0, 0.0, 0.0)
+    _tick(game)
+    assert _header(game, H_BOMBS) == 3
+    assert game.pickups.n == 1
+
+
+# --- the respawn refill and the starting stock ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("stock", "refilled"), [(0, BOMB_START_STOCK), (2, BOMB_START_STOCK), (5, 5), (7, 7)]
+)
+def test_refill_the_stock_becomes_at_least_three_when_the_ship_respawns(
+    stock: int, refilled: int
+) -> None:
+    game = _bomb_game(bombs=stock)
+    _die(game)
+    assert _header(game, H_BOMBS) == stock  # not on the death step itself
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _header(game, H_BOMBS) == refilled
+    assert EV_RESPAWN in _event_kinds(game)
+
+
+def test_refill_happens_once_on_the_respawn_transition_and_not_again_while_flying_in() -> None:
+    game = _bomb_game(bombs=0)
+    _die(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    game.bomb.stock = 1  # spent while flying in
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    assert _header(game, H_BOMBS) == 1
+
+
+@pytest.mark.parametrize(("asked", "stored"), [(0, 0), (-4, 0), (3, 3), (7, 7), (9, 7)])
+def test_bombs_sets_the_starting_stock_clamped_to_zero_through_seven(
+    asked: int, stored: int
+) -> None:
+    game = Game(bombs=asked)
+    assert game.bomb.stock == stored
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert _header(game, H_BOMBS) == stored
+
+
+def test_bombs_defaults_to_the_starting_stock_of_three() -> None:
+    assert Game().bomb.stock == BOMB_START_STOCK == 3
+
+
+def test_bombs_zero_starts_with_no_bombs_and_a_press_does_nothing() -> None:
+    game = _bomb_game(bombs=0)
+    _press_bomb(game)
+    _tick_n(game, 3)
+    assert game.bomb.phase == BombPhase.NONE
+    assert EV_BOMB_LAUNCH not in _event_kinds(game)

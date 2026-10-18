@@ -198,6 +198,22 @@ def test_script_entries_enter_from_outside_the_visible_field_with_a_known_kind()
         assert drop >= -1
 
 
+def test_both_aa_turret_entries_carry_a_bomb_drop() -> None:
+    turrets = [entry for entry in GALLERY_SCRIPT if entry[1] == EnemyKind.TURRET]
+    assert len(turrets) >= 2
+    assert all(entry[7] == PickupKind.BOMB for entry in turrets)
+
+
+def test_only_turrets_and_carriers_drop_anything_and_crystals_stay_on_the_carriers() -> None:
+    for _tick, kind, *_rest, drop in GALLERY_SCRIPT:
+        if kind == EnemyKind.TURRET:
+            assert drop == PickupKind.BOMB
+        elif kind == EnemyKind.CARRIER:
+            assert drop == PickupKind.CRYSTAL
+        else:
+            assert drop == -1
+
+
 def test_both_carriers_carry_a_crystal_and_nothing_else_drops_anything() -> None:
     carriers = [entry for entry in GALLERY_SCRIPT if entry[1] == EnemyKind.CARRIER]
     assert len(carriers) == 2

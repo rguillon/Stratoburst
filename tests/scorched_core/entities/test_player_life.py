@@ -205,3 +205,23 @@ def test_an_unknown_phase_fails_loudly() -> None:
     life.phase = 99  # type: ignore[assignment]
     with pytest.raises(ValueError, match="unknown player phase 99"):
         life.step(PlayerShip(), EventRing())
+
+
+def test_a_deathbomb_in_grace_cancels_the_death_and_returns_to_alive() -> None:
+    life, ship, events = _to_grace()
+    for _ in range(DEATHBOMB_TICKS - 1):
+        life.step(ship, events)
+    assert life.phase == PlayerPhase.GRACE
+    assert life.try_deathbomb()
+    assert life.phase == PlayerPhase.ALIVE
+    assert life.deaths == 0
+    assert life.step(ship, events) is False
+    assert life.phase == PlayerPhase.ALIVE
+    assert EV_PLAYER_DEATH not in _kinds(events)
+
+
+@pytest.mark.parametrize("phase", [PlayerPhase.ALIVE, PlayerPhase.DYING, PlayerPhase.RESPAWN])
+def test_a_deathbomb_outside_grace_is_refused_and_changes_nothing(phase: PlayerPhase) -> None:
+    life = PlayerLife(phase=phase, timer=7, invuln=5, deaths=2)
+    assert not life.try_deathbomb()
+    assert (life.phase, life.timer, life.invuln, life.deaths) == (phase, 7, 5, 2)
