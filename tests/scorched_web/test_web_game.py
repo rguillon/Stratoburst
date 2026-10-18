@@ -117,7 +117,7 @@ def test_resuming_stores_nothing() -> None:
     store.save.assert_not_called()
 
 
-def test_without_a_store_pausing_and_save_requests_are_harmless() -> None:
+def test_without_a_store_pausing_and_save_requests_are_harmless_and_still_acknowledged() -> None:
     game = MagicMock()
     game.paused = False
     game.save_requested = True
@@ -125,4 +125,4 @@ def test_without_a_store_pausing_and_save_requests_are_harmless() -> None:
     web = WebGame(game, MagicMock())
     web.tick(16.7, 0, 0.0, 0.0, 0.0, 0.0)
     web.set_paused(True)
-    game.clear_save_request.assert_not_called()
+    game.clear_save_request.assert_called_once_with()
