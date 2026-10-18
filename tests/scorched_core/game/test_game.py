@@ -986,6 +986,26 @@ def test_a_kill_step_follows_its_explosion_with_the_explosion_sound_id() -> None
     assert events[EVENT_STRIDE + 3] == SfxId.EXPLODE_SMALL
 
 
+def test_a_frozen_hitstop_step_routes_no_sound_and_the_thawed_step_does() -> None:
+    game = Game()
+    _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
+    game.hitstop.trigger(1)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_N] == 0  # the freeze did nothing, not even a sound
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_N] == 2
+    assert game.buffers["events"][EVENT_STRIDE] == EV_SFX
+
+
+def test_a_firing_vulcan_volley_is_followed_by_its_low_priority_sound() -> None:
+    game = Game()
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    events = game.buffers["events"]
+    assert events[0] == EV_SHOT
+    assert events[EVENT_STRIDE] == EV_SFX
+    assert events[EVENT_STRIDE + 3] == SfxId.VULCAN
+
+
 def test_event_n_resets_on_a_zero_step_tick_after_an_event_tick() -> None:
     game = Game()
     _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
