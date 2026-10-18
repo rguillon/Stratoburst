@@ -3,6 +3,10 @@ import { WEAPON_CSS, createStatusReadout } from '../../src/ui/status_readout.js'
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
 const WEAPONS = { VULCAN: 0, LASER: 1, HOMING: 2 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4 };
+const OUTCOME = { RAISED: 0, SWITCHED: 1, MAXED: 2, STOCKED: 3 };
+const OPTIONS = { weapons: WEAPONS, events: EVENTS, maxed: OUTCOME.MAXED };
+const FLASH_MS = 900;
 
 // A document holding the same markup as index.html, with writes to textContent counted.
 function build() {
@@ -15,7 +19,10 @@ function build() {
   const level = doc.createElement('span');
   level.className = 'level';
   el.append(weapon, level);
-  doc.body.append(el);
+  const flash = doc.createElement('div');
+  flash.id = 'max-flash';
+  flash.hidden = true;
+  doc.body.append(el, flash);
   const writes = { weapon: 0, level: 0 };
   for (const [key, node] of [
     ['weapon', weapon],
@@ -30,13 +37,13 @@ function build() {
       },
     });
   }
-  return { doc, el, weapon, level, writes };
+  return { doc, el, weapon, level, flash, writes };
 }
 
 describe('createStatusReadout', () => {
   it('shows the weapon name in its colour and the level', () => {
     const { doc, weapon, level } = build();
-    const readout = createStatusReadout({ doc, weapons: WEAPONS });
+    const readout = createStatusReadout({ doc, ...OPTIONS });
     readout.update(1, 3);
     expect(weapon.textContent).toBe('LASER');
     expect(weapon.style.color).toBe(WEAPON_CSS.LASER);
@@ -53,7 +60,7 @@ describe('createStatusReadout', () => {
 
   it('writes only when a value changes', () => {
     const { doc, writes } = build();
-    const readout = createStatusReadout({ doc, weapons: WEAPONS });
+    const readout = createStatusReadout({ doc, ...OPTIONS });
     readout.update(0, 1);
     readout.update(0, 1);
     readout.update(0, 1);
@@ -66,14 +73,14 @@ describe('createStatusReadout', () => {
 
   it('shows a placeholder, uncoloured, for an unknown weapon value', () => {
     const { doc, weapon } = build();
-    createStatusReadout({ doc, weapons: WEAPONS }).update(9, 1);
+    createStatusReadout({ doc, ...OPTIONS }).update(9, 1);
     expect(weapon.textContent).toBe('?');
     expect(weapon.style.color).toBe('');
   });
 
   it('show() unhides the element', () => {
     const { doc, el } = build();
-    const readout = createStatusReadout({ doc, weapons: WEAPONS });
+    const readout = createStatusReadout({ doc, ...OPTIONS });
     expect(el.hidden).toBe(true);
     readout.show();
     expect(el.hidden).toBe(false);
@@ -81,14 +88,106 @@ describe('createStatusReadout', () => {
   });
 
   it('fails loudly when the markup is missing', () => {
-    expect(() => createStatusReadout({ doc: createFakeDocument(), weapons: WEAPONS })).toThrow(
+    expect(() => createStatusReadout({ doc: createFakeDocument(), ...OPTIONS })).toThrow(
       /status-readout/,
     );
   });
 
   it('accepts a colour override', () => {
     const { doc, weapon } = build();
-    createStatusReadout({ doc, weapons: WEAPONS, colors: { VULCAN: 'red' } }).update(0, 1);
+    createStatusReadout({ doc, ...OPTIONS, colors: { VULCAN: 'red' } }).update(0, 1);
     expect(weapon.style.color).toBe('red');
+  });
+});
+
+describe('the MAX flash', () => {
+  const maxed = (readout) => readout.handle(EVENTS.PICKUP, 100, 100, 3, OUTCOME.MAXED, 0);
+
+  it('is hidden until a PICKUP event with the MAXED outcome arrives', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    expect(flash.hidden).toBe(true);
+    readout.tick(0);
+    expect(flash.hidden).toBe(true);
+    maxed(readout);
+    expect(flash.hidden).toBe(false);
+  });
+
+  it('hides again once 900 ms have passed on tick', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    maxed(readout);
+    readout.tick(5000); // the first tick after the catch starts the 900 ms
+    readout.tick(5000 + FLASH_MS - 1);
+    expect(flash.hidden).toBe(false);
+    readout.tick(5000 + FLASH_MS);
+    expect(flash.hidden).toBe(true);
+  });
+
+  it('fades out over the last part of the flash', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    maxed(readout);
+    readout.tick(0);
+    expect(flash.style.opacity).toBe('1.00');
+    readout.tick(FLASH_MS - 100);
+    expect(Number(flash.style.opacity)).toBeCloseTo(0.25, 2);
+  });
+
+  it('shows nothing for RAISED, SWITCHED or STOCKED catches', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    for (const outcome of [OUTCOME.RAISED, OUTCOME.SWITCHED, OUTCOME.STOCKED]) {
+      readout.handle(EVENTS.PICKUP, 100, 100, 3, outcome, 0);
+    }
+    readout.tick(0);
+    expect(flash.hidden).toBe(true);
+  });
+
+  it('ignores other event types even with a matching b payload', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.EXPLOSION, 100, 100, 0, OUTCOME.MAXED, 0);
+    readout.handle(EVENTS.HIT, 100, 100, 0, OUTCOME.MAXED, 0);
+    expect(flash.hidden).toBe(true);
+  });
+
+  it('a second MAX inside the window extends the flash instead of stacking', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    maxed(readout);
+    readout.tick(0);
+    readout.tick(600);
+    maxed(readout);
+    readout.tick(700); // the deadline restarts from this tick
+    readout.tick(700 + FLASH_MS - 1);
+    expect(flash.hidden).toBe(false);
+    readout.tick(700 + FLASH_MS);
+    expect(flash.hidden).toBe(true);
+  });
+
+  it('can flash again after it has hidden', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    maxed(readout);
+    readout.tick(0);
+    readout.tick(FLASH_MS);
+    expect(flash.hidden).toBe(true);
+    maxed(readout);
+    readout.tick(FLASH_MS + 10);
+    expect(flash.hidden).toBe(false);
+  });
+
+  it('does not touch the DOM on ticks while nothing flashes', () => {
+    const { doc, flash } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    for (let t = 0; t < 5; t++) readout.tick(t * 16);
+    expect(flash.style.opacity).toBeUndefined();
+  });
+
+  it('fails loudly when #max-flash is missing from the page', () => {
+    const { doc, flash } = build();
+    flash.remove();
+    expect(() => createStatusReadout({ doc, ...OPTIONS })).toThrow(/max-flash/);
   });
 });

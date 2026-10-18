@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/fx/palette.js';
-import { HIT_RECIPE, RECIPES, createExplosionFx, mulberry32 } from '../../src/fx/explosion_fx.js';
+import {
+  HIT_RECIPE,
+  PICKUP_RECIPE,
+  RECIPES,
+  createExplosionFx,
+  mulberry32,
+} from '../../src/fx/explosion_fx.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4 };
+const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4 };
 const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
 
 function build(options = {}) {
@@ -14,6 +21,7 @@ function build(options = {}) {
     layers: { additive: layer('additive'), normal: layer('normal') },
     events: EVENTS,
     blast: BLAST,
+    pickupKinds: PICKUP_KINDS,
     // The ground flag lifts a point onto a distinct plane, so a test can tell which one was used.
     toWorld: (x, y, ground, out) => out.set(x - 120 + (ground ? 1000 : 0), ground ? -40 : 0, y - 160),
     ...options,
@@ -253,5 +261,72 @@ describe('mulberry32', () => {
       expect(v).toBeLessThan(1);
       expect(v).toBe(b());
     }
+  });
+});
+
+describe('the PICKUP sparkle', () => {
+  function catchPickup({ kind = PICKUP_KINDS.CRYSTAL, outcome = 0, color = 0, scale = 1 } = {}) {
+    const built = build({ getScale: () => scale });
+    built.fx.handle(EVENTS.PICKUP, 130, 170, kind, outcome, color);
+    return built.emitted;
+  }
+
+  it('throws 10 additive sparkles at the catch position and nothing on the normal layer', () => {
+    const { additive, normal } = catchPickup();
+    expect(additive).toHaveLength(10);
+    expect(normal).toHaveLength(0);
+    expect(PICKUP_RECIPE).toHaveLength(1);
+    for (const p of additive) expect(p.slice(0, 3)).toEqual([10, 0, 10]); // toWorld(130, 170)
+  });
+
+  it('lives 0.3 s and expands outward in every direction on the plane', () => {
+    const { additive } = catchPickup();
+    expect(additive).toHaveLength(10);
+    for (const p of additive) {
+      expect(p[6]).toBeCloseTo(0.3, 5);
+      expect(p[4]).toBe(0); // flat
+      expect(Math.hypot(p[3], p[5])).toBeGreaterThan(20);
+    }
+    const heading = new Set(additive.map((p) => Math.sign(p[3]) + Math.sign(p[5]) * 3));
+    expect(heading.size).toBeGreaterThan(2);
+  });
+
+  it.each([
+    ['red', 0, PALETTE.CRYSTAL_RED],
+    ['blue', 1, PALETTE.CRYSTAL_BLUE],
+    ['purple', 2, PALETTE.CRYSTAL_PURPLE],
+  ])('is %s when the colour index at the catch is %i', (_name, color, entry) => {
+    const { additive } = catchPickup({ color });
+    expect(additive).toHaveLength(10);
+    for (const p of additive) expect(p.slice(9, 12)).toEqual(entry.rgb);
+  });
+
+  it('uses the bomb pickup colour for the BOMB kind whatever the colour slot says', () => {
+    const { additive } = catchPickup({ kind: PICKUP_KINDS.BOMB, color: 0 });
+    expect(additive).toHaveLength(10);
+    for (const p of additive) expect(p.slice(9, 12)).toEqual(PALETTE.BOMB_PICKUP.rgb);
+  });
+
+  it('draws a colour index outside the cycle in the red crystal colour', () => {
+    const { additive } = catchPickup({ color: 7 });
+    expect(additive).toHaveLength(10);
+    for (const p of additive) expect(p.slice(9, 12)).toEqual(PALETTE.CRYSTAL_RED.rgb);
+  });
+
+  it('scales the count with the tier, never below one', () => {
+    expect(catchPickup({ scale: 0.6 }).additive).toHaveLength(6);
+    expect(catchPickup({ scale: 0.35 }).additive).toHaveLength(4); // round(3.5)
+    expect(catchPickup({ scale: 0.01 }).additive).toHaveLength(1);
+  });
+
+  it('sparkles for every outcome, not only MAXED', () => {
+    for (const outcome of [0, 1, 2, 3]) expect(catchPickup({ outcome }).additive).toHaveLength(10);
+  });
+
+  it('leaves the explosion and hit recipes untouched', () => {
+    const { fx, emitted } = build();
+    fx.handle(EVENTS.HIT, 120, 160, 0, 0, 0);
+    expect(emitted.additive).toHaveLength(HIT_RECIPE[0].count);
+    expect(emitted.additive[0].slice(9, 12)).toEqual(PALETTE.HIT_SPARK.rgb);
   });
 });
