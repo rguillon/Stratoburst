@@ -8,8 +8,13 @@ import {
 } from '../../src/render/camera_fit.js';
 import { createGroundLayer, TERRAIN_DEPTH } from '../../src/render/ground_layer.js';
 import {
+  FLICKER_DIM,
+  FLICKER_SHARE,
+  REFLECTION_GAIN,
   cityY,
   createCityLayer,
+  flickerLevel,
+  placementUnit,
   terrainWindow,
   unitBoxModel,
   windowCapacity,
@@ -399,7 +404,12 @@ describe('createCityLayer', () => {
       ],
       { geometryFor, detail: 'high' },
     );
-    expect(layer.group.children.map((c) => c.name).sort()).toEqual(['city-sign', 'city-tower', 'city-tower-glow']);
+    expect(layer.group.children.map((c) => c.name).sort()).toEqual([
+      'city-sign',
+      'city-tower',
+      'city-tower-glow',
+      'city-tower-reflection',
+    ]);
     const tower = meshNamed(layer, 'city-tower');
     const glow = meshNamed(layer, 'city-tower-glow');
     expect(tower.geometry).toBe(geometries.get('TOWER:high').body);
@@ -494,5 +504,294 @@ describe('createCityLayer', () => {
       const rgb = glow.getColorAt(i, new THREE.Color()).toArray();
       expect(rgb.every((v, k) => Math.abs(v - expected[k]) < 1e-5)).toBe(true);
     }
+  });
+});
+
+
+// Wet streets (D-36): a dim, flattened copy of every glow lies on the road in front of its building.
+describe('reflections', () => {
+  const FIRE = 7;
+  const glowModel = () => ({
+    body: new THREE.BoxGeometry(1, 1, 1),
+    glow: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+  });
+  const withGlow = (records, extra = {}) => build(records, { geometryFor: glowModel, ...extra });
+
+  it('adds at most one mesh per glowing kind, named after it, and none for a kind with no glow', () => {
+    const layer = withGlow([
+      [TOWER, 10, 0, 10, 20, 0],
+      [SIGN, 12, 5, 2, 8, 1],
+    ]);
+    const names = layer.group.children.map((child) => child.name);
+    expect(names.filter((n) => n.endsWith('-reflection')).sort()).toEqual(['city-sign-reflection', 'city-tower-reflection']);
+    expect(layer.group.children).toHaveLength(6);
+    const plain = build([[TOWER, 10, 0, 10, 20, 0]]);
+    expect(plain.group.children.map((child) => child.name)).toEqual(['city-tower']);
+  });
+
+  it('is off until asked: hidden and drawing nothing', () => {
+    const layer = withGlow([[TOWER, 10, 0, 10, 20, 0]]);
+    layer.update(0);
+    const reflection = meshNamed(layer, 'city-tower-reflection');
+    expect(reflection.visible).toBe(false);
+    expect(reflection.count).toBe(0);
+  });
+
+  it('shows the reflection meshes with the same instance count as the glow when on, and hides them when off', () => {
+    const layer = withGlow([
+      [TOWER, 10, 0, 10, 20, 0],
+      [TOWER, 40, 4, 10, 20, 0],
+    ]);
+    layer.setReflections(true);
+    layer.update(0);
+    const reflection = meshNamed(layer, 'city-tower-reflection');
+    expect(reflection.visible).toBe(true);
+    expect(reflection.count).toBe(2);
+    expect(reflection.count).toBe(meshNamed(layer, 'city-tower-glow').count);
+    layer.setReflections(false);
+    expect(reflection.visible).toBe(false);
+    layer.update(0);
+    expect(reflection.count).toBe(0);
+    layer.setReflections(true);
+    layer.update(0);
+    expect(reflection.count).toBe(2);
+  });
+
+  it('is dim (gain at most 0.35), additive and writes no depth', () => {
+    expect(REFLECTION_GAIN).toBeLessThanOrEqual(0.35);
+    expect(REFLECTION_GAIN).toBeGreaterThan(0);
+    const layer = withGlow([[TOWER, 10, 0, 10, 20, 0]]);
+    const { material } = meshNamed(layer, 'city-tower-reflection');
+    expect(material.blending).toBe(THREE.AdditiveBlending);
+    expect(material.transparent).toBe(true);
+    expect(material.depthWrite).toBe(false);
+    expect(Math.max(material.color.r, material.color.g, material.color.b)).toBeCloseTo(REFLECTION_GAIN, 5);
+  });
+
+  it('lies flat on the road in front of its building and is stretched along the road', () => {
+    const layer = withGlow([[TOWER, 100, 0, 10, 20, 0]]);
+    layer.setReflections(true);
+    layer.update(0);
+    const reflection = meshNamed(layer, 'city-tower-reflection');
+    const m = new THREE.Matrix4();
+    reflection.getMatrixAt(0, m);
+    const at = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(m);
+    const base = localPosition(meshNamed(layer, 'city-tower'), 0);
+    const bottom = at(0, 0, 0);
+    const top = at(0, 1, 0);
+    const front = at(0, 0.5, 0.5);
+    const back = at(0, 0.5, -0.5);
+    // Flat: the whole glow stays within a hair of the road.
+    for (const p of [bottom, top, front, back]) {
+      expect(p.y).toBeGreaterThanOrEqual(0);
+      expect(p.y).toBeLessThan(0.3);
+    }
+    // Centred on the building's x, starting at its front edge and running toward the viewer (+z).
+    expect(bottom.x).toBeCloseTo(base.x, 4);
+    expect(bottom.z).toBeCloseTo(base.z + 5, 4);
+    expect(top.z - bottom.z).toBeGreaterThan(5);
+    expect(top.z - bottom.z).toBeLessThanOrEqual(20);
+  });
+
+  it('shares the glow instance colour, so a reflection takes the sign hue and its flicker', () => {
+    const layer = build([[SIGN, 12, 5, 2, 8, 1]], { geometryFor: glowModel });
+    expect(meshNamed(layer, 'city-sign-reflection').instanceColor).toBe(
+      meshNamed(layer, 'city-sign-glow').instanceColor,
+    );
+    expect(meshNamed(layer, 'city-sign-glow').instanceColor).not.toBeNull();
+  });
+
+  it('swaps geometry with setDetail, with the glow', () => {
+    const made = new Map();
+    const geometryFor = (name, detail) => {
+      const key = `${name}:${detail}`;
+      if (!made.has(key)) made.set(key, glowModel());
+      return made.get(key);
+    };
+    const layer = build([[TOWER, 10, 0, 10, 20, 0]], { geometryFor, detail: 'high' });
+    const reflection = meshNamed(layer, 'city-tower-reflection');
+    expect(reflection.geometry).toBe(made.get('TOWER:high').glow);
+    layer.setDetail('low');
+    expect(reflection.geometry).toBe(made.get('TOWER:low').glow);
+  });
+});
+
+describe('placementUnit', () => {
+  it('is deterministic and in [0, 1)', () => {
+    expect(placementUnit(12, 340, 3)).toBe(placementUnit(12, 340, 3));
+    for (let i = 0; i < 200; i++) {
+      const u = placementUnit(i * 3.5, i * 11, i % 6);
+      expect(u).toBeGreaterThanOrEqual(0);
+      expect(u).toBeLessThan(1);
+    }
+  });
+
+  it('spreads placements: about FLICKER_SHARE of a long run falls below it', () => {
+    let below = 0;
+    const n = 4000;
+    for (let i = 0; i < n; i++) if (placementUnit((i * 7) % 240, i * 2.5, i % 6) < FLICKER_SHARE) below += 1;
+    expect(below / n).toBeGreaterThan(0.1);
+    expect(below / n).toBeLessThan(0.2);
+  });
+});
+
+describe('flickerLevel', () => {
+  it('is steady (1) for a placement outside the flickering share, at any time', () => {
+    for (let t = 0; t < 20; t += 0.37) expect(flickerLevel(0.5, t)).toBe(1);
+    expect(flickerLevel(FLICKER_SHARE, 3)).toBe(1);
+  });
+
+  it('switches between on and a dim level for a flickering placement', () => {
+    const seen = new Set();
+    for (let t = 0; t < 12; t += 0.01) seen.add(flickerLevel(0.05, t));
+    expect([...seen].sort()).toEqual([FLICKER_DIM, 1].sort());
+    expect(FLICKER_DIM).toBeLessThan(0.2);
+  });
+
+  it('depends only on the unit and the clock', () => {
+    expect(flickerLevel(0.03, 7.123)).toBe(flickerLevel(0.03, 7.123));
+    const pattern = (u) => Array.from({ length: 300 }, (_, i) => flickerLevel(u, i * 0.02)).join();
+    expect(pattern(0.02)).not.toBe(pattern(0.11));
+  });
+});
+
+describe('sign flicker in the city layer', () => {
+  // A wall of signs, one hue; `flickering` are the ones the layer must flicker.
+  const records = [];
+  for (let d = 0; d < 400; d += 4) records.push([SIGN, 20 + ((d / 4) % 7) * 20, d, 2, 8, (d / 4) % 6]);
+  const unitOf = (r) => placementUnit(r[1], r[2], r[5]);
+
+  function glowLevels(layer) {
+    const glow = meshNamed(layer, 'city-sign-glow');
+    return Array.from({ length: glow.count }, (_, i) => glow.getColorAt(i, new THREE.Color()).toArray());
+  }
+
+  function build40() {
+    return createCityLayer({
+      layout: flat(records),
+      stride: STRIDE,
+      kinds: KINDS,
+      ratio: RATIO,
+      y0: Y0,
+      playfieldW: W,
+      playfieldH: H,
+    });
+  }
+
+  it('dims some signs at some times and leaves the rest at their hue', () => {
+    const layer = build40();
+    const dimmed = new Set();
+    const steady = new Set();
+    for (let t = 0; t < 8; t += 0.05) {
+      layer.update(200, t);
+      const levels = glowLevels(layer);
+      const body = meshNamed(layer, 'city-sign');
+      levels.forEach((rgb, i) => {
+        const z = localPosition(body, i).z + H / 2;
+        const d = Math.round((Y0 + RATIO * 200 - z) / RATIO);
+        const record = records.find((r) => Math.abs(r[2] - d) < 1.5);
+        const full = sceneryTint('SIGN', record[5]);
+        const ratio = rgb[0] / full[0] || rgb[1] / full[1] || rgb[2] / full[2];
+        (Math.abs(ratio - 1) < 1e-4 ? steady : dimmed).add(unitOf(record) < FLICKER_SHARE ? 'f' : 'n');
+      });
+    }
+    expect(dimmed.has('f')).toBe(true); // a flickering sign went dim at some time
+    expect(dimmed.has('n')).toBe(false); // a steady sign never did
+    expect(steady.has('n')).toBe(true);
+  });
+
+  it('is deterministic: the same clock gives the same colours in two layers', () => {
+    const a = build40();
+    const b = build40();
+    a.update(200, 3.21);
+    b.update(0, 0);
+    b.update(200, 3.21);
+    expect(glowLevels(a)).toEqual(glowLevels(b));
+  });
+
+  it('holds still when the clock holds (hitstop and pause)', () => {
+    const layer = build40();
+    layer.update(200, 5.5);
+    const first = glowLevels(layer);
+    layer.update(200, 5.5);
+    expect(glowLevels(layer)).toEqual(first);
+  });
+
+  it('defaults the clock to 0', () => {
+    const a = build40();
+    const b = build40();
+    a.update(200);
+    b.update(200, 0);
+    expect(glowLevels(a)).toEqual(glowLevels(b));
+  });
+
+  it('never flickers a tower', () => {
+    const towers = [];
+    for (let d = 0; d < 200; d += 4) towers.push([TOWER, 30, d, 10, 20, d % 6]);
+    const layer = createCityLayer({
+      layout: flat(towers),
+      stride: STRIDE,
+      kinds: KINDS,
+      ratio: RATIO,
+      y0: Y0,
+      playfieldW: W,
+      playfieldH: H,
+    });
+    layer.update(100, 0);
+    const glow = meshNamed(layer, 'city-tower-glow');
+    const at0 = Array.from({ length: glow.count }, (_, i) => glow.getColorAt(i, new THREE.Color()).toArray());
+    for (let t = 0.3; t < 6; t += 0.3) {
+      layer.update(100, t);
+      const now = Array.from({ length: glow.count }, (_, i) => glow.getColorAt(i, new THREE.Color()).toArray());
+      expect(now).toEqual(at0);
+    }
+  });
+});
+
+describe('visible fires', () => {
+  const FIRE_KIND = 7;
+  const FIRE_ROWS = [
+    [FIRE_KIND, 60, 10, 10, 2, 0],
+    [FIRE_KIND, 150, 40, 10, 2, 1],
+    [FIRE_KIND, 90, 3000, 10, 2, 2],
+    [TOWER, 30, 20, 10, 20, 0],
+  ];
+
+  it('exposes the FIRE placements in the window as logical x, y pairs plus a count', () => {
+    const layer = build(FIRE_ROWS);
+    layer.update(0);
+    expect(layer.firePositions).toBeInstanceOf(Float32Array);
+    expect(layer.fireCount).toBe(2);
+    expect(layer.firePositions[0]).toBeCloseTo(60);
+    expect(layer.firePositions[1]).toBeCloseTo(cityY(0, 10, Y0, RATIO));
+    expect(layer.firePositions[2]).toBeCloseTo(150);
+    expect(layer.firePositions[3]).toBeCloseTo(cityY(0, 40, Y0, RATIO));
+  });
+
+  it('is preallocated: the same array every frame, refreshed in update', () => {
+    const layer = build(FIRE_ROWS);
+    const positions = layer.firePositions;
+    layer.update(0);
+    expect(layer.firePositions).toBe(positions);
+    layer.update(3000 - 20);
+    expect(layer.firePositions).toBe(positions);
+    expect(layer.fireCount).toBe(1);
+    expect(layer.firePositions[0]).toBeCloseTo(90);
+    expect(layer.firePositions[1]).toBeCloseTo(cityY(2980, 3000, Y0, RATIO));
+  });
+
+  it('is sized by the FIRE capacity and reports none when the stage has no fire', () => {
+    const layer = build(FIRE_ROWS);
+    expect(layer.firePositions.length).toBe(layer.capacities.FIRE * 2);
+    const none = build([[TOWER, 30, 20, 10, 20, 0]]);
+    none.update(0);
+    expect(none.firePositions.length).toBe(0);
+    expect(none.fireCount).toBe(0);
+  });
+
+  it('counts zero when every fire has scrolled out of the window', () => {
+    const layer = build(FIRE_ROWS);
+    layer.update(1500);
+    expect(layer.fireCount).toBe(0);
   });
 });
