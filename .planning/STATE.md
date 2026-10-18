@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-21-PLAN.md
-last_updated: "2026-10-18T05:58:07.896Z"
+stopped_at: Completed 02-22-PLAN.md
+last_updated: "2026-10-18T06:08:58.117Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: b57556714ec9af71476eb65f1cbe124c3b2b02f9
+state_head: a2d9a64bfdcfe08696798ecdabf89c57f971b402
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 31
+  completed_plans: 32
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 22 of 33
+Plan: 23 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -87,6 +87,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P19 | 10 min | 2 tasks | 8 files |
 | Phase 02 P20 | 7 min | 2 tasks | 10 files |
 | Phase 02 P21 | 15 min | 2 tasks | 12 files |
+| Phase 02 P22 | 9 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -157,6 +158,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-20: the ?god flag is presence-only in JS and Python accepts only a real boolean True; e2e bootGame boots god unless mortal is asked for and the perf harness always passes god
 - [Phase 02]: 02-21: the laser is a pool-free hitscan beam that pierces every enemy in its column (research A2), damaging on the first firing step then every 3rd, with BEAM_W (header 18) carrying its half-width
 - [Phase 02]: 02-21: the beam draws additive at renderOrder 4 with gains 0.42 core / 0.5 glow / 0.9 flare (full HDR tone-mapped to white) and is shown once before the second prewarm so its shaders compile at load
+- [Phase 02]: 02-22: the bomb press is latched in tick() and cleared in _step whether or not the launch succeeds, so a refused press never fires later; the bomb steps before remove_dead so its kills join the normal kill pass
+- [Phase 02]: 02-22: blast radius is 20 on the first blast step and 230 from step 30, damage lands on blast steps 1, 7, 13; the launch-step invulnerability grant protects 143 steps because that step already decrements it
 
 ### Pending Todos
 
@@ -179,6 +182,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:58:07.795Z
-Stopped at: Completed 02-21-PLAN.md
+Last session: 2026-10-18T06:08:53.704Z
+Stopped at: Completed 02-22-PLAN.md
 Resume file: None
