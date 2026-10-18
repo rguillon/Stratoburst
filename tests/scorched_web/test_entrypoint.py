@@ -3,6 +3,7 @@ import math
 import pytest
 
 from scorched_core.game.fault_mode import FaultMode
+from scorched_core.tuning import BOMB_START_STOCK
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_web.entrypoint import create_game
 from scorched_web.web_game import WebGame
@@ -112,6 +113,38 @@ def test_the_level_option_is_truncated_and_clamped_and_junk_means_one(
 def test_weapon_and_level_reach_the_game_together() -> None:
     game = create_game({"weapon": "homing", "level": "4"})._game
     assert (game.loadout.kind, game.loadout.level) == (WeaponKind.HOMING, 4)
+
+
+@pytest.mark.parametrize(
+    ("bombs", "expected"),
+    [
+        (7, 7),
+        (0, 0),
+        (5, 5),
+        ("4", 4),
+        (99, 7),
+        (-2, 0),
+        (2.9, 2),
+        ("6.8", 6),
+        (math.nan, 3),
+        (math.inf, 3),
+        (-math.inf, 3),
+        ("nan", 3),
+        ("x", 3),
+        ("", 3),
+        (None, 3),
+        (True, 3),
+        ([5], 3),
+    ],
+)
+def test_the_bombs_option_is_truncated_and_clamped_and_junk_means_three(
+    bombs: object, expected: int
+) -> None:
+    assert create_game({"bombs": bombs})._game.bomb.stock == expected
+
+
+def test_no_bombs_option_means_the_default_stock() -> None:
+    assert create_game({"seed": 1})._game.bomb.stock == BOMB_START_STOCK
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WEAPON_CSS, createStatusReadout } from '../../src/ui/status_readout.js';
+import { BOMB_PIP, BOMB_PIPS_MAX, WEAPON_CSS, createStatusReadout } from '../../src/ui/status_readout.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
 const WEAPONS = { VULCAN: 0, LASER: 1, HOMING: 2 };
@@ -18,15 +18,18 @@ function build() {
   weapon.className = 'weapon';
   const level = doc.createElement('span');
   level.className = 'level';
-  el.append(weapon, level);
+  const bombs = doc.createElement('span');
+  bombs.className = 'bombs';
+  el.append(weapon, level, bombs);
   const flash = doc.createElement('div');
   flash.id = 'max-flash';
   flash.hidden = true;
   doc.body.append(el, flash);
-  const writes = { weapon: 0, level: 0 };
+  const writes = { weapon: 0, level: 0, bombs: 0 };
   for (const [key, node] of [
     ['weapon', weapon],
     ['level', level],
+    ['bombs', bombs],
   ]) {
     let text = '';
     Object.defineProperty(node, 'textContent', {
@@ -37,7 +40,7 @@ function build() {
       },
     });
   }
-  return { doc, el, weapon, level, flash, writes };
+  return { doc, el, weapon, level, bombs, flash, writes };
 }
 
 describe('createStatusReadout', () => {
@@ -61,14 +64,50 @@ describe('createStatusReadout', () => {
   it('writes only when a value changes', () => {
     const { doc, writes } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(0, 1);
-    readout.update(0, 1);
-    readout.update(0, 1);
-    expect(writes).toEqual({ weapon: 1, level: 1 });
-    readout.update(0, 2);
-    expect(writes).toEqual({ weapon: 1, level: 2 });
-    readout.update(2, 2);
-    expect(writes).toEqual({ weapon: 2, level: 2 });
+    readout.update(0, 1, 3);
+    readout.update(0, 1, 3);
+    readout.update(0, 1, 3);
+    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1 });
+    readout.update(0, 2, 3);
+    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1 });
+    readout.update(2, 2, 3);
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1 });
+    readout.update(2, 2, 2);
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2 });
+  });
+
+  it.each([0, 1, 3, 7])('shows %i bombs as that many pips', (stock) => {
+    const { doc, bombs } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(0, 1, stock);
+    expect(bombs.textContent).toBe(BOMB_PIP.repeat(stock));
+  });
+
+  it('shows no pips for a stock of zero and seven for the full stock', () => {
+    const { doc, bombs } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.update(0, 1, 0);
+    expect(bombs.textContent).toBe('');
+    readout.update(0, 1, BOMB_PIPS_MAX);
+    expect(bombs.textContent).toHaveLength(7);
+  });
+
+  it.each([
+    [99, 7],
+    [-4, 0],
+    [2.9, 2],
+    [Number.NaN, 0],
+    [undefined, 0],
+    [Number.POSITIVE_INFINITY, 0],
+  ])('treats a stock of %s as %i pips', (stock, pips) => {
+    const { doc, bombs } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(0, 1, stock);
+    expect(bombs.textContent).toBe(BOMB_PIP.repeat(pips));
+  });
+
+  it('never uses innerHTML for the pips', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../../src/ui/status_readout.js', import.meta.url), 'utf8');
+    expect(source).not.toContain('innerHTML');
   });
 
   it('shows a placeholder, uncoloured, for an unknown weapon value', () => {

@@ -1,8 +1,9 @@
 // URL flag grammar (D-15). Only these parameters are read; everything else is ignored:
-//   debug, stress, tier, crash (Phase 1), the weapon test flags weapon and level, and god
-// (presence only; the ship ignores hits so automated runs are never disturbed).
+//   debug, stress, tier, crash (Phase 1), the weapon test flags weapon and level, god
+// (presence only; the ship ignores hits so automated runs are never disturbed) and bombs.
 // weapon is an allow-listed lowercase name (else null, the default); level is truncated and
-// clamped to 1..5 (null when absent or not a number). Python validates both again.
+// clamped to 1..5 and bombs (the starting stock) to 0..7, both null when absent or not a number.
+// Python validates all three again.
 
 export const STRESS_DEFAULT = 500;
 export const STRESS_MAX = 5000;
@@ -13,12 +14,21 @@ const WEAPONS = new Set(['vulcan', 'laser', 'homing']);
 
 export const LEVEL_MIN = 1;
 export const LEVEL_MAX = 5;
+export const BOMBS_MIN = 0;
+export const BOMBS_MAX = 7;
 
 function parseLevel(params) {
   if (!params.has('level')) return null;
   const parsed = Number.parseFloat(params.get('level'));
   if (!Number.isFinite(parsed)) return null;
   return Math.min(Math.max(Math.trunc(parsed), LEVEL_MIN), LEVEL_MAX);
+}
+
+function parseBombs(params) {
+  if (!params.has('bombs')) return null;
+  const parsed = Number.parseFloat(params.get('bombs'));
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(Math.max(Math.trunc(parsed), BOMBS_MIN), BOMBS_MAX);
 }
 
 function parseStress(params) {
@@ -43,5 +53,6 @@ export function parseUrlFlags(search) {
     weapon: pick(params, 'weapon', WEAPONS),
     level: parseLevel(params),
     god: params.has('god'),
+    bombs: parseBombs(params),
   });
 }

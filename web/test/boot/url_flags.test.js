@@ -11,6 +11,7 @@ describe('parseUrlFlags', () => {
       weapon: null,
       level: null,
       god: false,
+      bombs: null,
     });
   });
 
@@ -72,6 +73,21 @@ describe('parseUrlFlags', () => {
     expect(parseUrlFlags(query).level).toBe(expected);
   });
 
+  it.each([
+    ['?bombs=5', 5],
+    ['?bombs=0', 0],
+    ['?bombs=7', 7],
+    ['?bombs=12', 7],
+    ['?bombs=-1', 0],
+    ['?bombs=2.9', 2],
+    ['?bombs=abc', null],
+    ['?bombs=', null],
+    ['?bombs=Infinity', null],
+    ['', null],
+  ])('%s gives bombs %s', (query, expected) => {
+    expect(parseUrlFlags(query).bombs).toBe(expected);
+  });
+
   it('detects god as a bare flag', () => {
     expect(parseUrlFlags('?god').god).toBe(true);
     expect(parseUrlFlags('?debug&god=1').god).toBe(true);
@@ -87,6 +103,7 @@ describe('parseUrlFlags', () => {
       weapon: null,
       level: null,
       god: false,
+      bombs: null,
     });
   });
 

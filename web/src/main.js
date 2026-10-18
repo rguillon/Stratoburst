@@ -392,7 +392,7 @@ async function main() {
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
-      readout.update(header[slots.WEAPON], header[slots.LEVEL]);
+      readout.update(header[slots.WEAPON], header[slots.LEVEL], header[slots.BOMBS]);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);

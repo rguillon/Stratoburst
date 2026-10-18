@@ -114,3 +114,38 @@ test('a shot-down AA turret drops a bomb pickup', async ({ page }) => {
   expect(await page.evaluate(() => globalThis.__pickupNSeen)).toBeGreaterThanOrEqual(1);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// PLYR-09, PLYR-07: the stock is on screen as one amber pip per bomb, and ?bombs sets it.
+test('?bombs=7 starts with seven bombs shown as seven pips', async ({ page }) => {
+  await bootGame(page, '?debug&bombs=7');
+  expect(await readSlot(page, 'BOMBS')).toBe(7);
+  await expect(page.locator('#status-readout .bombs')).toHaveText('●'.repeat(7));
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('the pips follow the stock down as bombs are spent', async ({ page }) => {
+  await bootGame(page, '?debug');
+  await expect(page.locator('#status-readout .bombs')).toHaveText('●'.repeat(3));
+  await page.keyboard.press('KeyK');
+  await expect(page.locator('#status-readout .bombs')).toHaveText('●'.repeat(2), {
+    timeout: 20_000,
+  });
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('?bombs=0 starts empty: no pips, and K launches nothing', async ({ page }) => {
+  await bootGame(page, '?debug&bombs=0');
+  expect(await readSlot(page, 'BOMBS')).toBe(0);
+  await expect(page.locator('#status-readout .bombs')).toHaveText('');
+  await page.keyboard.press('KeyK');
+  await page.waitForTimeout(500);
+  expect(await readSlot(page, 'BOMB_PHASE')).toBe(0);
+  expect(await readSlot(page, 'BOMBS')).toBe(0);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('an out-of-range ?bombs is clamped to the stock cap', async ({ page }) => {
+  await bootGame(page, '?debug&bombs=99');
+  expect(await readSlot(page, 'BOMBS')).toBe(7);
+  await expect(page.locator('#status-readout .bombs')).toHaveText('●'.repeat(7));
+});

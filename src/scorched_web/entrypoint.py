@@ -5,7 +5,7 @@ from typing import Any, Final
 
 from scorched_core.game.fault_mode import FaultMode
 from scorched_core.game.game import Game
-from scorched_core.tuning import MAX_LEVEL
+from scorched_core.tuning import BOMB_MAX_STOCK, BOMB_START_STOCK, MAX_LEVEL
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_web.bridge.render_sink import RenderSink
 from scorched_web.web_game import WebGame
@@ -25,6 +25,7 @@ def create_game(options: Any = None) -> WebGame:  # noqa: ANN401 - dict or JsPro
         weapon=_weapon(opts.get("weapon")),
         level=_level(opts.get("level")),
         god=_flag(opts.get("god")),
+        bombs=_bombs(opts.get("bombs")),
     )
     return WebGame(game, RenderSink(game.buffers))
 
@@ -55,6 +56,19 @@ def _level(value: object) -> int:
     if not math.isfinite(number):
         return 1
     return min(max(int(number), 1), MAX_LEVEL)
+
+
+def _bombs(value: object) -> int:
+    """The requested starting bomb stock, truncated and clamped to 0..7; junk means 3."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return BOMB_START_STOCK
+    try:
+        number = float(value)
+    except ValueError:
+        return BOMB_START_STOCK
+    if not math.isfinite(number):
+        return BOMB_START_STOCK
+    return min(max(int(number), 0), BOMB_MAX_STOCK)
 
 
 def _flag(value: object) -> bool:
