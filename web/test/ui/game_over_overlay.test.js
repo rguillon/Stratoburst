@@ -205,3 +205,71 @@ describe('createGameOverOverlay', () => {
     expect(t.el.listenerCount('pointerup')).toBe(1);
   });
 });
+
+describe('a deliberate restart', () => {
+  function armed() {
+    const t = build();
+    const overlay = t.make();
+    overlay.update(...frame(OVER), 0);
+    overlay.update(...frame(OVER), 900);
+    return { ...t, overlay };
+  }
+
+  it('ignores the repeat events of a key that was already held down', () => {
+    const t = armed();
+    t.win.dispatch('keydown', { code: 'Space', repeat: true });
+    t.win.dispatch('keydown', { code: 'KeyJ', repeat: true });
+    expect(t.restarts).toHaveLength(0);
+  });
+
+  it('restarts on a fresh key press that follows ignored repeats', () => {
+    const t = armed();
+    t.win.dispatch('keydown', { code: 'Space', repeat: true });
+    t.win.dispatch('keydown', { code: 'Space', repeat: false });
+    expect(t.restarts).toHaveLength(1);
+  });
+
+  it('ignores a pointerup whose pointerdown came before the arm', () => {
+    const t = build();
+    const overlay = t.make();
+    overlay.update(...frame(OVER), 0);
+    overlay.update(...frame(OVER), 300);
+    t.el.dispatch('pointerdown', { pointerId: 7 });
+    overlay.update(...frame(OVER), 900);
+    t.el.dispatch('pointerup', { pointerId: 7 });
+    expect(t.restarts).toHaveLength(0);
+  });
+
+  it('ignores a pointerup with no pointerdown on the overlay', () => {
+    const t = armed();
+    t.el.dispatch('pointerup', { pointerId: 3 });
+    expect(t.restarts).toHaveLength(0);
+  });
+
+  it('restarts on a pointerup whose pointerdown came after the arm, matched by pointer id', () => {
+    const t = armed();
+    t.el.dispatch('pointerdown', { pointerId: 2 });
+    t.el.dispatch('pointerup', { pointerId: 9 });
+    expect(t.restarts).toHaveLength(0);
+    t.el.dispatch('pointerup', { pointerId: 2 });
+    expect(t.restarts).toHaveLength(1);
+  });
+
+  it('forgets a cancelled pointer', () => {
+    const t = armed();
+    t.el.dispatch('pointerdown', { pointerId: 2 });
+    t.el.dispatch('pointercancel', { pointerId: 2 });
+    t.el.dispatch('pointerup', { pointerId: 2 });
+    expect(t.restarts).toHaveLength(0);
+  });
+
+  it('forgets pointers pressed before the overlay hid, so a stale one never restarts the next game over', () => {
+    const { overlay, ...t } = armed();
+    t.el.dispatch('pointerdown', { pointerId: 4 });
+    overlay.update(...frame(), 1000);
+    overlay.update(...frame(OVER), 2000);
+    overlay.update(...frame(OVER), 3000);
+    t.el.dispatch('pointerup', { pointerId: 4 });
+    expect(t.restarts).toHaveLength(0);
+  });
+});
