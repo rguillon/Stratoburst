@@ -1,5 +1,6 @@
 // Quality tier ladder. Presentation only: DPR, canvas pixel budget, bloom mode and the share of
-// each explosion's particles that is spawned (the explosion's size never changes), the
+// the bloom strength (retuned for the neon night, D-37; low keeps a value but runs without bloom),
+// the share of each explosion's particles that is spawned (the explosion's size never changes), the
 // level of detail of the procedural models, how many scorch marks are drawn, and how many of the
 // pooled explosion lights may flash.
 // Nothing here reaches Python, so every device plays the same simulation.
@@ -10,6 +11,7 @@ export const TIERS = Object.freeze({
     dprCap: 2,
     maxPixels: 2_800_000,
     bloom: 'full',
+    bloomStrength: 0.6,
     particleScale: 1,
     modelDetail: 'high',
     maxDecals: 48,
@@ -20,6 +22,7 @@ export const TIERS = Object.freeze({
     dprCap: 1.5,
     maxPixels: 1_200_000,
     bloom: 'half',
+    bloomStrength: 0.5,
     particleScale: 0.6,
     modelDetail: 'mid',
     maxDecals: 32,
@@ -30,6 +33,7 @@ export const TIERS = Object.freeze({
     dprCap: 1,
     maxPixels: 600_000,
     bloom: 'off',
+    bloomStrength: 0.5,
     particleScale: 0.35,
     modelDetail: 'low',
     maxDecals: 16,

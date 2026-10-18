@@ -10,7 +10,9 @@ const BLOOM_SCALE = { full: 1, half: 0.5 };
 // tone map + sRGB. The optional bullet pass redraws `bulletScene` over the bloomed frame (depth
 // cleared, colour kept), so fire and explosion bloom can never wash over enemy bullets.
 // UnrealBloomPass needs renderer.toneMapping to be set; renderer_rig does that.
-// A tier either scales the bloom chain ('full' / 'half') or bypasses the composer ('off').
+// A tier either scales the bloom chain ('full' / 'half') or bypasses the composer ('off'), and
+// carries its own bloom strength. `bloomPass.baseStrength` is the live per-tier strength that
+// transient pulses (the bomb) return to.
 export function createPostPipeline(
   renderer,
   scene,
@@ -24,6 +26,7 @@ export function createPostPipeline(
   composer.addPass(scenePass);
   const bloomPass = new ScaledBloomPass(size, strength, radius, threshold);
   bloomPass.name = 'bloom';
+  bloomPass.baseStrength = strength;
   composer.addPass(bloomPass);
   if (bulletScene) {
     const bulletPass = new RenderPass(bulletScene, camera);
@@ -47,7 +50,10 @@ export function createPostPipeline(
 
   function setTier(tier) {
     enabled = tier.bloom !== 'off';
-    if (enabled) bloomPass.setScale(BLOOM_SCALE[tier.bloom]);
+    if (!enabled) return;
+    bloomPass.setScale(BLOOM_SCALE[tier.bloom]);
+    bloomPass.strength = tier.bloomStrength;
+    bloomPass.baseStrength = tier.bloomStrength;
   }
 
   function render() {
