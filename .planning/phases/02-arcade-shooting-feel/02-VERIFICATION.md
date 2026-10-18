@@ -1,7 +1,7 @@
 ---
 phase: 02-arcade-shooting-feel
 verified: 2026-10-18T12:00:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 covered_files:
   - .planning/phases/02-arcade-shooting-feel/02-01-PLAN.md
@@ -370,3 +370,7 @@ No code gaps. Nothing in the roadmap contract is FAILED. Two evidence caveats th
 
 _Verified: 2026-10-18_
 _Verifier: Claude (gsd-verifier)_
+
+## Acknowledged Gaps
+
+- Android measurement (UAT test 7, ROADMAP Phase 2 criterion 4 "both phones") was accepted as a gap by the user on 2026-10-18. Satisfied for one phone only; revisit when an Android device is available or amend the criterion.

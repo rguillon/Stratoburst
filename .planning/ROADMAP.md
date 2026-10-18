@@ -17,7 +17,7 @@ Scorched goes from an empty directory to a shareable 3-stage, 3D-rendered Raiden
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Playable Core on Real Devices** - Pyodide + three.js deployed to the real host; ship flies and shoots on desktop and phones; mobile performance go/no-go (completed 2026-10-17)
-- [ ] **Phase 2: Arcade Shooting Feel** - Full Raiden arsenal, bombs, death/respawn and the complete 3D juice + SFX stack, validated in a shooting gallery
+- [x] **Phase 2: Arcade Shooting Feel** - Full Raiden arsenal, bombs, death/respawn and the complete 3D juice + SFX stack, validated in a shooting gallery (completed 2026-10-18)
 - [ ] **Phase 3: Stage 1 Vertical Slice** - Complete data-driven stage 1 with multi-phase boss, scoring, lives and HUD (content-pipeline gate)
 - [ ] **Phase 4: Full Campaign & Arcade Shell** - Stages 2-3, difficulty, stage select, title/pause/continue screens, high scores, music, options, PWA
 
@@ -65,7 +65,7 @@ Plans:
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
 
-**Plans:** 33/33 plans executed (21 waves)
+**Plans:** 33/33 plans complete (21 waves)
 
 Plans:
 **Wave 1**
@@ -188,6 +188,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
-| 2. Arcade Shooting Feel | 33/33 | In Progress | - |
+| 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

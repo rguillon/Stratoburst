@@ -39,7 +39,7 @@ result: pass
 ### 7. ANDROID (waived, never measured): baseline and worst-case 5-minute runs on a mid-range Android phone, plus the feel checklist and the touch bomb button
 expected: avg fps >= 29, p95 frame <= 40 ms, worst minute >= 29, final tier keeps bloom (ROADMAP Phase 2 criterion 4: 'both phones')
 result: skipped
-reason: user skipped (no Android device tested)
+reason: "Deferred follow-up: user accepted the Android gap and moved on (2026-10-18)"
 
 ### 8. Forced tier runs: ?tier=low and ?tier=high, 2 minutes each, on desktop and iPhone (research assumption A11)
 expected: Frame time and tick recorded for comparison; tier=low keeps readability, tier=high holds frame rate on phones
@@ -59,3 +59,9 @@ skipped: 1
 blocked: 0
 
 ## Gaps
+
+## Deferred Follow-Ups
+
+- test: 7
+  idea: "Accepted Android gap: measure on a mid-range Android phone (avg fps >= 29, p95 <= 40 ms, bloom kept) or amend ROADMAP Phase 2 criterion 4"
+  deferred_at: 2026-10-18
