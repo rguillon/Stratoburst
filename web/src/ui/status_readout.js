@@ -1,7 +1,7 @@
-// The HUD values: score and high score along the top, weapon, level and bomb stock at the bottom
-// left (inside the safe area). Text goes in through textContent only, from manifest weapon names
-// and integers (the bombs as one pip character each), and only when a value changes, so calling
-// update() every frame never touches the DOM.
+// The HUD values: score and high score along the top; lives (ship icons), weapon, level and bomb
+// stock at the bottom left, inside the safe area. Text goes in through textContent only, from
+// manifest weapon names and integers (the bombs as one pip character each), and only when a value
+// changes, so calling update() every frame never touches the DOM.
 
 // CSS counterparts of the crystal colours (crimson, blue, purple; PALETTE.CRYSTAL_RED normalised).
 // None is in the orange-yellow band reserved for enemy bullets (D-39).
@@ -21,6 +21,14 @@ export const BOMB_PIPS_MAX = 7;
 // Whole pips for a header value; anything that is not a finite number shows no pips.
 const pipCount = (bombs) =>
   Number.isFinite(bombs) ? Math.min(Math.max(Math.trunc(bombs), 0), BOMB_PIPS_MAX) : 0;
+
+// One ship icon per life, 0..LIVES_ICONS_MAX (the lives cap, tuning LIVES_CAP). The HUD shows the ships
+// left including the one flying; the cyan colour is the player trim's, set in index.html's stylesheet.
+export const LIFE_ICON = '\u25b2';
+export const LIVES_ICONS_MAX = 9;
+
+const lifeCount = (lives) =>
+  Number.isFinite(lives) ? Math.min(Math.max(Math.trunc(lives), 0), LIVES_ICONS_MAX) : 0;
 
 // Whole number for a header value (the score is an exact integer in the float32 slot, up to seven
 // digits); anything that is not a finite number shows 0.
@@ -42,6 +50,7 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   const bombsEl = el.querySelector('.bombs');
   const scoreEl = el.querySelector('.score');
   const hiscoreEl = el.querySelector('.hiscore');
+  const livesEl = el.querySelector('.lives');
   const nameByValue = new Map(Object.entries(weapons).map(([name, value]) => [value, name]));
 
   let shownWeapon = Number.NaN;
@@ -49,6 +58,7 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   let shownPips = -1;
   let shownScore = -1;
   let shownHiscore = -1;
+  let shownLives = -1;
   // The flash starts counting at the first tick after the catch, so the 900 ms follow the frame
   // clock; a catch while it is up resets the count instead of stacking a second flash.
   let flashing = false;
@@ -74,6 +84,11 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
       if (pips !== shownPips) {
         shownPips = pips;
         bombsEl.textContent = BOMB_PIP.repeat(pips);
+      }
+      const lives = lifeCount(header[slots.LIVES]);
+      if (lives !== shownLives) {
+        shownLives = lives;
+        livesEl.textContent = LIFE_ICON.repeat(lives);
       }
       const score = wholeNumber(header[slots.SCORE]);
       if (score !== shownScore) {

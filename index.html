@@ -158,6 +158,11 @@
       #status-readout[hidden] {
         display: none;
       }
+      /* The lives are the player ship's trim cyan, never orange-yellow (D-39). */
+      #status-readout .lives {
+        color: rgb(27, 215, 255);
+        letter-spacing: 0.2em;
+      }
       /* The bomb pickup's acid green (PALETTE.BOMB_PICKUP 0.8, 3.6, 0.5 scaled so its largest channel
          is 255). Orange-yellow belongs to enemy bullets alone (D-39). */
       #status-readout .bombs {
@@ -262,7 +267,7 @@
       </div>
       <div id="status-readout" hidden>
         <div class="hud-top"><span class="score"></span><span class="hi"><span class="hi-label">HI</span> <span class="hiscore"></span></span></div>
-        <div class="hud-bl"><span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
+        <div class="hud-bl"><span class="lives"></span> <span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
       </div>
       <div id="max-flash" hidden>MAX</div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
