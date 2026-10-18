@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-10-18T03:46:57.773Z"
+stopped_at: Completed 02-07-PLAN.md
+last_updated: "2026-10-18T04:00:10.445Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 63216cafb08b78ab9aeaae4ba36a27b75ea95397
+state_head: f5c8e1820b91f62c9366ba0686f5a3f1b866054c
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 16
+  completed_plans: 17
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 7 of 33
+Plan: 8 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -72,6 +72,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P04 | 14 min | 2 tasks | 10 files |
 | Phase 02 P05 | 9 min | 3 tasks | 10 files |
 | Phase 02 P06 | 14 min | 2 tasks | 9 files |
+| Phase 02 P07 | 8 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-04: enemy meshes are one InstancedMesh per kind behind a geometryFor seam; flash is HDR (2.2) instanceColor on a white shared material; mesh with zero instances is not re-uploaded
 - [Phase 02]: 02-05: enemy motion is data (MotionKind per enemy, applied by a match with a loud unknown arm); hover state lives in the timer column; ground units move at SCROLL_SPEED * 0.94 = 0.752 per step and the ratio is exported in the manifest
 - [Phase 02]: 02-06: every model detail level is built eagerly and warmed at load, so a tier change only swaps cached geometry and material; terrain keeps separate smooth and flat materials instead of toggling flatShading
+- [Phase 02]: 02-07: air enemy models are { body, glow, top } (HDR accents in a separate glow mesh, optional spinning top); hit flash is a (6, 6, 6) instanceColor multiplier on vertex colours, rest is (1, 1, 1)
+- [Phase 02]: 02-07: a HELI top spins by angle + timeS * ROTOR_RATE (30 rad/s) and any other top follows the absolute aux aim angle; kinds without a builder (TANK, TURRET until 02-09) keep tinted primitives
 
 ### Pending Todos
 
@@ -135,6 +138,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T03:46:57.700Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-10-18T04:00:10.370Z
+Stopped at: Completed 02-07-PLAN.md
 Resume file: None
