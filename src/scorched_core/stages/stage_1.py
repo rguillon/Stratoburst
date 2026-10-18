@@ -18,6 +18,11 @@ downtown is dense neon with towers, signs and an elevated maglev line along x = 
 past the mid-boss marker, and the lit airbase has hangars and runway lights where the bomber
 arrives. Burning ruins appear in every section (D-33). ``scenery_placements`` expands the whole
 thing once, in ``StageData``.
+
+Only selected buildings are destructible (D-05): every few blocks of a section flag their middle
+lot as a target (houses and fuel tanks in the slums, billboards and depots downtown, fuel tanks
+and depots at the airbase), two of every three carrying a medal (D-15). ``target_entries``
+turns the flagged lots into the stage's ground rows, which spawn on their blocks.
 """
 
 import math
@@ -27,6 +32,7 @@ from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.stages.city_block import CityBlock
+from scorched_core.stages.city_builder import target_entries
 from scorched_core.stages.city_feature import CityFeature
 from scorched_core.stages.city_style import CityStyle
 from scorched_core.stages.formations import (
@@ -38,7 +44,7 @@ from scorched_core.stages.formations import (
 from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.wave_entry import WaveEntry
-from scorched_core.tuning import CITY_PITCH
+from scorched_core.tuning import CITY_BLOCK, CITY_CORRIDOR_HALF, CITY_PITCH
 
 _JET: Final = EnemyKind.JET
 _HELI: Final = EnemyKind.HELI
@@ -52,6 +58,11 @@ _GROUND: Final = MotionKind.GROUND
 _PATH: Final = MotionKind.PATH
 
 _MEDAL: Final = PickupKind.MEDAL
+_HOUSE: Final = EnemyKind.HOUSE
+_FUEL_TANK: Final = EnemyKind.FUEL_TANK
+_DEPOT: Final = EnemyKind.DEPOT
+_BILLBOARD: Final = EnemyKind.BILLBOARD
+_TARGET_DROPS: Final = (_MEDAL, _MEDAL, None)  # two targets in three carry a medal (D-15)
 
 _MIDBOSS_AT: Final = 4200.0
 _BOSS_AT: Final = 8640.0  # about three minutes in (D-01)
@@ -381,6 +392,34 @@ _LENGTH: Final = _BOSS_AT + 660.0
 type _Grid = tuple[int, int]  # lot columns x lot rows of one block
 
 
+_CITY_FEATURES: Final = (
+    # The elevated maglev line along x = 120, through downtown and across the mid-boss marker
+    # (D-02, D-35): the mid-boss runs on it.
+    CityFeature(SceneryKind.MAGLEV, 120.0, _MIDBOSS_AT - 700.0, _MIDBOSS_AT + 1100.0, 40.0),
+    # Runway edge lights down the airbase, past the boss marker where the bomber arrives.
+    CityFeature(SceneryKind.RUNWAY_LIGHT, 108.0, 7600.0, _LENGTH, 40.0),
+    CityFeature(SceneryKind.RUNWAY_LIGHT, 132.0, 7600.0, _LENGTH, 40.0),
+)
+
+
+def _on_a_feature(col: int, d: float) -> bool:
+    """True when the block at column ``col``, row ``d`` overlaps a feature line's corridor.
+
+    Lots there are not built (the maglev and the runway lights own the strip), so the block
+    holds no target either.
+    """
+    inset = (CITY_PITCH - CITY_BLOCK) / 2
+    x_low = CITY_PITCH * col + inset
+    d_low = d + inset
+    return any(
+        feature.x + CITY_CORRIDOR_HALF > x_low
+        and feature.x - CITY_CORRIDOR_HALF < x_low + CITY_BLOCK
+        and feature.d1 > d_low
+        and feature.d0 < d_low + CITY_BLOCK
+        for feature in _CITY_FEATURES
+    )
+
+
 def _section(  # noqa: PLR0913 - one keyword per authored property of a city section
     style: CityStyle,
     start: float,
@@ -390,19 +429,35 @@ def _section(  # noqa: PLR0913 - one keyword per authored property of a city sec
     fire_every: int,
     signs: int,
     sign_every: int,
+    target_every: int,
+    target_kinds: tuple[EnemyKind, ...],
 ) -> tuple[CityBlock, ...]:
     """The block rows of one section, in the three playfield columns.
 
     Rows start at the first road-grid row at or after ``start`` and stop before ``stop``. Column
     ``c`` cycles through ``grids[c]`` row by row; every ``fire_every``-th block (counting rows
     and columns together) burns one lot and every ``sign_every``-th hangs ``signs`` neon signs.
+    Every ``target_every``-th block flags its middle lot as a target (the kinds cycle through
+    ``target_kinds``, the drops through ``_TARGET_DROPS``), unless a feature line crosses the block
+    or it lies in the quiet before the boss (``BOSS_QUIET``): the boss room holds no targets.
     """
     first = math.ceil(start / CITY_PITCH) * CITY_PITCH
     blocks: list[CityBlock] = []
+    flagged = 0
     for index, d in enumerate(range(int(first), int(stop), int(CITY_PITCH))):
         for col, options in enumerate(grids):
             step = index + col
             cols, rows = options[step % len(options)]
+            targets: tuple[tuple[int, EnemyKind, PickupKind | None], ...] = ()
+            if (
+                step % target_every == 0
+                and d + CITY_PITCH <= _LAST_WAVE_AT
+                and not _on_a_feature(col, float(d))
+            ):
+                lot = (rows // 2) * cols + cols // 2  # the lot nearest the block centre
+                kind = target_kinds[flagged % len(target_kinds)]
+                targets = ((lot, kind, _TARGET_DROPS[flagged % len(_TARGET_DROPS)]),)
+                flagged += 1
             blocks.append(
                 CityBlock(
                     d=float(d),
@@ -413,6 +468,7 @@ def _section(  # noqa: PLR0913 - one keyword per authored property of a city sec
                     seed=int(style) * 1000 + index * 3 + col,
                     fires=1 if step % fire_every == 0 else 0,
                     signs=signs if step % sign_every == 0 else 0,
+                    targets=targets,
                 )
             )
     return tuple(blocks)
@@ -428,6 +484,8 @@ _CITY: Final = (
         fire_every=5,
         signs=1,
         sign_every=8,
+        target_every=7,
+        target_kinds=(_HOUSE, _FUEL_TANK),
     ),
     # Dense neon downtown: towers and signs everywhere. The middle column keeps three lot columns
     # so the maglev corridor only costs it the middle one.
@@ -439,6 +497,8 @@ _CITY: Final = (
         fire_every=6,
         signs=2,
         sign_every=1,
+        target_every=6,
+        target_kinds=(_BILLBOARD, _DEPOT),
     ),
     # The lit airbase: hangars beside the runway.
     *_section(
@@ -449,16 +509,9 @@ _CITY: Final = (
         fire_every=5,
         signs=1,
         sign_every=12,
+        target_every=6,
+        target_kinds=(_FUEL_TANK, _DEPOT),
     ),
-)
-
-_CITY_FEATURES: Final = (
-    # The elevated maglev line along x = 120, through downtown and across the mid-boss marker
-    # (D-02, D-35): the mid-boss runs on it.
-    CityFeature(SceneryKind.MAGLEV, 120.0, _MIDBOSS_AT - 700.0, _MIDBOSS_AT + 1100.0, 40.0),
-    # Runway edge lights down the airbase, past the boss marker where the bomber arrives.
-    CityFeature(SceneryKind.RUNWAY_LIGHT, 108.0, 7600.0, _LENGTH, 40.0),
-    CityFeature(SceneryKind.RUNWAY_LIGHT, 132.0, 7600.0, _LENGTH, 40.0),
 )
 
 STAGE_1: Final = StageData(
@@ -469,4 +522,5 @@ STAGE_1: Final = StageData(
     city=_CITY,
     features=_CITY_FEATURES,
     seed=1,
+    ground=target_entries(_CITY),
 )
