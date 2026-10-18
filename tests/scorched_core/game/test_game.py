@@ -1944,7 +1944,7 @@ def test_a_zero_step_latch_launches_exactly_once_zero_step_latch() -> None:
     assert game.bomb.timer == 3
 
 
-def test_a_press_while_paused_is_remembered_and_fires_on_the_first_live_step_latch() -> None:
+def test_a_press_made_while_paused_is_discarded_on_resume_and_spends_no_bomb() -> None:
     game = _bomb_game()
     game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
     assert game.paused
@@ -1955,8 +1955,21 @@ def test_a_press_while_paused_is_remembered_and_fires_on_the_first_live_step_lat
     game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)  # resume, bomb button already up
     _tick(game)
     assert not game.paused
-    assert game.bomb.phase == BombPhase.LAUNCH
-    assert _header(game, H_BOMBS) == 2
+    assert game.bomb.phase == BombPhase.NONE
+    assert game.bomb.stock == 3
+    assert _header(game, H_BOMBS) == 3
+    assert EV_BOMB_LAUNCH not in _event_kinds(game)
+
+
+def test_a_bomb_press_in_the_resume_frame_does_not_launch_a_bomb() -> None:
+    game = _bomb_game()
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    assert game.paused
+    game.tick(STEP_MS, Button.BOMB, 0.0, 0.0, 0.0, 0.0)  # the resume key is also bound to BOMB
+    game.set_paused(False)  # JS resumes on that same key
+    _tick_n(game, 3)
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 3
 
 
 def test_a_press_with_no_stock_is_consumed_and_never_fires_later_ignored() -> None:
