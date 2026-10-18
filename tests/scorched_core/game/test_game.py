@@ -456,7 +456,7 @@ def test_a_level_five_game_fires_every_four_steps() -> None:
 def test_a_firing_vulcan_pushes_one_shot_event_per_volley() -> None:
     game = Game()
     _hold_fire(game, 1)
-    assert game.events.n == 1
+    assert _event_kinds(game) == [EV_SHOT]
     assert game.events.buf[0] == EV_SHOT
     assert game.events.buf[3] == WeaponKind.VULCAN
 
@@ -1046,7 +1046,7 @@ def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
     _park_one_enemy(game, 3)
     game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["header"][H_EVENT_N] == 1
+    assert _event_kinds(game) == [EV_HIT]
     assert game.buffers["events"][0] == EV_HIT
 
 
@@ -1148,7 +1148,7 @@ def test_scripted_catch_a_red_crystal_from_a_carrier_raises_the_vulcan_one_level
     _tick(game)
     header = game.buffers["header"]
     assert (header[H_WEAPON], header[H_LEVEL], header[H_PICKUP_N]) == (0.0, 2.0, 0.0)
-    assert header[H_EVENT_N] == 1
+    assert _event_kinds(game) == [EV_PICKUP]
     events = game.buffers["events"]
     assert events[0] == EV_PICKUP
     assert events[1] == pytest.approx(game.ship.x, abs=1.0)
@@ -1415,7 +1415,9 @@ def _header(game: Game, slot: int) -> int:
 
 
 def _event_kinds(game: Game) -> list[int]:
-    return [int(game.events.buf[i * EVENT_STRIDE]) for i in range(game.events.n)]
+    """The gameplay events of the last tick; the SFX events the router adds are filtered out."""
+    kinds = [int(game.events.buf[i * EVENT_STRIDE]) for i in range(game.events.n)]
+    return [kind for kind in kinds if kind != EV_SFX]
 
 
 def _tick_until(game: Game, done: Callable[[Game], bool], limit: int = 600) -> int:
