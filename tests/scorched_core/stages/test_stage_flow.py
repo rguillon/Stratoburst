@@ -3,14 +3,21 @@ import pytest
 from scorched_core.entities.player_life import PlayerLife
 from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.events.event_ring import EventRing
-from scorched_core.protocol import EV_GAME_OVER, EVENT_STRIDE
+from scorched_core.protocol import EV_GAME_OVER, EV_STAGE_START, EVENT_STRIDE
 from scorched_core.scoring.score_keeper import ScoreKeeper
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.stage_flow import StageFlow
+from scorched_core.tuning import INTRO_TICKS
 
 
-def make() -> StageFlow:
-    return StageFlow(life=PlayerLife(), score=ScoreKeeper(), events=EventRing())
+def make(state: FlowState = FlowState.PLAY, stage_number: int = 1) -> StageFlow:
+    return StageFlow(
+        life=PlayerLife(),
+        score=ScoreKeeper(),
+        events=EventRing(),
+        state=state,
+        stage_number=stage_number,
+    )
 
 
 def record(flow: StageFlow, index: int) -> list[float]:
@@ -18,12 +25,53 @@ def record(flow: StageFlow, index: int) -> list[float]:
     return [float(flow.events.buf[base + k]) for k in range(EVENT_STRIDE)]
 
 
-def test_a_new_flow_is_playing_with_nothing_requested() -> None:
-    flow = make()
-    assert flow.state == FlowState.PLAY
+def test_a_new_flow_opens_with_the_intro_and_nothing_requested() -> None:
+    flow = StageFlow(life=PlayerLife(), score=ScoreKeeper(), events=EventRing())
+    assert flow.state == FlowState.INTRO
     assert flow.timer == 0
+    assert flow.progress == 0.0
     assert flow.save_requested is False
     assert flow.spawning is True
+
+
+def test_the_first_intro_step_pushes_one_stage_start_with_the_stage_number() -> None:
+    flow = make(FlowState.INTRO, stage_number=3)
+    flow.step()
+    assert flow.events.n == 1
+    kind, _, _, number, _, _ = record(flow, 0)
+    assert (kind, number) == (EV_STAGE_START, 3.0)
+    for _ in range(INTRO_TICKS - 2):
+        flow.step()
+    assert flow.events.n == 1
+
+
+def test_the_intro_progress_rises_from_zero_to_one_and_play_follows() -> None:
+    flow = make(FlowState.INTRO)
+    assert INTRO_TICKS == 120
+    flow.step()
+    assert flow.progress == pytest.approx(1 / INTRO_TICKS)
+    for _ in range(INTRO_TICKS // 2 - 1):
+        flow.step()
+    assert flow.state == FlowState.INTRO
+    assert flow.progress == pytest.approx(0.5)
+    for _ in range(INTRO_TICKS // 2 - 1):
+        flow.step()
+    assert flow.state == FlowState.INTRO
+    flow.step()
+    assert flow.state == FlowState.PLAY
+    assert flow.progress == 0.0
+    assert flow.spawning is True
+
+
+def test_reset_returns_to_the_intro_so_the_next_run_pushes_stage_start_again() -> None:
+    flow = make(FlowState.INTRO)
+    for _ in range(INTRO_TICKS + 5):
+        flow.step()
+    flow.events.clear()
+    flow.reset()
+    assert (flow.state, flow.timer, flow.progress) == (FlowState.INTRO, 0, 0.0)
+    flow.step()
+    assert flow.events.n == 1
 
 
 def test_a_step_while_the_ship_lives_changes_nothing() -> None:
@@ -80,13 +128,13 @@ def test_the_timer_counts_the_steps_since_the_game_ended() -> None:
     assert flow.timer == 2
 
 
-def test_reset_returns_to_play_and_forgets_the_request() -> None:
+def test_reset_returns_to_the_intro_and_forgets_the_request() -> None:
     flow = make()
     flow.life.phase = PlayerPhase.OUT
     flow.step()
     flow.step()
     flow.reset()
-    assert (flow.state, flow.timer, flow.save_requested) == (FlowState.PLAY, 0, False)
+    assert (flow.state, flow.timer, flow.save_requested) == (FlowState.INTRO, 0, False)
     assert flow.spawning is True
 
 

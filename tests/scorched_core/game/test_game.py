@@ -38,6 +38,7 @@ from scorched_core.protocol import (
     EV_RESPAWN,
     EV_SFX,
     EV_SHOT,
+    EV_STAGE_START,
     EVENT_CAP,
     EVENT_STRIDE,
     FLAG_FIRING,
@@ -56,6 +57,7 @@ from scorched_core.protocol import (
     H_EVENT_N,
     H_FLAGS,
     H_FLOW,
+    H_FLOW_T,
     H_HIGH_SCORE,
     H_HITSTOP,
     H_INVULN,
@@ -114,6 +116,7 @@ from scorched_core.tuning import (
     GROUND_SCROLL_RATIO,
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
+    INTRO_TICKS,
     INVULN_RESPAWN_TICKS,
     LIVES_CAP,
     LIVES_START,
@@ -3443,3 +3446,56 @@ def test_restart_while_paused_leaves_the_game_paused_restart() -> None:
     game.restart()
     assert game.paused is True
     assert game.buffers["header"][H_FLAGS] == float(FLAG_PAUSED)
+
+
+def test_a_stage_opens_with_the_intro_and_the_ship_flying_in() -> None:
+    game = Game(stage=STAGE_1)
+    header = game.buffers["header"]
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert header[H_FLOW] == FlowState.INTRO
+    assert header[H_PLAYER_PHASE] == PlayerPhase.RESPAWN
+    assert header[H_FLOW_T] == pytest.approx(1 / INTRO_TICKS, rel=1e-6)
+    assert game.ship.y > SHIP_START_Y
+    assert _event_kinds(game).count(EV_STAGE_START) == 1
+
+
+def test_the_intro_flows_into_play_with_an_arrived_ship_and_no_blink() -> None:
+    game = Game(stage=STAGE_1)
+    seen = 0
+    for _ in range(INTRO_TICKS):
+        _tick(game)
+        seen += _event_kinds(game).count(EV_STAGE_START)
+        assert _header(game, H_INVULN) == 0
+    assert seen == 1
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_FLOW_T) == 0
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+
+
+def test_the_gallery_has_no_intro_and_starts_alive_at_the_start_position() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert _header(game, H_FLOW) == -1
+    assert _header(game, H_FLOW_T) == 0
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert EV_STAGE_START not in _event_kinds(game)
+
+
+def test_a_restart_opens_with_the_intro_and_the_fly_in_again() -> None:
+    game = Game(stage=STAGE_1, lives=1)
+    _tick_n(game, INTRO_TICKS)
+    _run_until_out(game)
+    game.restart()
+    header = game.buffers["header"]
+    assert header[H_FLOW] == FlowState.INTRO
+    assert header[H_PLAYER_PHASE] == PlayerPhase.RESPAWN
+    assert header[H_FLOW_T] == 0
+    assert game.ship.y > SHIP_START_Y
+    _tick(game)
+    assert _event_kinds(game).count(EV_STAGE_START) == 1
+    _tick_n(game, INTRO_TICKS - 1)
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_INVULN) == 0

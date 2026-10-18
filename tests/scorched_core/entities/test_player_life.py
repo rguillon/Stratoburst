@@ -297,3 +297,48 @@ def test_reset_returns_to_a_fresh_alive_life() -> None:
     assert (life.timer, life.invuln, life.deaths) == (0, 0, 0)
     assert life.final is False
     assert life.vulnerable
+
+
+def test_a_fly_in_start_puts_the_ship_below_the_playfield_without_an_event() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 0)
+    assert life.phase == PlayerPhase.RESPAWN
+    assert (ship.x, ship.y) == (SHIP_START_X, RESPAWN_START_Y)
+    assert not life.can_control
+    assert events.n == 0
+
+
+def test_the_stage_intro_fly_in_grants_no_invulnerability_on_arrival() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 0)
+    for _ in range(100):
+        life.step(ship, events)
+        if life.phase == PlayerPhase.ALIVE:
+            break
+    assert life.phase == PlayerPhase.ALIVE
+    assert life.invuln == 0
+    assert life.vulnerable
+
+
+def test_a_fly_in_can_grant_a_custom_arrival_window_once() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 30)
+    while life.phase == PlayerPhase.RESPAWN:
+        life.step(ship, events)
+    assert life.invuln == 30
+    assert life.arrival_invuln == INVULN_RESPAWN_TICKS
+
+
+def test_a_death_respawn_after_the_intro_still_grants_the_blink() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 0)
+    while life.phase == PlayerPhase.RESPAWN:
+        life.step(ship, events)
+    assert life.invuln == 0
+    assert life.hit(ship.x, ship.y, events)
+    for _ in range(DEATHBOMB_TICKS + DYING_TICKS):
+        life.step(ship, events)
+    assert life.phase == PlayerPhase.RESPAWN
+    while life.phase == PlayerPhase.RESPAWN:
+        life.step(ship, events)
+    assert life.invuln == INVULN_RESPAWN_TICKS

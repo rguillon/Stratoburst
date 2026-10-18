@@ -27,6 +27,7 @@ DYING_TICKS: Final = 50  # no control and no fire while the wreck burns
 RESPAWN_START_Y: Final = PLAYFIELD_H + 24.0  # D-14: the fly-in starts below the playfield
 RESPAWN_SPEED: Final = 2.5  # units per step while flying in
 INVULN_RESPAWN_TICKS: Final = 150  # 2.5 s, inside D-14's 2-3 s
+INTRO_TICKS: Final = 120  # D-26: the stage intro, about 2 s of fly-in under the STAGE banner
 ENEMY_BULLET_RADIUS: Final = 2.5
 
 # Terrain scroll in terrain units per 60 Hz step (about 48 units per second); STGE-02.
