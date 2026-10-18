@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../src/fx/palette.js';
 import { HIT_RECIPE, RECIPES, createExplosionFx, mulberry32 } from '../../src/fx/explosion_fx.js';
 
 const EVENTS = { EXPLOSION: 1, HIT: 2 };
@@ -223,6 +224,14 @@ describe('recipe colours (D-23)', () => {
     else h = (r - g) / d + 4;
     return (h * 60 + 360) % 360;
   }
+
+  it('take every colour from the palette, with no inline literals', () => {
+    const emitters = [...Object.values(RECIPES).flat(), ...HIT_RECIPE];
+    const known = Object.values(PALETTE).map((entry) => entry.rgb.join(','));
+    for (const e of emitters) {
+      expect(known, `colour ${e.color.join(',')} is not a palette entry`).toContain(e.color.join(','));
+    }
+  });
 
   it('stay out of the hot-pink band reserved for enemy bullets', () => {
     const emitters = [...Object.values(RECIPES).flat(), ...HIT_RECIPE];

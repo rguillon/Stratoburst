@@ -113,6 +113,43 @@ describe('createBulletInstances', () => {
     });
   });
 
+  describe("style 'bolt'", () => {
+    const bolt = (overrides = {}) => build({ name: 'pbullets', style: 'bolt', ...overrides });
+
+    it('is an HDR tracer in the vulcan colour by default, with an override', () => {
+      const { uniforms } = bolt().mesh.material;
+      expect(uniforms.uColor.value.toArray()).toEqual([...PALETTE.VULCAN_TRACER.rgb]);
+      expect(Math.max(...uniforms.uColor.value.toArray())).toBeGreaterThan(1);
+      expect(bolt({ color: [1, 2, 3] }).mesh.material.uniforms.uColor.value.toArray()).toEqual([1, 2, 3]);
+    });
+
+    it('stretches the quad about 2.5 times along its flight angle', () => {
+      const { uniforms } = bolt().mesh.material;
+      expect(uniforms.uStretch.value).toBeCloseTo(2.5);
+    });
+
+    it('reads the flight angle from slot 2 of the shared channel, so +pi/6 turns the streak by pi/6', () => {
+      const { data, mesh, geometry } = bolt();
+      data.set([100, 200, Math.PI / 6, 0]);
+      const attribute = geometry.getAttribute('aData');
+      expect(attribute.array[2]).toBeCloseTo(Math.PI / 6);
+      expect(mesh.material.vertexShader).toContain('aData.z');
+      expect(mesh.material.vertexShader).toContain('uStretch');
+    });
+
+    it('stays a normal-blended opaque draw that still writes no depth', () => {
+      const { material, renderOrder } = bolt().mesh;
+      expect(material.transparent).toBe(false);
+      expect(material.depthWrite).toBe(false);
+      expect(renderOrder).toBe(0);
+    });
+
+    it('defaults to a size-3 quad', () => {
+      const box = new THREE.Box3().setFromBufferAttribute(bolt().geometry.getAttribute('position'));
+      expect(box.max.x - box.min.x).toBeCloseTo(3);
+    });
+  });
+
   describe('update', () => {
     it('sets the instance count and uploads exactly the live prefix', () => {
       const { bullets, geometry } = build();
