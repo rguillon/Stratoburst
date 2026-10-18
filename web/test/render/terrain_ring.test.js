@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {
   BUILDINGS_PER_CHUNK,
   CHUNK_COUNT,
   CHUNK_LEN,
+  TERRAIN_DEPTH,
   TERRAIN_WIDTH,
   chunkLayout,
   createTerrainRing,
@@ -136,5 +138,84 @@ describe('createTerrainRing', () => {
     ring.update(400);
     const changed = versions(ring).filter((v, i) => v !== first[i]);
     expect(changed).toHaveLength(1);
+  });
+
+  it('exports the terrain depth and uses it as the default ground height', () => {
+    expect(TERRAIN_DEPTH).toBe(-40);
+    expect(makeRing().group.position.y).toBe(TERRAIN_DEPTH);
+    expect(createTerrainRing({ createCanvas: fakeCanvas, depthY: -10 }).group.position.y).toBe(-10);
+  });
+
+  describe('detail (D-24, D-25)', () => {
+    const buildings = (ring) => ring.group.children.map((chunk) => chunk.children[1]);
+    const matrices = (ring) => buildings(ring).map((mesh) => Array.from(mesh.instanceMatrix.array));
+
+    it('builds softened rounded boxes with smooth shading at high and mid', () => {
+      for (const detail of ['high', 'mid']) {
+        const ring = createTerrainRing({ createCanvas: fakeCanvas, detail });
+        for (const mesh of buildings(ring)) {
+          expect(mesh.geometry).toBeInstanceOf(RoundedBoxGeometry);
+          expect(mesh.geometry.parameters.radius).toBeCloseTo(0.08);
+          expect(mesh.material.flatShading).toBe(false);
+        }
+      }
+      const high = buildings(createTerrainRing({ createCanvas: fakeCanvas, detail: 'high' }))[0];
+      const mid = buildings(createTerrainRing({ createCanvas: fakeCanvas, detail: 'mid' }))[0];
+      expect(high.geometry.parameters.segments).toBe(3);
+      expect(mid.geometry.parameters.segments).toBe(2);
+    });
+
+    it('builds plain flat-shaded boxes at low', () => {
+      const ring = createTerrainRing({ createCanvas: fakeCanvas, detail: 'low' });
+      for (const mesh of buildings(ring)) {
+        expect(mesh.geometry.type).toBe('BoxGeometry');
+        expect(mesh.material.flatShading).toBe(true);
+      }
+    });
+
+    it('starts at high by default and at low for an unknown detail', () => {
+      expect(buildings(makeRing())[0].geometry).toBeInstanceOf(RoundedBoxGeometry);
+      const odd = createTerrainRing({ createCanvas: fakeCanvas, detail: 'ultra' });
+      expect(buildings(odd)[0].geometry.type).toBe('BoxGeometry');
+    });
+
+    it('setDetail swaps every chunk without regenerating building placement', () => {
+      const ring = makeRing();
+      ring.update(120);
+      const before = matrices(ring);
+      const versionsBefore = versions(ring);
+      ring.setDetail('low');
+      for (const mesh of buildings(ring)) {
+        expect(mesh.geometry.type).toBe('BoxGeometry');
+        expect(mesh.material.flatShading).toBe(true);
+      }
+      expect(matrices(ring)).toEqual(before);
+      expect(versions(ring)).toEqual(versionsBefore);
+    });
+
+    it('setDetail reuses cached geometries and materials and never disposes them (Pitfall 8)', () => {
+      const ring = makeRing();
+      const highGeometry = buildings(ring)[0].geometry;
+      const highMaterial = buildings(ring)[0].material;
+      let disposed = 0;
+      highGeometry.addEventListener('dispose', () => (disposed += 1));
+      ring.setDetail('low');
+      const lowGeometry = buildings(ring)[0].geometry;
+      ring.setDetail('high');
+      expect(buildings(ring)[0].geometry).toBe(highGeometry);
+      expect(buildings(ring)[0].material).toBe(highMaterial);
+      ring.setDetail('low');
+      expect(buildings(ring)[0].geometry).toBe(lowGeometry);
+      // All chunks share one geometry per detail.
+      expect(new Set(buildings(ring).map((mesh) => mesh.geometry)).size).toBe(1);
+      expect(disposed).toBe(0);
+    });
+
+    it('keeps the new detail across a chunk recycle', () => {
+      const ring = makeRing();
+      ring.setDetail('mid');
+      ring.update(900);
+      for (const mesh of buildings(ring)) expect(mesh.geometry.parameters.segments).toBe(2);
+    });
   });
 });

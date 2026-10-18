@@ -85,7 +85,9 @@ async function main() {
   });
   rig.scene.add(ship);
   // Everything whose model detail follows the tier. A tier change only swaps cached geometries.
-  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }];
+  // rig.terrain was created inside the rig at its default detail; the starting tier is applied
+  // below, before the first frame.
+  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }, rig.terrain];
   const applyModelDetail = (tierName) => {
     for (const view of detailViews) view.setDetail(TIERS[tierName].modelDetail);
   };

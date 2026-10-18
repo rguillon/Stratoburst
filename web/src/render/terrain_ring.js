@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { normalizeDetail } from './models/model_kit.js';
 
 // Terrain as a ring of recycled chunks (RESEARCH Pattern 6, D-13). Chunk `i` covers terrain
 // distance [i * CHUNK_LEN, (i + 1) * CHUNK_LEN); scrolling by `s` puts it at world Z
@@ -9,6 +11,8 @@ export const CHUNK_LEN = 400;
 export const TERRAIN_WIDTH = 1200;
 export const CHUNK_COUNT = 4;
 export const BUILDINGS_PER_CHUNK = 40;
+// Y of the ground layer; the buildings stand on it and the ground-unit shadows share it.
+export const TERRAIN_DEPTH = -40;
 
 const TILE_UNITS = 100; // one texture tile covers 100 x 100 terrain units
 const LANES = [-80, 0, 80]; // open lanes kept free for later ground units
@@ -103,6 +107,11 @@ function createGroundTexture(createCanvas, seed) {
   return texture;
 }
 
+// Building corner softening per detail (D-24, D-25): segments across each rounded edge, and a
+// plain hard-edged box at 'low'.
+const BUILDING_SEGMENTS = Object.freeze({ high: 3, mid: 2 });
+const BUILDING_RADIUS = 0.08;
+
 const LOW = new THREE.Color(0x3b3833);
 const HIGH = new THREE.Color(0x77705f);
 
@@ -111,7 +120,8 @@ export function createTerrainRing({
   chunkLen = CHUNK_LEN,
   chunks = CHUNK_COUNT,
   width = TERRAIN_WIDTH,
-  depthY = -40,
+  depthY = TERRAIN_DEPTH,
+  detail = 'high',
   createCanvas = () => document.createElement('canvas'),
 } = {}) {
   const group = new THREE.Group();
@@ -124,15 +134,31 @@ export function createTerrainRing({
   });
   const groundGeometry = new THREE.PlaneGeometry(width, chunkLen);
   groundGeometry.rotateX(-Math.PI / 2);
-  const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
-  const buildingMaterial = new THREE.MeshLambertMaterial({ flatShading: true });
+  // Every detail's building geometry and material is built once, here. A tier change swaps
+  // these cached objects and never builds, compiles or disposes anything mid-game (Pitfall 8).
+  const buildingGeometries = {
+    high: new RoundedBoxGeometry(1, 1, 1, BUILDING_SEGMENTS.high, BUILDING_RADIUS),
+    mid: new RoundedBoxGeometry(1, 1, 1, BUILDING_SEGMENTS.mid, BUILDING_RADIUS),
+    low: new THREE.BoxGeometry(1, 1, 1),
+  };
+  const smoothMaterial = new THREE.MeshLambertMaterial({ flatShading: false });
+  const buildingMaterials = {
+    high: smoothMaterial,
+    mid: smoothMaterial,
+    low: new THREE.MeshLambertMaterial({ flatShading: true }),
+  };
+  let currentDetail = normalizeDetail(detail);
 
   const slots = [];
   for (let s = 0; s < chunks; s++) {
     const chunk = new THREE.Group();
     chunk.name = `terrain-chunk-${s}`;
     chunk.add(new THREE.Mesh(groundGeometry, groundMaterial));
-    const buildings = new THREE.InstancedMesh(buildingGeometry, buildingMaterial, BUILDINGS_PER_CHUNK);
+    const buildings = new THREE.InstancedMesh(
+      buildingGeometries[currentDetail],
+      buildingMaterials[currentDetail],
+      BUILDINGS_PER_CHUNK,
+    );
     // Instances are rewritten on recycle, so the bounding sphere cached at first render would
     // go stale; the chunk is always near the camera, so culling buys nothing.
     buildings.frustumCulled = false;
@@ -170,6 +196,16 @@ export function createTerrainRing({
     }
   }
 
+  // Swaps the cached geometry and material on every chunk; building placement (the instance
+  // matrices) is untouched.
+  function setDetail(next) {
+    currentDetail = normalizeDetail(next);
+    for (const slot of slots) {
+      slot.buildings.geometry = buildingGeometries[currentDetail];
+      slot.buildings.material = buildingMaterials[currentDetail];
+    }
+  }
+
   update(0);
-  return { group, update };
+  return { group, update, setDetail };
 }
