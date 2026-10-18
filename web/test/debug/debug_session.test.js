@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDebugSession } from '../../src/debug/debug_session.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
-const SLOTS = { STEPS: 0, EBULLET_N: 1, PBULLET_N: 2, DRONE_N: 3 };
+const SLOTS = { STEPS: 0, EBULLET_N: 1, PBULLET_N: 2, ENEMY_N: 3, KILLS: 4 };
 
 function fakeRig() {
   const info = { autoReset: true, render: { calls: 7, triangles: 1234 }, reset: vi.fn() };
@@ -29,7 +29,7 @@ function setup(overrides = {}) {
   vi.stubGlobal('document', doc);
   const { rig, info } = fakeRig();
   const header = new Float32Array(8);
-  header.set([2, 50, 6, 3]);
+  header.set([2, 50, 6, 3, 7]);
   const session = createDebugSession({
     rig,
     pyodide: { _module: { HEAPU8: { length: 32 * 1024 * 1024 } } },
@@ -82,7 +82,7 @@ describe('createDebugSession', () => {
 
     const text = doc.getElementById('debug-overlay').textContent;
     expect(text).toContain('draw calls 7   triangles 1234');
-    expect(text).toContain('bullets 50 (player 6)   drones 3');
+    expect(text).toContain('bullets 50 (player 6)   enemies 3   kills 7');
     expect(text).toContain('tier high   dpr 1.50   canvas 800x600');
     expect(text).toContain('wasm heap 32.0 MB');
     expect(text).toContain('build abc1234');
@@ -101,7 +101,7 @@ describe('createDebugSession', () => {
 
     session.record({ frameMs: 16.7, tickMs: 1, renderMs: 2, nowMs: 1000 });
 
-    expect(doc.getElementById('debug-overlay').textContent).toContain('bullets n/a (player n/a)   drones n/a');
+    expect(doc.getElementById('debug-overlay').textContent).toContain('bullets n/a (player n/a)   enemies n/a   kills n/a');
   });
 
   it('does not sample a frame without a delta (first frame or first after a resume)', () => {

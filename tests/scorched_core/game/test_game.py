@@ -55,8 +55,9 @@ def test_manifest_contract() -> None:
     assert header["len"] == HEADER_LEN
     assert header["slots"]["STEPS"] == 0
     assert header["slots"]["SHIP_X"] == H_SHIP_X
-    assert header["slots"]["DRONE_N"] == 8 == H_ENEMY_N
-    assert header["slots"]["DRONES_DOWN"] == 11 == H_KILLS
+    assert header["slots"]["ENEMY_N"] == 8 == H_ENEMY_N
+    assert header["slots"]["KILLS"] == 11 == H_KILLS
+    assert not {"DRONE_N", "DRONES_DOWN"} & header["slots"].keys()
     assert header["slots"]["EVENT_N"] == 12
     assert header["slots"]["EVENT_DROPPED"] == 13
     assert header["len"] == 48
@@ -64,7 +65,7 @@ def test_manifest_contract() -> None:
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
-        "drones": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
+        "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
         "events": {"stride": 6, "cap": 128},
     }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
@@ -145,13 +146,20 @@ def test_stress_clamping(stress: int, stored: int, cap: int) -> None:
     assert game.manifest()["channels"]["ebullets"]["cap"] == cap
 
 
+def test_the_enemy_channel_is_named_enemies_and_no_drones_channel_exists() -> None:
+    game = Game()
+    assert "enemies" in game.buffers
+    assert "drones" not in game.buffers
+    assert "drones" not in game.manifest()["channels"]
+
+
 def test_buffer_lengths_and_zero_fill() -> None:
     game = Game(stress=750)
     assert {name: len(buf) for name, buf in game.buffers.items()} == {
         "header": HEADER_LEN,
         "pbullets": PBULLET_STRIDE * PBULLET_CAP,
         "ebullets": EBULLET_STRIDE * 750,
-        "drones": ENEMY_STRIDE * ENEMY_CAP,
+        "enemies": ENEMY_STRIDE * ENEMY_CAP,
         "events": EVENT_STRIDE * EVENT_CAP,
     }
     assert all(v == 0.0 for buf in game.buffers.values() for v in buf)
@@ -396,11 +404,11 @@ def test_the_header_counts_enemies_from_step_forty_on() -> None:
     assert game.buffers["header"][H_KILLS] == 0
 
 
-def test_enemies_are_packed_into_the_drones_channel() -> None:
+def test_enemies_are_packed_into_the_enemies_channel() -> None:
     game = Game()
     for _ in range(40):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    packed = game.buffers["drones"]
+    packed = game.buffers["enemies"]
     assert packed[0] == game.enemies.x[0]
     assert packed[1] == game.enemies.y[0]
     assert packed[5] == float(EnemyKind.JET)
@@ -410,9 +418,9 @@ def test_a_zero_step_tick_keeps_the_enemy_buffer_but_reports_the_count() -> None
     game = Game()
     for _ in range(40):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    before = game.buffers["drones"].tobytes()
+    before = game.buffers["enemies"].tobytes()
     game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["drones"].tobytes() == before
+    assert game.buffers["enemies"].tobytes() == before
     assert game.buffers["header"][H_ENEMY_N] == 1
 
 
@@ -446,7 +454,7 @@ def test_the_same_seed_and_inputs_give_byte_identical_buffers_determinism() -> N
     def run(seed: int, pilot: Callable[[Game, int], None]) -> tuple[bytes, ...]:
         game = Game(seed=seed)
         pilot(game, 600)
-        return tuple(game.buffers[name].tobytes() for name in ("header", "pbullets", "drones"))
+        return tuple(game.buffers[name].tobytes() for name in ("header", "pbullets", "enemies"))
 
     assert run(11, _sweep_and_fire) == run(11, _sweep_and_fire)
     assert run(11, _sweep_and_fire) == run(12, _sweep_and_fire)  # the gallery is scripted
@@ -476,7 +484,7 @@ def test_a_flooded_gallery_refuses_spawns_instead_of_growing() -> None:
     for _ in range(GALLERY_LOOP_TICKS):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.enemies.n == ENEMY_MAX_ALIVE
-    assert len(game.buffers["drones"]) == ENEMY_STRIDE * ENEMY_CAP
+    assert len(game.buffers["enemies"]) == ENEMY_STRIDE * ENEMY_CAP
 
 
 def test_overkill_two_bolts_on_one_enemy_give_one_explosion_and_one_kill() -> None:

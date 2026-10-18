@@ -72,9 +72,6 @@ from scorched_core.weapons.twin_shot import TwinShot
 # Bolts are culled once they are this far outside the playfield.
 _MARGIN: Final = 16.0
 
-# Plan 02-03 keeps the Phase 1 wire names DRONE_N and DRONES_DOWN for slots 8 and 11 (they now
-# carry gallery enemies and cumulative kills); plan 02-04 renames them together with their JS
-# readers.
 _HEADER_SLOTS: dict[str, int] = {
     "STEPS": H_STEPS,
     "SCROLL_Y": H_SCROLL_Y,
@@ -84,10 +81,10 @@ _HEADER_SLOTS: dict[str, int] = {
     "FLAGS": H_FLAGS,
     "PBULLET_N": H_PBULLET_N,
     "EBULLET_N": H_EBULLET_N,
-    "DRONE_N": H_ENEMY_N,
+    "ENEMY_N": H_ENEMY_N,
     "TICK_COUNT": H_TICK_COUNT,
     "STORM_HITS": H_STORM_HITS,
-    "DRONES_DOWN": H_KILLS,
+    "KILLS": H_KILLS,
     "EVENT_N": H_EVENT_N,
     "EVENT_DROPPED": H_EVENT_DROPPED,
 }
@@ -176,7 +173,7 @@ class Game:
             "header": array("f", bytes(4 * HEADER_LEN)),
             "pbullets": array("f", bytes(4 * PBULLET_STRIDE * PBULLET_CAP)),
             "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self.ebullet_cap)),
-            "drones": array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP)),
+            "enemies": array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP)),
             "events": self.events.buf,
         }
 
@@ -189,7 +186,7 @@ class Game:
             "channels": {
                 "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
                 "ebullets": {"stride": EBULLET_STRIDE, "cap": self.ebullet_cap},
-                "drones": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
+                "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
                 "events": {"stride": EVENT_STRIDE, "cap": EVENT_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
@@ -245,7 +242,7 @@ class Game:
         self._pack_header(steps)
         if steps > 0:
             self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
-            self.enemies.pack_into(self.buffers["drones"])
+            self.enemies.pack_into(self.buffers["enemies"])
             self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 

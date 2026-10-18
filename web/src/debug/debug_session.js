@@ -45,7 +45,7 @@ export function createDebugSession({
       `fps ${fixed(s.fps, 1)}   frame ms avg ${fixed(s.frame.avg, 1)} p50 ${fixed(s.frame.p50, 1)} p95 ${fixed(s.frame.p95, 1)} max ${fixed(s.frame.max, 1)}`,
       `tick ms avg ${fixed(s.tick.avg, 2)} p95 ${fixed(s.tick.p95, 2)} (incl. assign)`,
       `render-submit ms avg ${fixed(s.render.avg, 2)} p95 ${fixed(s.render.p95, 2)}`,
-      `steps/frame ${fixed(s.steps.avg, 2)}   bullets ${read('EBULLET_N')} (player ${read('PBULLET_N')})   drones ${read('DRONE_N')}`,
+      `steps/frame ${fixed(s.steps.avg, 2)}   bullets ${read('EBULLET_N')} (player ${read('PBULLET_N')})   enemies ${read('ENEMY_N')}   kills ${read('KILLS')}`,
       `tier ${tier}   dpr ${fixed(rig.dpr, 2)}   canvas ${rig.pixels.width}x${rig.pixels.height}`,
       `draw calls ${drawCalls}   triangles ${triangles}`,
       `wasm heap ${megabytes(pyodide._module?.HEAPU8?.length)}   js heap ${megabytes(heap)}`,

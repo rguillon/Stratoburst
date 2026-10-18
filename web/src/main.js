@@ -13,7 +13,7 @@ import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
-import { createDroneInstances } from './render/drone_instances.js';
+import { createEnemyInstances } from './render/enemy_instances.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
@@ -99,13 +99,15 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(pbullets.mesh);
-  const drones = createDroneInstances({
-    data: bridge.channels.drones,
-    capacity: manifest.channels.drones.cap,
+  // One instanced mesh per gallery kind, all added before the second prewarm.
+  const enemies = createEnemyInstances({
+    data: bridge.channels.enemies,
+    capacity: manifest.channels.enemies.cap,
+    kinds: manifest.enemy_kinds,
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,
   });
-  rig.scene.add(drones.mesh);
+  for (const mesh of enemies.meshes) rig.scene.add(mesh);
   // GPU particle layers for explosions and sparks: spawn records only, motion and fade run in
   // the vertex shader. Added before the second prewarm so their shaders compile at load.
   const fxLayers = {
@@ -218,7 +220,7 @@ async function main() {
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
-      drones.update(header[slots.DRONE_N]);
+      enemies.update(header[slots.ENEMY_N]);
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz.
       rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);
