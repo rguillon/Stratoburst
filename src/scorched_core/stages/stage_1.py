@@ -11,21 +11,34 @@ carrier, then goes quiet for ``BOSS_QUIET`` units before the bomber arrives. Eve
 slow, spaced-out bullet patterns. Each section is a tuple of rows (formation helpers expand into
 plain rows) and the stage merges them with a stable sort on ``at``, so rows that share a distance
 keep their authored order.
+
+The city under it is data too (D-34, D-35): a road grid of ``CityBlock`` rows, 80 distance units
+apart, in the three playfield columns. Dark low-rise slums with sparse neon open the stage,
+downtown is dense neon with towers, signs and an elevated maglev line along x = 120 that runs
+past the mid-boss marker, and the lit airbase has hangars and runway lights where the bomber
+arrives. Burning ruins appear in every section (D-33). ``scenery_placements`` expands the whole
+thing once, in ``StageData``.
 """
 
+import math
 from typing import Final
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.stages.city_block import CityBlock
+from scorched_core.stages.city_feature import CityFeature
+from scorched_core.stages.city_style import CityStyle
 from scorched_core.stages.formations import (
     column_formation,
     line_formation,
     mirrored,
     v_formation,
 )
+from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.wave_entry import WaveEntry
+from scorched_core.tuning import CITY_PITCH
 
 _JET: Final = EnemyKind.JET
 _HELI: Final = EnemyKind.HELI
@@ -363,9 +376,97 @@ _AIRBASE: Final = (
     ),
 )
 
+_LENGTH: Final = _BOSS_AT + 660.0
+
+type _Grid = tuple[int, int]  # lot columns x lot rows of one block
+
+
+def _section(  # noqa: PLR0913 - one keyword per authored property of a city section
+    style: CityStyle,
+    start: float,
+    stop: float,
+    grids: tuple[tuple[_Grid, ...], ...],
+    *,
+    fire_every: int,
+    signs: int,
+    sign_every: int,
+) -> tuple[CityBlock, ...]:
+    """The block rows of one section, in the three playfield columns.
+
+    Rows start at the first road-grid row at or after ``start`` and stop before ``stop``. Column
+    ``c`` cycles through ``grids[c]`` row by row; every ``fire_every``-th block (counting rows
+    and columns together) burns one lot and every ``sign_every``-th hangs ``signs`` neon signs.
+    """
+    first = math.ceil(start / CITY_PITCH) * CITY_PITCH
+    blocks: list[CityBlock] = []
+    for index, d in enumerate(range(int(first), int(stop), int(CITY_PITCH))):
+        for col, options in enumerate(grids):
+            step = index + col
+            cols, rows = options[step % len(options)]
+            blocks.append(
+                CityBlock(
+                    d=float(d),
+                    col=col,
+                    cols=cols,
+                    rows=rows,
+                    style=style,
+                    seed=int(style) * 1000 + index * 3 + col,
+                    fires=1 if step % fire_every == 0 else 0,
+                    signs=signs if step % sign_every == 0 else 0,
+                )
+            )
+    return tuple(blocks)
+
+
+_CITY: Final = (
+    # Dark low-rise slums; the odd lamp and a sparse neon sign.
+    *_section(
+        CityStyle.SLUMS,
+        0.0,
+        DOWNTOWN_AT,
+        (((3, 2), (2, 2)), ((2, 2), (2, 3)), ((3, 2), (2, 3))),
+        fire_every=5,
+        signs=1,
+        sign_every=8,
+    ),
+    # Dense neon downtown: towers and signs everywhere. The middle column keeps three lot columns
+    # so the maglev corridor only costs it the middle one.
+    *_section(
+        CityStyle.DOWNTOWN,
+        DOWNTOWN_AT,
+        AIRBASE_AT,
+        (((2, 2), (2, 3)), ((3, 2), (3, 3)), ((2, 2), (3, 2))),
+        fire_every=6,
+        signs=2,
+        sign_every=1,
+    ),
+    # The lit airbase: hangars beside the runway.
+    *_section(
+        CityStyle.AIRBASE,
+        AIRBASE_AT,
+        _LENGTH,
+        (((2, 2), (1, 2)), ((2, 1), (2, 2)), ((1, 2), (2, 1))),
+        fire_every=5,
+        signs=1,
+        sign_every=12,
+    ),
+)
+
+_CITY_FEATURES: Final = (
+    # The elevated maglev line along x = 120, through downtown and across the mid-boss marker
+    # (D-02, D-35): the mid-boss runs on it.
+    CityFeature(SceneryKind.MAGLEV, 120.0, _MIDBOSS_AT - 700.0, _MIDBOSS_AT + 1100.0, 40.0),
+    # Runway edge lights down the airbase, past the boss marker where the bomber arrives.
+    CityFeature(SceneryKind.RUNWAY_LIGHT, 108.0, 7600.0, _LENGTH, 40.0),
+    CityFeature(SceneryKind.RUNWAY_LIGHT, 132.0, 7600.0, _LENGTH, 40.0),
+)
+
 STAGE_1: Final = StageData(
     number=1,
-    length=_BOSS_AT + 660.0,
+    length=_LENGTH,
     waves=tuple(sorted(_SLUMS + _DOWNTOWN + _AIRBASE, key=lambda wave: wave.at)),
     markers=(("midboss", _MIDBOSS_AT), ("boss", _BOSS_AT)),
+    city=_CITY,
+    features=_CITY_FEATURES,
+    seed=1,
 )
