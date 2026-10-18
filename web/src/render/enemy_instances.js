@@ -79,6 +79,10 @@ function defaultGeometryFor() {
 // (when the model has one). `data` is the Float32Array Python assigns into (stride 8); `kinds` is
 // the manifest's name -> kind value map. Each instance is routed to its kind's meshes, placed at
 // (x - W/2, 0, y - H/2) and turned about Y by its heading angle.
+//
+// Ground kinds (`groundKinds`, a Set of kind values) draw inside `groundGroup`, the ray-compensating
+// ground layer, so a tank is seen on the terrain exactly where the bolts hit it (D-21). Their
+// meshes are added to that group here; the air meshes are left for the caller to add to the scene.
 export function createEnemyInstances({
   data,
   capacity,
@@ -87,6 +91,8 @@ export function createEnemyInstances({
   playfieldH,
   detail = 'high',
   geometryFor = defaultGeometryFor(),
+  groundKinds = new Set(),
+  groundGroup = null,
 }) {
   const bodyMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -96,32 +102,41 @@ export function createEnemyInstances({
   const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
   const entries = []; // indexed by the kind value in the channel
   const meshes = [];
+  const airMeshes = [];
+  const groundMeshes = [];
 
-  function instanced(geometry, material, name) {
+  function instanced(geometry, material, name, ground) {
     const mesh = new THREE.InstancedMesh(geometry, material, capacity);
     mesh.name = name;
     mesh.frustumCulled = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.count = 0;
     meshes.push(mesh);
+    if (ground) {
+      groundMeshes.push(mesh);
+      groundGroup.add(mesh);
+    } else {
+      airMeshes.push(mesh);
+    }
     return mesh;
   }
 
   for (const [name, value] of Object.entries(kinds)) {
     const model = geometryFor(name, detail);
     const lower = name.toLowerCase();
-    const body = instanced(model.body, bodyMaterial, `enemy-${lower}`);
+    const ground = groundGroup !== null && groundKinds.has(value);
+    const body = instanced(model.body, bodyMaterial, `enemy-${lower}`, ground);
     // Allocate instanceColor up front so the first update never reshapes the buffers.
     body.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
     body.instanceColor.setUsage(THREE.DynamicDrawUsage);
-    const glow = model.glow === null ? null : instanced(model.glow, glowMaterial, `enemy-${lower}-glow`);
+    const glow = model.glow === null ? null : instanced(model.glow, glowMaterial, `enemy-${lower}-glow`, ground);
     let top = null;
     if (model.top !== null) {
-      top = instanced(model.top, bodyMaterial, `enemy-${lower}-top`);
+      top = instanced(model.top, bodyMaterial, `enemy-${lower}-top`, ground);
       top.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
       top.instanceColor.setUsage(THREE.DynamicDrawUsage);
     }
-    entries[value] = { name, body, glow, top, spins: name === 'HELI', index: value };
+    entries[value] = { name, body, glow, top, ground, spins: name === 'HELI', index: value };
   }
   const slotCount = entries.length;
   const counts = new Int32Array(slotCount);
@@ -142,14 +157,16 @@ export function createEnemyInstances({
   }
 
   // `timeS` is the effect clock in seconds: it turns rotors, and is presentation only.
-  function update(n, timeS = 0) {
+  // `groundOffsetY` is the sub-step scroll extrapolation (alpha * scroll speed * ground ratio) added
+  // to the logical y of ground kinds only, so tanks glide between steps like the roads do.
+  function update(n, timeS = 0, groundOffsetY = 0) {
     const count = Math.min(n, capacity);
     counts.fill(0);
     for (let i = 0; i < count; i++) {
       const base = i * STRIDE;
       const entry = entries[data[base + KIND]];
       if (entry === undefined) continue;
-      position.set(data[base] - halfW, 0, data[base + 1] - halfH);
+      position.set(data[base] - halfW, 0, data[base + 1] - halfH + (entry.ground ? groundOffsetY : 0));
       quaternion.setFromAxisAngle(UP, data[base + ANGLE]);
       matrix.compose(position, quaternion, scale);
       const slot = counts[entry.index]++;
@@ -183,5 +200,5 @@ export function createEnemyInstances({
     }
   }
 
-  return { meshes, update, setDetail };
+  return { meshes, airMeshes, groundMeshes, update, setDetail };
 }

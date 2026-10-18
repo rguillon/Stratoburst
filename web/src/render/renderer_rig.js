@@ -4,6 +4,7 @@ import { TIERS, effectiveDpr, renderSize } from '../quality/tiers.js';
 import { CAMERA_FOV_DEG, CAMERA_TILT_DEG, applyCameraFit, fitCamera } from './camera_fit.js';
 import { createPlayfieldMask } from './playfield_mask.js';
 import { createTerrainRing } from './terrain_ring.js';
+import { createGroundLayer } from './ground_layer.js';
 
 export { CAMERA_FOV_DEG, CAMERA_TILT_DEG };
 
@@ -28,6 +29,11 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   const terrain = createTerrainRing({ seed: 1 });
   scene.add(terrain.group);
 
+  // Terrain-anchored visuals (ground units, wrecks) live in this ray-compensating group so they
+  // are drawn where the bolts on the gameplay plane visibly hit them (D-21).
+  const groundLayer = createGroundLayer({ playfieldW, playfieldH });
+  scene.add(groundLayer.group);
+
   // Fixed orientation (D-08, D-09); resize refits only the distance and the look-at target.
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, 1, 10, 4000);
   scene.add(createPlayfieldMask({ halfW: playfieldW / 2, halfH: playfieldH / 2 }));
@@ -45,6 +51,7 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
     camera,
     pipeline,
     terrain,
+    groundLayer,
     toWorld,
     bloomAvailable: true,
     tier: TIERS.high,
@@ -77,6 +84,7 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
       camera.aspect = cssW / cssH;
       applyCameraFit(camera, fitCamera({ aspect: camera.aspect, halfW: playfieldW / 2, halfH: playfieldH / 2 }));
       fitted = { cssW, cssH };
+      groundLayer.refit(camera);
     }
     pipeline.setTier(tier);
   }

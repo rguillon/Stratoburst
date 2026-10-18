@@ -14,9 +14,10 @@ import { createShipModel } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
-import { warmModels } from './render/models/enemy_models.js';
+import { enemyModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
+import { createWreckRing } from './fx/wreck_ring.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -114,6 +115,16 @@ async function main() {
   // Generate every (kind, detail) enemy model now, behind the loading screen: a tier change then
   // only swaps cached geometries.
   warmModels(Object.keys(manifest.enemy_kinds));
+  // Ground kinds (tanks, turrets) are drawn inside the ground layer, which projects the gameplay
+  // plane onto the terrain along the camera ray, so they are seen where the bolts hit them (D-21).
+  const groundKinds = new Set();
+  const groundKindNames = {};
+  for (const [name, value] of Object.entries(manifest.enemy_kinds)) {
+    if (manifest.tuning.enemy_ground[value] === 1) {
+      groundKinds.add(value);
+      groundKindNames[name] = value;
+    }
+  }
   // Instanced meshes per gallery kind, all added before the second prewarm.
   const enemies = createEnemyInstances({
     data: bridge.channels.enemies,
@@ -122,9 +133,11 @@ async function main() {
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,
     detail: TIERS[tier0].modelDetail,
+    groundKinds,
+    groundGroup: rig.groundLayer.group,
   });
   detailViews.push(enemies);
-  for (const mesh of enemies.meshes) rig.scene.add(mesh);
+  for (const mesh of enemies.airMeshes) rig.scene.add(mesh);
   // GPU particle layers for explosions and sparks: spawn records only, motion and fade run in
   // the vertex shader. Added before the second prewarm so their shaders compile at load.
   const fxLayers = {
@@ -140,7 +153,20 @@ async function main() {
     toWorld: (x, y, out) => rig.toWorld(x, y, out),
     getScale: () => TIERS[currentTier].particleScale,
   });
-  const fx = createFxDispatcher({ handlers: [explosionFx] });
+  // Terrain scroll this frame (steps plus the sub-step alpha); the wrecks read it at a kill.
+  let scrollNow = 0;
+  // Charred wrecks of ground kills live in the ground layer and scroll away with the terrain.
+  const wrecks = createWreckRing({
+    kinds: groundKindNames,
+    events: manifest.events,
+    geometryFor: enemyModel,
+    ratio: manifest.tuning.ground_scroll_ratio,
+    getScroll: () => scrollNow,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.groundLayer.group.add(wrecks.group);
+  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks] });
   let fxTime = 0;
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
@@ -241,6 +267,9 @@ async function main() {
       const tickStart = debug ? performance.now() : 0;
       tick(dt, input.buttons, input.moveX, input.moveY, input.dragX, input.dragY);
       const tickEnd = debug ? performance.now() : 0;
+      // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
+      // while the simulation stays at 60 Hz. One value drives the terrain and the wrecks.
+      scrollNow = header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed;
       fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
       pause.sync(header[slots.FLAGS]);
@@ -249,10 +278,15 @@ async function main() {
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
       readout.update(header[slots.WEAPON], header[slots.LEVEL]);
-      enemies.update(header[slots.ENEMY_N], fxTime);
-      // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
-      // while the simulation stays at 60 Hz.
-      rig.terrain.update(header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed);
+      // Ground units extrapolate like the terrain, at the ground ratio, so they never stutter
+      // against the roads.
+      enemies.update(
+        header[slots.ENEMY_N],
+        fxTime,
+        header[slots.ALPHA] * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
+      );
+      rig.terrain.update(scrollNow);
+      wrecks.update(scrollNow, fxTime);
       fxTime += dt / 1000;
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
@@ -330,6 +364,13 @@ async function main() {
         get particlesSpawned() {
           return fxLayers.additive.spawned + fxLayers.normal.spawned;
         },
+        get wrecksSpawned() {
+          return wrecks.spawned;
+        },
+      },
+      // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).
+      get groundLayerK() {
+        return rig.groundLayer.k;
       },
       get lockReason() {
         return controller.locked ? controller.reason : null;

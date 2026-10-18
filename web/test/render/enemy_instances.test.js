@@ -481,3 +481,62 @@ describe('basicEnemyGeometry', () => {
     expect(position.getY(tip)).toBeCloseTo(0);
   });
 });
+
+describe('createEnemyInstances ground layer', () => {
+  const GROUND = new Set([KINDS.TANK, KINDS.TURRET]);
+
+  function buildGrounded(capacity = 8) {
+    const groundGroup = new THREE.Group();
+    const built = build(capacity, { groundKinds: GROUND, groundGroup });
+    return { ...built, groundGroup };
+  }
+
+  it('parents the body, glow and top meshes of ground kinds to the ground group', () => {
+    const { enemies, byName, groundGroup } = buildGrounded();
+    const grounded = ['enemy-tank', 'enemy-tank-glow', 'enemy-tank-top', 'enemy-turret', 'enemy-turret-glow', 'enemy-turret-top'];
+    expect(groundGroup.children.map((mesh) => mesh.name)).toEqual(grounded);
+    expect(enemies.groundMeshes.map((mesh) => mesh.name)).toEqual(grounded);
+    for (const name of grounded) expect(byName[name].parent).toBe(groundGroup);
+  });
+
+  it('leaves every other mesh for the scene and lists them as air meshes', () => {
+    const { enemies, byName } = buildGrounded();
+    const air = enemies.airMeshes.map((mesh) => mesh.name);
+    expect(air).toEqual([
+      'enemy-jet',
+      'enemy-jet-glow',
+      'enemy-heli',
+      'enemy-heli-glow',
+      'enemy-heli-top',
+      'enemy-carrier',
+      'enemy-carrier-glow',
+    ]);
+    for (const name of air) expect(byName[name].parent).toBeNull();
+    expect(enemies.meshes).toHaveLength(air.length + enemies.groundMeshes.length);
+  });
+
+  it('treats every kind as air when no ground group is given', () => {
+    const { enemies } = build(8, { groundKinds: GROUND });
+    expect(enemies.groundMeshes).toHaveLength(0);
+    expect(enemies.airMeshes).toEqual(enemies.meshes);
+  });
+
+  it('adds the ground offset to the logical y of ground kinds only', () => {
+    const { data, enemies, byName } = buildGrounded();
+    setEnemy(data, 0, { x: 100, y: 50, kind: KINDS.TANK });
+    setEnemy(data, 1, { x: 100, y: 50, kind: KINDS.JET });
+    setEnemy(data, 2, { x: 100, y: 50, kind: KINDS.TURRET });
+    enemies.update(3, 0, 0.5);
+    expect(positionOf(byName['enemy-tank'], 0).toArray()).toEqual([-20, 0, -109.5]);
+    expect(positionOf(byName['enemy-tank-top'], 0).toArray()).toEqual([-20, 0, -109.5]);
+    expect(positionOf(byName['enemy-turret'], 0).toArray()).toEqual([-20, 0, -109.5]);
+    expect(positionOf(byName['enemy-jet'], 0).toArray()).toEqual([-20, 0, -110]);
+  });
+
+  it('defaults the ground offset to zero', () => {
+    const { data, enemies, byName } = buildGrounded();
+    setEnemy(data, 0, { x: 100, y: 50, kind: KINDS.TANK });
+    enemies.update(1);
+    expect(positionOf(byName['enemy-tank'], 0).toArray()).toEqual([-20, 0, -110]);
+  });
+});
