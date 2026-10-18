@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-25-PLAN.md
-last_updated: "2026-10-18T21:12:22.230Z"
+stopped_at: Completed 03-27-PLAN.md
+last_updated: "2026-10-18T21:18:23.092Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 2760bebe4c171609513acb9e612535cf80a0636e
+state_head: 8565694a8320d6424fcfd02b51df6a111dd1ad1a
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 67
+  completed_plans: 68
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 25 of 28
+Plan: 26 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -124,6 +124,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P22 | 14 min | 2 tasks | 7 files |
 | Phase 03 P24 | 12 min | 2 tasks | 7 files |
 | Phase 03 P25 | 32 min | 2 tasks | 12 files |
+| Phase 03 P27 | 8 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -272,6 +273,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-25: sign flicker is chosen by an integer placement hash below 0.15 (a sign's variant is a 0-5 hue index, so 'variant below 0.15' would flicker only cyan signs) and runs from the effect clock
 - [Phase 03]: 03-25: wet-street reflections are one dim (0.3) additive InstancedMesh per glowing kind laid flat on the road and stretched along +z, sharing the glow's geometry and instanceColor; shown for the prewarm and set by applyAtmosphere so a tier change never compiles
 - [Phase 03]: 03-25: the rain quad is built in view space and drawn DoubleSide (its winding flips with the streak direction, FrontSide culled every streak while rainCount read 600); fire plumes take an optional getDrift so puffs ride the ground
+- [Phase 03]: 27: stage perf runs carry no stress storm by default (stress 0 for --stage 1, 500 for the gallery); the gate measures the stage's own content
+- [Phase 03]: 27: the mortal perf run parks the ship (the sweep never dies) and fails if no death was seen; game-over ticks stay in its average
+- [Phase 03]: 27: native full-stage play-through reaches STAGE_CLEAR at about step 17300 with a peak of 58 gameplay enemy bullets (budget 180), no refused spawn, no lost high-priority event; stage data needed no tuning
 
 ### Pending Todos
 
@@ -295,6 +299,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T21:12:21.950Z
-Stopped at: Completed 03-25-PLAN.md
+Last session: 2026-10-18T21:18:22.857Z
+Stopped at: Completed 03-27-PLAN.md
 Resume file: None
