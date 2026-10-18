@@ -61,13 +61,24 @@ export const HIT_RECIPE = Object.freeze([
   emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], PALETTE.HIT_SPARK.rgb),
 ]);
 
+// Catching a pickup: a short ring of sparkles that flies outward flat on the plane. The colour is the
+// caught pickup's, so the recipe's own colour is only a placeholder that `colorFor` replaces.
+export const PICKUP_RECIPE = Object.freeze([
+  emitter('additive', 10, [0.3, 0.3], [30, 60], [3, 0.8], PALETTE.SPARK.rgb),
+]);
+
+// The palette crystal entry for each colour index of Python's cycle (0 red, 1 blue, 2 purple).
+const CRYSTAL_COLORS = Object.freeze([PALETTE.CRYSTAL_RED, PALETTE.CRYSTAL_BLUE, PALETTE.CRYSTAL_PURPLE]);
+
 // `toWorld(x, y, ground, out)` places a logical point in the world: on the gameplay plane for an air
 // event, or in the ground layer (on the terrain, where the unit was drawn) when `ground` is set.
 // `groundKinds` is the Set of kind values drawn in the ground layer; a HIT carries its kind.
+// `pickupKinds` is the manifest's pickup name -> value map; only BOMB needs a colour of its own.
 export function createExplosionFx({
   layers,
   events,
   blast,
+  pickupKinds = {},
   toWorld,
   getScale = () => 1,
   rng = mulberry32(0x5c0c7ed),
@@ -79,11 +90,13 @@ export function createExplosionFx({
     return range[0] + (range[1] - range[0]) * rng();
   }
 
-  function burst(emitters, x, y, ground) {
+  // `rgb`, when given, replaces every emitter's colour (the sparkle takes the caught pickup's).
+  function burst(emitters, x, y, ground, rgb = null) {
     toWorld(x, y, ground, scratch);
     const scale = getScale();
     for (let k = 0; k < emitters.length; k += 1) {
       const e = emitters[k];
+      const color = rgb ?? e.color;
       const layer = layers[e.layer];
       const count = Math.max(1, Math.round(e.count * scale));
       for (let i = 0; i < count; i += 1) {
@@ -99,21 +112,30 @@ export function createExplosionFx({
           between(e.life),
           e.size[0],
           e.size[1],
-          e.color[0],
-          e.color[1],
-          e.color[2],
+          color[0],
+          color[1],
+          color[2],
           e.gravity,
         );
       }
     }
   }
 
-  function handle(type, x, y, a, b) {
+  // A BOMB shows its own colour; any other pickup shows the colour index at the catch (c). An index
+  // outside the cycle (a protocol fault) is drawn red rather than not at all.
+  function pickupColor(kind, colorIndex) {
+    if (kind === pickupKinds.BOMB) return PALETTE.BOMB_PICKUP.rgb;
+    return (CRYSTAL_COLORS[colorIndex] ?? PALETTE.CRYSTAL_RED).rgb;
+  }
+
+  function handle(type, x, y, a, b, c) {
     if (type === events.EXPLOSION) {
       const emitters = byBlast.get(a);
       if (emitters) burst(emitters, x, y, b);
     } else if (type === events.HIT) {
       burst(HIT_RECIPE, x, y, groundKinds.has(a) ? 1 : 0);
+    } else if (type === events.PICKUP) {
+      burst(PICKUP_RECIPE, x, y, 0, pickupColor(a, c));
     }
   }
 

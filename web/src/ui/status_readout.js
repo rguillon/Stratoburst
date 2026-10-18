@@ -11,15 +11,27 @@ export const WEAPON_CSS = Object.freeze({
 
 const UNKNOWN_NAME = '?';
 
-export function createStatusReadout({ doc = document, weapons, colors = WEAPON_CSS }) {
+// The MAX flash (D-06) stays up for this long, fading over its last FADE_MS.
+export const FLASH_MS = 900;
+const FADE_MS = 400;
+
+// `events` is the manifest's event name -> id map and `maxed` the PickupOutcome value of a fifth
+// same-colour catch. The flash is static markup toggled with `hidden`; no text is ever written to it.
+export function createStatusReadout({ doc = document, weapons, events, maxed, colors = WEAPON_CSS }) {
   const el = doc.getElementById('status-readout');
   if (!el) throw new Error('#status-readout is missing from the page');
+  const flashEl = doc.getElementById('max-flash');
+  if (!flashEl) throw new Error('#max-flash is missing from the page');
   const weaponEl = el.querySelector('.weapon');
   const levelEl = el.querySelector('.level');
   const nameByValue = new Map(Object.entries(weapons).map(([name, value]) => [value, name]));
 
   let shownWeapon = Number.NaN;
   let shownLevel = Number.NaN;
+  // The flash starts counting at the first tick after the catch, so the 900 ms follow the frame
+  // clock; a catch while it is up resets the count instead of stacking a second flash.
+  let flashing = false;
+  let deadline = null;
 
   return {
     el,
@@ -37,6 +49,25 @@ export function createStatusReadout({ doc = document, weapons, colors = WEAPON_C
     },
     show() {
       el.hidden = false;
+    },
+    // One fx event; only a PICKUP whose outcome is MAXED flashes.
+    handle(type, _x, _y, _a, b) {
+      if (type !== events.PICKUP || b !== maxed) return;
+      flashing = true;
+      deadline = null;
+      flashEl.hidden = false;
+    },
+    // Called every frame with the frame clock in ms.
+    tick(nowMs) {
+      if (!flashing) return;
+      deadline ??= nowMs + FLASH_MS;
+      const remaining = deadline - nowMs;
+      if (remaining <= 0) {
+        flashing = false;
+        flashEl.hidden = true;
+        return;
+      }
+      flashEl.style.opacity = Math.min(1, remaining / FADE_MS).toFixed(2);
     },
   };
 }

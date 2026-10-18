@@ -44,6 +44,9 @@ test('without flags the readout shows VULCAN Lv 1', async ({ page }) => {
   await bootGame(page, '?debug');
   await expect(page.locator('#status-readout')).toContainText('VULCAN');
   await expect(page.locator('#status-readout')).toContainText('Lv 1');
+  // The MAX flash markup exists but stays hidden until a fifth same-colour crystal is caught.
+  await expect(page.locator('#max-flash')).toHaveCount(1);
+  await expect(page.locator('#max-flash')).toBeHidden();
 });
 
 test('holding fire with the level 3 laser opens a half-width 4 beam and releasing closes it', async ({

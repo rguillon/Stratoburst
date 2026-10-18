@@ -127,6 +127,28 @@
       #status-readout[hidden] {
         display: none;
       }
+      #max-flash {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 24%;
+        z-index: 4;
+        pointer-events: none;
+        text-align: center;
+        font: 900 clamp(48px, 14vmin, 128px) / 1 system-ui, sans-serif;
+        letter-spacing: 0.18em;
+        text-indent: 0.18em;
+        color: #ffd27a;
+        text-shadow:
+          0 0 10px #ff9a2e,
+          0 0 28px #ff7a14,
+          0 0 56px rgba(255, 122, 20, 0.7),
+          0 2px 0 #7a3a08;
+        user-select: none;
+      }
+      #max-flash[hidden] {
+        display: none;
+      }
       #paused {
         position: fixed;
         inset: 0;
@@ -171,6 +193,7 @@
         <button id="start-gate" type="button" hidden>TAP / CLICK TO START</button>
       </div>
       <div id="status-readout" hidden><span class="weapon"></span> <span class="level"></span></div>
+      <div id="max-flash" hidden>MAX</div>
     </div>
     <div id="paused" role="dialog" aria-label="Game paused" hidden>
       <div class="title">PAUSED</div>

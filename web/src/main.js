@@ -157,6 +157,7 @@ async function main() {
     layers: fxLayers,
     events: manifest.events,
     blast: manifest.blast,
+    pickupKinds: manifest.pickup_kinds,
     // A ground explosion bursts on the terrain where the unit was drawn; an air one on the plane.
     toWorld: (x, y, ground, out) =>
       ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
@@ -289,8 +290,13 @@ async function main() {
   const app = document.getElementById('app');
   const { audio, pointerType } = await waitForStartGesture(app);
   loading.hide();
-  const readout = createStatusReadout({ weapons: manifest.weapons });
+  const readout = createStatusReadout({
+    weapons: manifest.weapons,
+    events: manifest.events,
+    maxed: manifest.outcomes.MAXED,
+  });
   readout.show();
+  fx.add(readout); // the MAX flash listens for the MAXED pickup events
 
   // Timing, overlay and report exist only under ?debug; nothing is created otherwise. They
   // start with play, so the report's elapsed time and minutes exclude the loading screen.
@@ -359,6 +365,7 @@ async function main() {
       // while the simulation stays at 60 Hz. One value drives the terrain and the wrecks.
       scrollNow = header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed;
       fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
+      readout.tick(ts);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
       pause.sync(header[slots.FLAGS]);
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
