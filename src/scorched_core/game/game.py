@@ -554,7 +554,10 @@ class Game:
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.ebullets.integrate()
         self.ebullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
-        self.gallery.step(self.enemies)
+        if self.director is not None:
+            self.director.step(self.terrain.distance, self.enemies)
+        else:
+            self.gallery.step(self.enemies)
         self.enemies.step(self.ship.x, self.ship.y)
         self.enemies.fire(self.ebullets, self.ship.x, self.ship.y, self.events)
         self.missiles.steer(self.enemies)
