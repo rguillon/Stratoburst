@@ -65,7 +65,7 @@ Plans:
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
 
-**Plans:** 20/33 plans executed (21 waves)
+**Plans:** 21/33 plans executed (21 waves)
 
 Plans:
 **Wave 1**
@@ -109,7 +109,7 @@ Plans:
 - [x] 02-20-PLAN.md — (wave 10) Lethal hits wired: death and fly-in respawn in the game; ?god flag, mortal e2e helper, death spec
 
 **Wave 11** *(blocked on Wave 10 completion)*
-- [ ] 02-21-PLAN.md — (wave 11) Piercing laser beam: hitscan, BEAM_W, glowing beam mesh
+- [x] 02-21-PLAN.md — (wave 11) Piercing laser beam: hitscan, BEAM_W, glowing beam mesh
 
 **Wave 12** *(blocked on Wave 11 completion)*
 - [ ] 02-22-PLAN.md — (wave 12) Nuke core (Shift/K): bullet clear, growing damage, invulnerability, stock, press latch
@@ -188,6 +188,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
-| 2. Arcade Shooting Feel | 20/33 | In Progress | - |
+| 2. Arcade Shooting Feel | 21/33 | In Progress | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

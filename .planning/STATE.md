@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-20-PLAN.md
-last_updated: "2026-10-18T05:41:38.886Z"
+stopped_at: Completed 02-21-PLAN.md
+last_updated: "2026-10-18T05:58:07.896Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: f716dcf81e9dfcd297fb59309e1124b0636fafb9
+state_head: b57556714ec9af71476eb65f1cbe124c3b2b02f9
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 30
+  completed_plans: 31
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 21 of 33
+Plan: 22 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -86,6 +86,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P18 | 9 min | 2 tasks | 10 files |
 | Phase 02 P19 | 10 min | 2 tasks | 8 files |
 | Phase 02 P20 | 7 min | 2 tasks | 10 files |
+| Phase 02 P21 | 15 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -154,6 +155,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-19: air shadows are uncompensated blob quads at terrain depth + 0.3 displaced along the sun ray by 40 units, renderOrder 3, ship included, shipVisible false hides its own
 - [Phase 02]: 02-20: lethal contact checks gameplay bullets then live air bodies only while the ship is vulnerable and not god; ground units and the storm never kill, and drag owed while the ship cannot be controlled is dropped
 - [Phase 02]: 02-20: the ?god flag is presence-only in JS and Python accepts only a real boolean True; e2e bootGame boots god unless mortal is asked for and the perf harness always passes god
+- [Phase 02]: 02-21: the laser is a pool-free hitscan beam that pierces every enemy in its column (research A2), damaging on the first firing step then every 3rd, with BEAM_W (header 18) carrying its half-width
+- [Phase 02]: 02-21: the beam draws additive at renderOrder 4 with gains 0.42 core / 0.5 glow / 0.9 flare (full HDR tone-mapped to white) and is shown once before the second prewarm so its shaders compile at load
 
 ### Pending Todos
 
@@ -176,6 +179,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:41:34.767Z
-Stopped at: Completed 02-20-PLAN.md
+Last session: 2026-10-18T05:58:07.795Z
+Stopped at: Completed 02-21-PLAN.md
 Resume file: None
