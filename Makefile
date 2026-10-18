@@ -58,7 +58,7 @@ build: ## Production build into dist/
 perf: ## Python tick budget in Pyodide-on-Node: the gallery runs (500 stress bullets, every weapon at Lv5) then the stage runs, fails above 3 ms average
 	npm run perf --if-present
 
-perf-stage: ## Python tick budget over stage 1's boss fight (every weapon at Lv5, bombs) in Pyodide-on-Node, fails above 3 ms average
+perf-stage: ## Python tick budget over stage 1's boss fight (every weapon at Lv5, bombs) and a mortal run (deaths, game over) in Pyodide-on-Node, fails above 3 ms average
 	npm run perf:stage
 
 dev: ## Vite dev server
