@@ -1,4 +1,5 @@
 import pytest
+from scorched_core.paths.path_library import path_index
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -150,3 +151,35 @@ def test_a_wave_without_a_pattern_takes_the_kind_default() -> None:
     director, enemies = StageDirector(stage_of(jet(1.0))), EnemyPool()
     director.step(1.0, enemies)
     assert enemies.pattern[0] == pattern_index("jet_aimed")
+
+
+def path_jet(at: float, name: str = "swoop", *, mirror: bool = False) -> WaveEntry:
+    return WaveEntry(
+        at=at, kind=EnemyKind.JET, x=20.0, motion=MotionKind.PATH, path=name, mirror=mirror
+    )
+
+
+def test_a_wave_path_name_is_resolved_to_an_index_when_the_director_is_built() -> None:
+    director = StageDirector(stage_of(path_jet(1.0, "s_dive"), jet(2.0)))
+    assert director._paths == (path_index("s_dive"), -1)
+
+
+def test_a_path_wave_reaches_the_spawned_row_with_its_index_and_a_forward_flip() -> None:
+    director, enemies = StageDirector(stage_of(path_jet(1.0, "loop_back"))), EnemyPool()
+    director.step(1.0, enemies)
+    assert enemies.motion[0] == MotionKind.PATH
+    assert enemies.path[0] == path_index("loop_back")
+    assert enemies.flip[0] == 1
+
+
+def test_a_mirrored_wave_spawns_with_a_flip_of_minus_one() -> None:
+    director, enemies = StageDirector(stage_of(path_jet(1.0, mirror=True))), EnemyPool()
+    director.step(1.0, enemies)
+    assert enemies.flip[0] == -1
+
+
+def test_a_wave_without_a_path_spawns_with_no_path() -> None:
+    director, enemies = StageDirector(stage_of(jet(1.0))), EnemyPool()
+    director.step(1.0, enemies)
+    assert enemies.path[0] == -1
+    assert enemies.flip[0] == 1

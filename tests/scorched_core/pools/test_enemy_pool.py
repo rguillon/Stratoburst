@@ -5,13 +5,14 @@ from array import array
 from types import SimpleNamespace
 
 import pytest
-from scorched_core.patterns.pattern_library import PATTERN_TABLE, pattern_index
-from scorched_core.patterns.pattern_spec import PatternSpec
+from scorched_core.paths.path_spec import PathSpec
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.patterns.fire_pattern import FirePattern
+from scorched_core.patterns.pattern_library import PATTERN_TABLE, pattern_index
+from scorched_core.patterns.pattern_spec import PatternSpec
 from scorched_core.pools import enemy_pool
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
@@ -935,6 +936,7 @@ def test_columns_cover_every_array_field_except_the_kill_buffer() -> None:
     assert set(enemy_pool._COLUMNS) == arrays - kill_buffer
     assert len(enemy_pool._COLUMNS) == len(set(enemy_pool._COLUMNS))
     assert {"pattern", "volley", "burst_left", "fire_timer"} <= set(enemy_pool._COLUMNS)
+    assert {"path", "seg", "seg_t", "base_y", "flip"} <= set(enemy_pool._COLUMNS)
 
 
 def test_a_randomized_spawn_and_remove_sequence_keeps_every_column_in_step() -> None:
@@ -958,3 +960,261 @@ def test_a_randomized_spawn_and_remove_sequence_keeps_every_column_in_step() -> 
         for i, row in enumerate(model):
             for name in enemy_pool._COLUMNS:
                 assert getattr(pool, name)[i] == row[name]
+
+
+# --- PATH and SCRIPTED motion (ENMY-01, ENMY-02) ---
+
+
+def use_paths(monkeypatch: pytest.MonkeyPatch, *specs: PathSpec) -> None:
+    """Replace the path registry table with ``specs`` so a test controls the geometry."""
+    monkeypatch.setattr(enemy_pool, "PATH_TABLE", specs)
+
+
+def on_path(
+    pool: EnemyPool,
+    kind: EnemyKind = EnemyKind.JET,
+    x: float = 100.0,
+    y: float = 0.0,
+    path: int = 0,
+    flip: int = 1,
+) -> int:
+    assert pool.spawn(kind, x, y, MotionKind.PATH, 0.0, 0.0, path=path, flip=flip)
+    return pool.n - 1
+
+
+def test_spawn_defaults_to_no_path_and_a_forward_flip() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    assert (pool.path[0], pool.seg[0], pool.seg_t[0], pool.flip[0]) == (-1, 0, 0.0, 1)
+
+
+def test_spawn_records_the_path_the_base_row_and_the_flip(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 50.0)), 1.0))
+    pool = EnemyPool()
+    on_path(pool, y=-16.0, path=0, flip=-1)
+    assert (pool.path[0], pool.flip[0]) == (0, -1)
+    assert (pool.seg[0], pool.seg_t[0], pool.base_y[0]) == (0, 0.0, -16.0)
+    assert pool.base_x[0] == 100.0
+
+
+@pytest.mark.parametrize("path", [-1, 1])
+def test_spawning_a_path_motion_without_a_valid_path_is_a_loud_error(
+    monkeypatch: pytest.MonkeyPatch, path: int
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 50.0)), 1.0))
+    with pytest.raises(ValueError, match="PATH motion needs a path index"):
+        EnemyPool().spawn(EnemyKind.JET, 0.0, 0.0, MotionKind.PATH, 0.0, 0.0, path=path)
+
+
+def test_a_full_pool_refuses_a_path_spawn_before_validating_the_path() -> None:
+    pool = EnemyPool()
+    for _ in range(ENEMY_MAX_ALIVE):
+        jet(pool)
+    assert not pool.spawn(EnemyKind.JET, 0.0, 0.0, MotionKind.PATH, 0.0, 0.0, path=-1)
+
+
+def test_a_path_row_moves_exactly_its_speed_along_a_straight_segment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 400.0)), 2.0))
+    pool = EnemyPool()
+    on_path(pool, x=100.0, y=10.0)
+    for step in range(1, 31):
+        pool.step(SHIP_X, SHIP_Y)
+        assert pool.x[0] == pytest.approx(100.0, abs=1e-4)
+        assert pool.y[0] == pytest.approx(10.0 + 2.0 * step, abs=1e-3)
+
+
+def test_a_path_row_carries_leftover_distance_into_the_next_segment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 3.0), (10.0, 3.0)), 2.0))
+    pool = EnemyPool()
+    on_path(pool, x=0.0, y=0.0)
+    seen = []
+    for _ in range(3):
+        pool.step(SHIP_X, SHIP_Y)
+        seen.append((float(pool.x[0]), float(pool.y[0]), int(pool.seg[0])))
+    assert seen[0] == pytest.approx((0.0, 2.0, 0))
+    assert seen[1] == pytest.approx((1.0, 3.0, 1))  # 4 units travelled: 3 down, 1 across
+    assert seen[2] == pytest.approx((3.0, 3.0, 1))
+
+
+def test_a_path_row_can_cross_several_short_segments_in_one_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 2.0)), 2.5))
+    pool = EnemyPool()
+    on_path(pool, x=0.0, y=0.0)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.seg[0] == 2
+    assert (pool.x[0], pool.y[0]) == pytest.approx((1.0, 1.5))
+
+
+def test_after_the_last_point_a_path_row_keeps_going_along_the_last_direction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 4.0), (3.0, 8.0)), 1.0))
+    pool = EnemyPool()
+    on_path(pool, x=50.0, y=0.0)
+    for _ in range(15):
+        pool.step(SHIP_X, SHIP_Y)
+    assert pool.seg[0] == 1  # never advances past the last segment
+    # 15 units: 4 along the first segment, 10 along the (0.6, 0.8) second, 1 more beyond its end.
+    assert pool.x[0] == pytest.approx(50.0 + 0.6 * 11.0, abs=1e-3)
+    assert pool.y[0] == pytest.approx(4.0 + 0.8 * 11.0, abs=1e-3)
+
+
+def test_a_path_row_faces_the_heading_of_its_current_segment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 3.0), (10.0, 3.0)), 2.0))
+    pool = EnemyPool()
+    on_path(pool)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.angle[0] == pytest.approx(math.atan2(0.0, 1.0))
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.angle[0] == pytest.approx(math.atan2(1.0, 0.0))
+
+
+def test_a_mirrored_path_row_flips_its_x_offsets_and_heading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 3.0), (10.0, 3.0)), 2.0))
+    pool = EnemyPool()
+    on_path(pool, x=100.0, y=0.0, flip=-1)
+    pool.step(SHIP_X, SHIP_Y)
+    pool.step(SHIP_X, SHIP_Y)
+    assert (pool.x[0], pool.y[0]) == pytest.approx((99.0, 3.0))
+    assert pool.angle[0] == pytest.approx(math.atan2(-1.0, 0.0))
+
+
+def test_a_ground_kind_on_a_path_adds_the_ground_scroll_to_its_base_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 600.0)), 0.25))
+    pool = EnemyPool()
+    on_path(pool, EnemyKind.TANK, x=80.0, y=-16.0)
+    for step in range(1, 41):
+        pool.step(SHIP_X, SHIP_Y, 0.5)
+        assert pool.y[0] == pytest.approx(-16.0 + (0.5 + 0.25) * step, abs=1e-3)
+    assert pool.base_y[0] == pytest.approx(-16.0 + 0.5 * 40, abs=1e-3)
+
+
+def test_a_road_following_tank_slows_with_the_terrain(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 600.0)), 0.25))
+    pool = EnemyPool()
+    on_path(pool, EnemyKind.TANK, x=80.0, y=0.0)
+    pool.step(SHIP_X, SHIP_Y, 0.0)  # the terrain has stopped: only the tank's own drive remains
+    assert pool.y[0] == pytest.approx(0.25, abs=1e-5)
+
+
+def test_an_air_kind_on_a_path_ignores_the_ground_scroll(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 600.0)), 2.0))
+    pool = EnemyPool()
+    on_path(pool, EnemyKind.JET, y=0.0)
+    pool.step(SHIP_X, SHIP_Y, 5.0)
+    assert pool.y[0] == pytest.approx(2.0, abs=1e-5)
+
+
+def test_a_turret_on_a_path_keeps_aiming_at_the_player(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 600.0)), 0.25))
+    pool = EnemyPool()
+    on_path(pool, EnemyKind.TANK, x=60.0, y=40.0)
+    pool.step(180.0, 280.0, 0.0)
+    assert pool.aux[0] == pytest.approx(math.atan2(180.0 - 60.0, 280.0 - 40.25), abs=1e-4)
+
+
+def test_a_path_row_going_up_is_removed_above_twice_the_exit_margin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, -500.0)), 5.0))
+    pool = EnemyPool()
+    ring = EventRing()
+    on_path(pool, y=0.0)
+    top = -2.0 * ENEMY_EXIT_MARGIN
+    steps = 0
+    while pool.n and steps < 100:
+        pool.step(SHIP_X, SHIP_Y)
+        steps += 1
+        if pool.n:
+            assert pool.y[0] >= top
+    assert pool.n == 0
+    assert steps == 10  # y reaches -50, past -48
+    pool.remove_dead(ring)
+    assert (pool.kills, ring.n) == (0, 0)
+
+
+def test_a_path_row_just_below_the_top_exit_line_stays(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, -500.0)), 1.0))
+    pool = EnemyPool()
+    on_path(pool, y=-2.0 * ENEMY_EXIT_MARGIN + 2.0)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.n == 1
+
+
+def test_a_non_path_row_above_the_top_is_not_removed() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.JET, 100.0, -200.0, MotionKind.DIVE, 0.0, 0.5)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.n == 1  # only PATH rows have a top exit; a diving jet may still be on its way in
+
+
+@pytest.mark.parametrize(
+    ("x", "y"),
+    [
+        (100.0, PLAYFIELD_H + ENEMY_EXIT_MARGIN),
+        (-2 * ENEMY_EXIT_MARGIN - 5.0, 100.0),
+        (PLAYFIELD_W + 2 * ENEMY_EXIT_MARGIN + 5.0, 100.0),
+    ],
+)
+def test_a_path_row_is_removed_on_any_other_side(
+    monkeypatch: pytest.MonkeyPatch, x: float, y: float
+) -> None:
+    use_paths(monkeypatch, PathSpec(((0.0, 0.0), (0.0, 10.0)), 1.0))
+    pool = EnemyPool()
+    on_path(pool, x=x, y=y)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.n == 0
+
+
+def test_a_scripted_row_never_moves_by_itself() -> None:
+    pool = EnemyPool()
+    assert pool.spawn(EnemyKind.CARRIER, 120.0, 60.0, MotionKind.SCRIPTED, 1.0, 1.0)
+    for _ in range(1000):
+        pool.step(SHIP_X, SHIP_Y)
+    assert (pool.x[0], pool.y[0]) == (120.0, 60.0)
+    assert pool.age[0] == 1000
+
+
+@pytest.mark.parametrize(
+    ("x", "y"),
+    [
+        (100.0, PLAYFIELD_H + 3 * ENEMY_EXIT_MARGIN),
+        (-5 * ENEMY_EXIT_MARGIN, 100.0),
+        (PLAYFIELD_W + 5 * ENEMY_EXIT_MARGIN, 100.0),
+        (100.0, -5 * ENEMY_EXIT_MARGIN),
+    ],
+)
+def test_a_scripted_row_outside_every_exit_margin_is_never_removed(x: float, y: float) -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.CARRIER, x, y, MotionKind.SCRIPTED, 0.0, 0.0)
+    for _ in range(1000):
+        pool.step(SHIP_X, SHIP_Y)
+    assert pool.n == 1
+    assert (pool.x[0], pool.y[0]) == (x, y)
+
+
+def test_a_scripted_row_still_flashes_down_and_dies_at_zero_hp() -> None:
+    pool = EnemyPool()
+    ring = EventRing()
+    pool.spawn(EnemyKind.CARRIER, 120.0, 60.0, MotionKind.SCRIPTED, 0.0, 0.0)
+    pool.apply_hit(0, 1, ring)
+    assert pool.flash[0] == ENEMY_FLASH_TICKS
+    for _ in range(ENEMY_FLASH_TICKS):
+        pool.step(SHIP_X, SHIP_Y)
+    assert pool.flash[0] == 0
+    pool.apply_hit(0, 10_000, ring)
+    pool.remove_dead(ring)
+    assert pool.n == 0
+    assert pool.kills == 1

@@ -1,6 +1,7 @@
 import pytest
 
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.wave_entry import WaveEntry
 
@@ -72,3 +73,26 @@ def test_an_unknown_marker_raises_key_error() -> None:
     stage = StageData(number=1, length=100.0, waves=(), markers=(("boss", 90.0),))
     with pytest.raises(KeyError):
         stage.marker("nowhere")
+
+
+def test_a_path_wave_naming_a_known_path_is_valid() -> None:
+    wave = WaveEntry(at=5.0, kind=EnemyKind.JET, x=20.0, motion=MotionKind.PATH, path="swoop")
+    assert StageData(number=1, length=100.0, waves=(wave,), markers=()).waves == (wave,)
+
+
+def test_a_wave_naming_an_unknown_path_is_rejected_naming_the_entry() -> None:
+    wave = WaveEntry(at=7.0, kind=EnemyKind.HELI, x=80.0, motion=MotionKind.PATH, path="nope")
+    with pytest.raises(ValueError, match=r"wave 0 \(at=7.0, HELI\) names an unknown path 'nope'"):
+        StageData(number=1, length=100.0, waves=(wave,), markers=())
+
+
+def test_a_path_on_a_wave_that_is_not_a_path_motion_is_rejected() -> None:
+    wave = WaveEntry(at=7.0, kind=EnemyKind.JET, x=80.0, motion=MotionKind.DIVE, path="swoop")
+    with pytest.raises(ValueError, match=r"wave 0 \(at=7.0, JET\) .*path.*not PATH"):
+        StageData(number=1, length=100.0, waves=(wave,), markers=())
+
+
+def test_a_path_motion_without_a_path_is_rejected() -> None:
+    wave = WaveEntry(at=7.0, kind=EnemyKind.JET, x=80.0, motion=MotionKind.PATH)
+    with pytest.raises(ValueError, match=r"wave 0 \(at=7.0, JET\) .*PATH.*no path"):
+        StageData(number=1, length=100.0, waves=(wave,), markers=())

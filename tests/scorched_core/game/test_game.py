@@ -7,6 +7,7 @@ from array import array
 from collections.abc import Callable
 
 import pytest
+from scorched_core.paths.path_library import PATHS
 
 from scorched_core.audio.sfx_id import SfxId
 from scorched_core.clock.fixed_step_runner import STEP_MS
@@ -2880,3 +2881,74 @@ def test_ground_units_slow_with_a_scroll_ramp() -> None:
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     speed = SCROLL_SPEED - SCROLL_ACCEL
     assert game.enemies.y[0] == pytest.approx(50.0 + speed * GROUND_SCROLL_RATIO, abs=1e-4)
+
+
+def _along(points: tuple[tuple[float, float], ...], distance: float) -> tuple[float, float]:
+    """The offset ``distance`` units along a polyline (test oracle, independent of the pool)."""
+    for (x0, y0), (x1, y1) in itertools.pairwise(points):
+        length = math.hypot(x1 - x0, y1 - y0)
+        if distance <= length:
+            return x0 + (x1 - x0) * distance / length, y0 + (y1 - y0) * distance / length
+        distance -= length
+    raise AssertionError("distance runs past the polyline")
+
+
+def _path_stage(*waves: WaveEntry) -> StageData:
+    return StageData(number=9, length=2000.0, waves=waves, markers=())
+
+
+def test_a_stage_jet_flies_its_authored_path_at_the_path_speed() -> None:
+    spec = PATHS["swoop"]
+    wave = WaveEntry(
+        at=0.0, kind=EnemyKind.JET, x=20.0, y=-16.0, motion=MotionKind.PATH, path="swoop"
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    for k in range(1, 61):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        dx, dy = _along(spec.points, k * spec.speed)
+        assert game.enemies.x[0] == pytest.approx(20.0 + dx, abs=1e-2)
+        assert game.enemies.y[0] == pytest.approx(-16.0 + dy, abs=1e-2)
+
+
+def test_a_mirrored_stage_jet_flies_the_reflected_path() -> None:
+    spec = PATHS["swoop"]
+    wave = WaveEntry(
+        at=0.0,
+        kind=EnemyKind.JET,
+        x=220.0,
+        y=-16.0,
+        motion=MotionKind.PATH,
+        path="swoop",
+        mirror=True,
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    for _ in range(40):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    dx, dy = _along(spec.points, 40 * spec.speed)
+    assert game.enemies.x[0] == pytest.approx(220.0 - dx, abs=1e-2)
+    assert game.enemies.y[0] == pytest.approx(-16.0 + dy, abs=1e-2)
+
+
+def test_a_stage_tank_drives_down_its_road_with_the_scroll() -> None:
+    spec = PATHS["road_down"]
+    wave = WaveEntry(
+        at=0.0, kind=EnemyKind.TANK, x=80.0, y=-16.0, motion=MotionKind.PATH, path="road_down"
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    for k in range(1, 31):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        ground = game.terrain.speed * GROUND_SCROLL_RATIO
+        assert game.enemies.x[0] == pytest.approx(80.0, abs=1e-3)
+        assert game.enemies.y[0] == pytest.approx(-16.0 + k * (ground + spec.speed), abs=1e-2)
+
+
+def test_a_stage_tank_on_a_road_stays_put_on_the_terrain_when_the_scroll_stops() -> None:
+    wave = WaveEntry(
+        at=0.0, kind=EnemyKind.TANK, x=80.0, y=40.0, motion=MotionKind.PATH, path="road_down"
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.terrain.speed = game.terrain.target = 0.0
+    before = float(game.enemies.y[0])
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.y[0] - before == pytest.approx(PATHS["road_down"].speed, abs=1e-4)
