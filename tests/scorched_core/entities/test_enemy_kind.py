@@ -14,10 +14,18 @@ from scorched_core.tuning import (
     HITSTOP_PART_TICKS,
     MISSILE_RADIUS,
     PBULLET_RADIUS,
+    WARNING_TICKS,
 )
 
 TRAIN_KINDS = (EnemyKind.TRAIN, EnemyKind.TRAIN_TURRET, EnemyKind.TRAIN_STUMP)
 TARGET_KINDS = (EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD)
+BOMBER_KINDS = (
+    EnemyKind.BOMBER,
+    EnemyKind.BOMBER_TURRET,
+    EnemyKind.BOMBER_ENGINE,
+    EnemyKind.BOMBER_STUMP,
+    EnemyKind.BOMBER_OPEN,
+)
 
 
 def test_the_roster_values_are_the_wire_values() -> None:
@@ -34,6 +42,11 @@ def test_the_roster_values_are_the_wire_values() -> None:
         "FUEL_TANK": 9,
         "DEPOT": 10,
         "BILLBOARD": 11,
+        "BOMBER": 12,
+        "BOMBER_TURRET": 13,
+        "BOMBER_ENGINE": 14,
+        "BOMBER_STUMP": 15,
+        "BOMBER_OPEN": 16,
     }
 
 
@@ -56,8 +69,11 @@ def test_every_per_kind_table_has_one_row_per_kind() -> None:
 
 
 def test_the_kind_tables_match_the_design_numbers() -> None:
-    assert ENEMY_RADIUS == (9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0)
-    assert ENEMY_HP == (3, 6, 12, 8, 6, 500, 120, 1, 8, 6, 16, 10)
+    assert (
+        *(9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0),
+        *(28.0, 10.0, 12.0, 6.0, 28.0),
+    ) == ENEMY_RADIUS
+    assert ENEMY_HP == (3, 6, 12, 8, 6, 500, 120, 1, 8, 6, 16, 10, 1400, 200, 220, 1, 1400)
     assert ENEMY_BLAST == (
         BLAST_SMALL,
         BLAST_MEDIUM,
@@ -71,6 +87,11 @@ def test_the_kind_tables_match_the_design_numbers() -> None:
         BLAST_LARGE,
         BLAST_LARGE,
         BLAST_MEDIUM,
+        BLAST_LARGE,
+        BLAST_MEDIUM,
+        BLAST_MEDIUM,
+        BLAST_MEDIUM,
+        BLAST_LARGE,
     )
 
 
@@ -115,18 +136,42 @@ def test_each_kind_names_its_default_pattern_and_the_carrier_has_none() -> None:
         None,
         None,
         None,
+        None,
+        None,
+        None,
+        None,
+        None,
     )
     assert ENEMY_PATTERN[EnemyKind.CARRIER] is None
-    assert all(ENEMY_PATTERN[kind] is None for kind in (*TRAIN_KINDS, *TARGET_KINDS))
+    assert all(ENEMY_PATTERN[kind] is None for kind in (*TRAIN_KINDS, *TARGET_KINDS, *BOMBER_KINDS))
     assert all(name in PATTERNS for name in ENEMY_PATTERN if name is not None)
 
 
 def test_each_kind_pays_fixed_points_with_no_multiplier() -> None:
-    assert ENEMY_POINTS == (300, 800, 2000, 1000, 1200, 0, 0, 0, 500, 1500, 2000, 1000)
+    assert ENEMY_POINTS == (
+        300,
+        800,
+        2000,
+        1000,
+        1200,
+        0,
+        0,
+        0,
+        500,
+        1500,
+        2000,
+        1000,
+        0,
+        0,
+        0,
+        0,
+        0,
+    )
     assert ENEMY_POINTS[EnemyKind.JET] == 300
     assert ENEMY_POINTS[EnemyKind.TURRET] == 1200
     assert all(points > 0 for points in ENEMY_POINTS[: EnemyKind.TRAIN])
     assert all(ENEMY_POINTS[kind] == 0 for kind in TRAIN_KINDS)  # the controller pays the train
+    assert all(ENEMY_POINTS[kind] == 0 for kind in BOMBER_KINDS)  # and the bomber
     assert all(ENEMY_POINTS[kind] > 0 for kind in TARGET_KINDS)
 
 
@@ -137,11 +182,37 @@ def test_the_four_target_kinds_are_tougher_than_a_tank_and_pay_by_their_size() -
 
 
 def test_which_kinds_leave_a_wreck_is_data_one_flag_per_kind() -> None:
-    assert ENEMY_WRECK == (0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1)
+    assert ENEMY_WRECK == (0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0)
     wrecked = {kind for kind in EnemyKind if ENEMY_WRECK[kind]}
     assert wrecked == {EnemyKind.TANK, EnemyKind.TURRET, EnemyKind.TRAIN, *TARGET_KINDS}
     assert not wrecked & {EnemyKind.JET, EnemyKind.HELI, EnemyKind.CARRIER}
     assert not wrecked & {EnemyKind.TRAIN_TURRET, EnemyKind.TRAIN_STUMP}
+    assert not wrecked & set(BOMBER_KINDS)  # the bomber is air: it leaves no wreck on the ground
+
+
+def test_the_bomber_kinds_are_air_units_with_the_design_radii() -> None:
+    assert not any(ENEMY_GROUND[kind] for kind in BOMBER_KINDS)
+    assert [ENEMY_RADIUS[kind] for kind in BOMBER_KINDS] == [28.0, 10.0, 12.0, 6.0, 28.0]
+    assert ENEMY_RADIUS[EnemyKind.BOMBER_OPEN] == ENEMY_RADIUS[EnemyKind.BOMBER]  # a swap in place
+    assert (
+        max(ENEMY_RADIUS[kind] for kind in BOMBER_KINDS) + max(PBULLET_RADIUS, MISSILE_RADIUS)
+        <= GRID_CELL
+    )
+
+
+def test_the_bomber_hit_points_start_in_the_research_range() -> None:
+    hull, turret, engine = (
+        ENEMY_HP[EnemyKind.BOMBER],
+        ENEMY_HP[EnemyKind.BOMBER_TURRET],
+        ENEMY_HP[EnemyKind.BOMBER_ENGINE],
+    )
+    assert (hull, turret, engine) == (1400, 200, 220)
+    assert ENEMY_HP[EnemyKind.BOMBER_OPEN] == hull
+    assert ENEMY_HP[EnemyKind.BOMBER_STUMP] == 1
+
+
+def test_the_warning_lasts_three_seconds_of_steps() -> None:
+    assert WARNING_TICKS == 180
 
 
 def test_the_train_hull_is_the_largest_row_and_still_fits_one_grid_cell() -> None:

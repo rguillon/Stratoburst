@@ -1,7 +1,8 @@
-from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
+import math
 
+from scorched_core.bosses.stage_1_bosses import BOMBER_1, MIDBOSS_1
 from scorched_core.entities.enemy_kind import EnemyKind
-from scorched_core.tuning import BOSS_MAX_RADIUS
+from scorched_core.tuning import BOSS_MAX_RADIUS, MISSILE_RADIUS, PBULLET_RADIUS
 
 
 def test_the_midboss_is_an_armored_train_on_the_maglev_column() -> None:
@@ -43,3 +44,61 @@ def test_phase_one_aims_both_turrets_and_phase_two_opens_the_hull_spread_at_half
     assert first.sway_x == 0.0
     assert second.hp_frac == 0.5
     assert [(e.pattern, e.part) for e in second.emitters] == [("train_hull_spread", -1)]
+
+
+# --- the giant bomber (plan 03-19) ---------------------------------------------------------------
+
+
+def test_the_boss_is_a_giant_bomber_over_the_centre_column() -> None:
+    assert BOMBER_1.hull_kind == EnemyKind.BOMBER
+    assert (BOMBER_1.hull_hp, BOMBER_1.hull_radius, BOMBER_1.x) == (1400, 28.0, 120.0)
+    assert BOMBER_1.enter_y < 0.0  # it descends into view from above the screen
+    assert BOMBER_1.hold_y == 84.0
+    assert BOMBER_1.enter_speed > 0.0
+
+
+def test_the_bomber_has_two_wing_turrets_and_two_engines_that_leave_stumps() -> None:
+    turrets, engines = BOMBER_1.parts[:2], BOMBER_1.parts[2:]
+    assert [(p.kind, p.dx, p.dy) for p in turrets] == [
+        (EnemyKind.BOMBER_TURRET, -46.0, 6.0),
+        (EnemyKind.BOMBER_TURRET, 46.0, 6.0),
+    ]
+    assert [(p.kind, p.dx, p.dy) for p in engines] == [
+        (EnemyKind.BOMBER_ENGINE, -26.0, -2.0),
+        (EnemyKind.BOMBER_ENGINE, 26.0, -2.0),
+    ]
+    assert [(p.hp, p.points) for p in turrets] == [(200, 8000)] * 2
+    assert [(p.hp, p.points) for p in engines] == [(220, 6000)] * 2
+    assert all(p.stump_kind == EnemyKind.BOMBER_STUMP for p in BOMBER_1.parts)
+    assert all(p.effective_radius <= BOSS_MAX_RADIUS for p in BOMBER_1.parts)
+
+
+def test_the_bomber_times_out_at_a_hundred_seconds_and_a_kill_pays_nothing_directly() -> None:
+    assert BOMBER_1.timeout_ticks == 100 * 60 == 6000
+    assert BOMBER_1.kill_points == 0  # the stage tally pays the boss bonus (D-18)
+    assert BOMBER_1.death_ticks == 150
+
+
+def test_phase_one_fires_from_both_turrets_and_the_nose_while_the_bomber_sways() -> None:
+    first = BOMBER_1.phases[0]
+    assert first.hp_frac == 1.0
+    assert [(e.pattern, e.part, e.dx, e.dy) for e in first.emitters] == [
+        ("bomber_turret_spread", 0, 0.0, 0.0),
+        ("bomber_turret_spread", 1, 0.0, 0.0),
+        ("bomber_nose_ring", -1, 0.0, 24.0),
+    ]
+    assert (first.sway_x, first.sway_period) == (30.0, 360)
+    assert first.hull_kind is None
+
+
+def test_every_bomber_part_has_a_lip_a_bolt_can_reach_without_touching_the_hull() -> None:
+    # Bolts and missiles stop at the first row they touch and the hull spawns first, so a part
+    # whose circle sat wholly inside the hull's (grown by the shot) could never be shot by them.
+    shot = max(PBULLET_RADIUS, MISSILE_RADIUS)
+    for part in BOMBER_1.parts:
+        reach = math.hypot(part.dx, part.dy) + part.effective_radius
+        assert reach > BOMBER_1.hull_radius + shot
+    turrets = BOMBER_1.parts[:2]
+    for part in turrets:  # the wing turrets stand clear of the hull altogether
+        gap = math.hypot(part.dx, part.dy) - part.effective_radius
+        assert gap > BOMBER_1.hull_radius + shot

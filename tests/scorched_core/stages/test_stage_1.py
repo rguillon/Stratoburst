@@ -1,7 +1,7 @@
 import itertools
 import math
 
-from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
+from scorched_core.bosses.stage_1_bosses import BOMBER_1, MIDBOSS_1
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
@@ -110,7 +110,16 @@ def test_at_least_three_aa_turrets_drop_a_bomb() -> None:
 
 
 def test_the_opening_uses_every_gallery_kind() -> None:
-    boss_kinds = {EnemyKind.TRAIN, EnemyKind.TRAIN_TURRET, EnemyKind.TRAIN_STUMP}  # boss rows
+    boss_kinds = {  # boss rows
+        EnemyKind.TRAIN,
+        EnemyKind.TRAIN_TURRET,
+        EnemyKind.TRAIN_STUMP,
+        EnemyKind.BOMBER,
+        EnemyKind.BOMBER_TURRET,
+        EnemyKind.BOMBER_ENGINE,
+        EnemyKind.BOMBER_STUMP,
+        EnemyKind.BOMBER_OPEN,
+    }
     target_kinds = {EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD}
     assert {wave.kind for wave in STAGE_1.waves} == set(EnemyKind) - boss_kinds - target_kinds
 
@@ -441,9 +450,9 @@ def test_every_target_spawns_and_an_undamaged_one_scrolls_off_and_is_gone() -> N
     assert enemies.kills == 0
 
 
-def test_the_stage_runs_the_armored_train_as_its_midboss_and_has_no_boss_data_yet() -> None:
+def test_the_stage_runs_the_armored_train_as_its_midboss_and_the_bomber_as_its_boss() -> None:
     assert STAGE_1.midboss is MIDBOSS_1
-    assert STAGE_1.boss is None  # the bomber arrives with plan 03-19
+    assert STAGE_1.boss is BOMBER_1
 
 
 def test_the_train_rides_the_maglev_line() -> None:

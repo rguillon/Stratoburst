@@ -60,3 +60,14 @@ def test_the_train_patterns_are_registered_slow_and_sparse_for_the_mid_boss() ->
         assert spec.interval >= 90
     assert PATTERN_TABLE[pattern_index("train_turret_aimed")] is turret
     assert PATTERN_TABLE[pattern_index("train_hull_spread")] is hull
+
+
+def test_the_bomber_phase_one_patterns_are_slow_and_sparse() -> None:
+    turret = PATTERNS["bomber_turret_spread"]
+    ring = PATTERNS["bomber_nose_ring"]
+    assert turret == PatternSpec(FirePattern.SPREAD, count=3, speed=1.5, interval=100, arc_deg=24.0)
+    assert ring == PatternSpec(
+        FirePattern.RING, count=10, speed=1.2, interval=160, phase_step_deg=18.0
+    )
+    for name in ("bomber_turret_spread", "bomber_nose_ring"):
+        assert PATTERN_TABLE[pattern_index(name)] is PATTERNS[name]

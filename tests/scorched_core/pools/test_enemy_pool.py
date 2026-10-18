@@ -1363,3 +1363,67 @@ def test_remove_uid_is_false_when_the_row_is_already_gone() -> None:
     assert pool.remove_uid(uid)
     assert not pool.remove_uid(uid)
     assert not pool.remove_uid(9999)
+
+
+# --- the giant bomber (plan 03-19) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", [EnemyKind.TRAIN_TURRET, EnemyKind.BOMBER_TURRET])
+def test_a_gun_part_aims_at_the_ship(kind: EnemyKind) -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, kind)
+    pool.step(SHIP_X + 60.0, SHIP_Y)
+    assert pool.aux[i] == pytest.approx(math.atan2(60.0, SHIP_Y - 60.0))
+
+
+def test_the_other_bomber_rows_do_not_aim() -> None:
+    pool = EnemyPool()
+    rows = [
+        scripted_train(pool, kind)
+        for kind in (
+            EnemyKind.BOMBER,
+            EnemyKind.BOMBER_ENGINE,
+            EnemyKind.BOMBER_STUMP,
+            EnemyKind.BOMBER_OPEN,
+        )
+    ]
+    pool.step(SHIP_X + 60.0, SHIP_Y)
+    assert [pool.aux[i] for i in rows] == [0.0] * 4
+
+
+def test_detonate_all_explodes_every_row_unpaid_and_empties_the_pool() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    jet(pool, x=40.0, y=50.0)
+    tank(pool, x=90.0, y=120.0)
+    pool.kills = 7
+    pool.detonate_all(ring)
+    assert (pool.n, pool.kill_n, pool.kills) == (0, 0, 7)  # nothing counts as a kill
+    assert ring.n == 2
+    records = sorted(
+        tuple(float(ring.buf[i * EVENT_STRIDE + k]) for k in range(EVENT_STRIDE))
+        for i in range(ring.n)
+    )
+    assert records == [
+        (EV_EXPLOSION, 40.0, 50.0, float(BLAST_SMALL), 0.0, float(EnemyKind.JET)),
+        (EV_EXPLOSION, 90.0, 120.0, float(BLAST_LARGE), 1.0, float(EnemyKind.TANK)),
+    ]
+
+
+def test_detonate_all_pushes_low_priority_events_and_still_empties_a_nearly_full_ring() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    jet(pool)
+    jet(pool)
+    ring.n = EVENT_SOFT_CAP
+    pool.detonate_all(ring)
+    assert pool.n == 0
+    assert ring.n == EVENT_SOFT_CAP  # the explosions were refused, the rows are gone anyway
+    assert ring.dropped == 2
+
+
+def test_detonate_all_on_an_empty_pool_pushes_nothing() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    pool.detonate_all(ring)
+    assert (pool.n, ring.n) == (0, 0)
