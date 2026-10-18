@@ -65,6 +65,7 @@ from scorched_core.protocol import (
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.tuning import (
     DEATHBOMB_TICKS,
+    DYING_TICKS,
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
@@ -1434,3 +1435,144 @@ def test_a_god_ship_ignores_a_ramming_jet_god() -> None:
     game.enemies.spawn(EnemyKind.JET, game.ship.x, game.ship.y, MotionKind.SWAY, 0.0, 0.0)
     _tick(game)
     assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+
+
+def test_hits_are_ignored_while_in_grace_dying_or_respawning_ignored() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick(game)  # GRACE
+    for _ in range(DEATHBOMB_TICKS + DYING_TICKS + 3):  # GRACE, then DYING, then RESPAWN
+        _put_bullet_on_ship(game)
+        _tick(game)
+        assert EV_PLAYER_HIT not in _event_kinds(game)
+    assert game.life.deaths == 1
+    assert game.life.phase is not PlayerPhase.GRACE
+
+
+def test_hits_are_ignored_while_invulnerable_after_the_respawn_ignored() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.deaths == 1)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    assert game.life.invuln > 0
+    for _ in range(INVULN_RESPAWN_TICKS - 1):
+        _put_bullet_on_ship(game)
+        _tick(game)
+        assert game.life.phase is PlayerPhase.ALIVE
+    assert game.life.deaths == 1
+
+
+def test_a_dying_ship_ignores_the_move_vector_and_drag_control() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    x, y = game.ship.x, game.ship.y
+    for _ in range(DYING_TICKS - 2):
+        game.tick(STEP_MS, 0, 1.0, -1.0, 30.0, -30.0)
+        assert (game.ship.x, game.ship.y) == (x, y)
+    assert game.life.phase is PlayerPhase.DYING
+    assert (game.ship.pending_x, game.ship.pending_y) == (0.0, 0.0)
+
+
+def test_a_respawning_ship_only_flies_in_and_ignores_the_move_vector_control() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    for _ in range(3):
+        before = game.ship.y
+        game.tick(STEP_MS, 0, 1.0, 1.0, 0.0, 0.0)
+        assert game.ship.x == SHIP_START_X
+        assert game.ship.y < before
+
+
+def test_held_fire_spawns_nothing_while_dying_or_respawning_control() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    game.pbullets.n = 0
+    while game.life.phase is not PlayerPhase.ALIVE:
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+        if game.life.phase is not PlayerPhase.ALIVE:
+            assert game.pbullets.n == 0
+    # once control returns the held fire shoots again
+    for _ in range(3):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert game.pbullets.n > 0
+
+
+def test_homing_fire_is_also_held_while_dying_control() -> None:
+    game = _empty_game(weapon=WeaponKind.HOMING)
+    game.enemies.spawn(EnemyKind.JET, 40.0, 40.0, MotionKind.HOVER, 0.0, 0.0)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    game.missiles.n = 0
+    for _ in range(10):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+        assert game.missiles.n == 0
+
+
+def test_the_ship_moves_and_fires_during_grace_and_the_blink_control() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert game.life.phase is PlayerPhase.GRACE
+    x = game.ship.x
+    game.tick(STEP_MS, Button.FIRE, 1.0, 0.0, 0.0, 0.0)
+    assert game.ship.x > x
+    assert game.pbullets.n > 0
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    assert game.life.invuln > 0
+    x = game.ship.x
+    game.pbullets.n = 0
+    game.tick(STEP_MS, Button.FIRE, -1.0, 0.0, 0.0, 0.0)
+    assert game.ship.x < x
+    assert game.pbullets.n > 0
+
+
+def test_pickups_are_collected_only_while_the_player_has_control_control() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    game.pickups.spawn_crystal(game.ship.x, game.ship.y)
+    pickups = game.pickups.n
+    _tick(game)
+    assert game.pickups.n == pickups  # still dying: not caught
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    game.pickups.spawn_crystal(game.ship.x, game.ship.y)
+    _tick(game)
+    assert EV_PICKUP in _event_kinds(game)
+    assert game.pickups.n == pickups  # the new crystal was caught, the old one still floats
+
+
+def test_a_jet_on_the_hitbox_starts_the_grace_window_ram() -> None:
+    game = _empty_game()
+    game.enemies.spawn(EnemyKind.JET, game.ship.x, game.ship.y, MotionKind.SWAY, 0.0, 0.0)
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    assert _event_kinds(game).count(EV_PLAYER_HIT) == 1
+
+
+def test_a_tank_overlapping_the_ship_never_hurts_it_ram() -> None:
+    game = _empty_game()
+    game.enemies.spawn(EnemyKind.TANK, game.ship.x, game.ship.y, MotionKind.GROUND, 0.0, 0.0)
+    for _ in range(30):
+        _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_DEATHS) == 0
+
+
+def _scripted_death_run(seed: int) -> bytes:
+    game = Game(seed=seed)
+    snapshots = bytearray()
+    for step in range(900):
+        if step == 5:
+            _put_bullet_on_ship(game)
+        buttons = Button.FIRE if step % 3 else 0
+        game.tick(STEP_MS, buttons, math.sin(step / 40), 0.0, 0.0, 0.0)
+        snapshots += bytes(game.buffers["header"])
+    assert game.life.deaths >= 1
+    return bytes(snapshots)
+
+
+def test_the_life_cycle_is_deterministic_for_one_seed_and_inputs() -> None:
+    assert _scripted_death_run(3) == _scripted_death_run(3)
