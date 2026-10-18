@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-10-18T16:44:27.598Z"
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-10-18T16:54:48.093Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: ed0908a80e21684e215f4c382c43be0af570d8e9
+state_head: 1be1c7b0420b610c6833e70912ea50def6bbea29
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 49
+  completed_plans: 50
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 7 of 28
+Plan: 8 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -106,6 +106,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P04 | 13 min | 2 tasks | 17 files |
 | Phase 03 P05 | 8 min | 2 tasks | 21 files |
 | Phase 03 P06 | 16min | 2 tasks | 20 files |
+| Phase 03 P07 | 9 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -211,6 +212,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-06: road_bend runs at 0.8 units/step (road_down stays a 0.25 crawl) because path offsets ride the scrolling terrain; at crawl speed the turn would be off screen
 - [Phase 03]: 03-06: EnemyPool.spawn raises ValueError for PATH motion without a valid path index; only PATH rows have a top exit, SCRIPTED rows skip every exit
 - [Phase 03]: 03-06: formations are functions expanding to WaveEntry tuples; stage 1 sections merge with a stable sort on at; MIDBOSS_LULL 420 and BOSS_QUIET 240 are pinned constants
+- [Phase 03]: 03-07: kill payout runs through Game._settle_kills (remove_dead, award, drop pickups) to keep _step under the statement limit; later score sources call game.score.award so extends and the 9,999,999 cap apply uniformly
+- [Phase 03]: 03-07: score is a Python int clamped at 9,999,999 and extends use the int; lives icons are cyan U+25B2 capped at 9; reset_run makes the running high score the new best at start
 
 ### Pending Todos
 
@@ -234,6 +237,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T16:44:27.400Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-10-18T16:54:47.886Z
+Stopped at: Completed 03-07-PLAN.md
 Resume file: None
