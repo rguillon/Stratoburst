@@ -9,6 +9,7 @@ from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.tuning import AT_LEAD, BOMB_START_STOCK, LIVES_START
 from scorched_core.weapons.weapon_kind import WeaponKind
+from scorched_web.bridge.high_score_store import KEY
 from scorched_web.entrypoint import create_game
 from scorched_web.web_game import WebGame
 
@@ -244,3 +245,42 @@ def test_the_gallery_ignores_the_at_option() -> None:
     game = create_game({"gallery": True, "at": "boss"})._game
     assert game.stage is None
     assert game.terrain.distance == 0.0
+
+
+class FakeStorage:
+    """A localStorage stand-in recording every write."""
+
+    def __init__(self, items: dict[str, object] | None = None) -> None:
+        self.items: dict[str, object] = dict(items or {})
+        self.writes: list[tuple[str, str]] = []
+
+    def getItem(self, key: str) -> object:  # noqa: N802 - the JS name
+        return self.items.get(key)
+
+    def setItem(self, key: str, value: str) -> None:  # noqa: N802 - the JS name
+        self.writes.append((key, value))
+        self.items[key] = value
+
+
+def test_the_stored_best_is_the_starting_high_score() -> None:
+    web = create_game({}, lambda: FakeStorage({KEY: "4200"}))
+    assert web._game.score.high_score == 4200
+
+
+def test_with_nothing_stored_the_starting_high_score_is_zero() -> None:
+    assert create_game({}, FakeStorage)._game.score.high_score == 0
+
+
+def test_a_flag_free_run_saves_its_best_when_the_game_pauses() -> None:
+    storage = FakeStorage()
+    web = create_game({}, lambda: storage)
+    web._game.score.score = 800
+    web._game.score.high_score = 800
+    web.set_paused(True)
+    assert storage.writes == [(KEY, "800")]
+
+
+def test_the_default_storage_getter_is_the_browser_one_and_never_breaks_a_native_game() -> None:
+    web = create_game({})
+    assert web._game.score.high_score == 0
+    web.set_paused(True)
