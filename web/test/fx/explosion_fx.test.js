@@ -13,7 +13,8 @@ function build(options = {}) {
     layers: { additive: layer('additive'), normal: layer('normal') },
     events: EVENTS,
     blast: BLAST,
-    toWorld: (x, y, out) => out.set(x - 120, 0, y - 160),
+    // The ground flag lifts a point onto a distinct plane, so a test can tell which one was used.
+    toWorld: (x, y, ground, out) => out.set(x - 120 + (ground ? 1000 : 0), ground ? -40 : 0, y - 160),
     ...options,
   });
   return { fx, emitted };
@@ -151,6 +152,53 @@ describe('HIT', () => {
     const { fx, emitted } = build({ getScale: () => 0.05 });
     fx.handle(EVENTS.HIT, 0, 0, 0, 0, 0);
     expect(emitted.additive).toHaveLength(1);
+  });
+});
+
+describe('ground positioning (D-21, VISL-03)', () => {
+  it('passes the ground flag of an EXPLOSION payload to toWorld', () => {
+    const calls = [];
+    const { fx } = build({
+      toWorld: (x, y, ground, out) => {
+        calls.push([x, y, ground]);
+        return out.set(0, 0, 0);
+      },
+    });
+    fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.LARGE, 1, 3);
+    fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.LARGE, 0, 0);
+    expect(calls).toEqual([
+      [130, 170, 1],
+      [130, 170, 0],
+    ]);
+  });
+
+  it('bursts a ground LARGE explosion at the ground-layer position and an air one on the plane', () => {
+    const ground = build();
+    ground.fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.LARGE, 1, 3);
+    const air = build();
+    air.fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.LARGE, 0, 3);
+    for (const p of [...ground.emitted.additive, ...ground.emitted.normal]) {
+      expect(p.slice(0, 3)).toEqual([1010, -40, 10]);
+    }
+    for (const p of [...air.emitted.additive, ...air.emitted.normal]) {
+      expect(p.slice(0, 3)).toEqual([10, 0, 10]);
+    }
+    expect(ground.emitted.additive).toHaveLength(air.emitted.additive.length);
+  });
+
+  it('sparks a HIT on a ground kind at the ground position when groundKinds is given', () => {
+    const { fx, emitted } = build({ groundKinds: new Set([3, 4]) });
+    fx.handle(EVENTS.HIT, 130, 170, 3, 0, 0); // a tank
+    fx.handle(EVENTS.HIT, 130, 170, 0, 0, 0); // a jet
+    const [tank, jet] = [emitted.additive.slice(0, 4), emitted.additive.slice(4)];
+    for (const p of tank) expect(p.slice(0, 3)).toEqual([1010, -40, 10]);
+    for (const p of jet) expect(p.slice(0, 3)).toEqual([10, 0, 10]);
+  });
+
+  it('keeps every HIT on the plane when no ground kinds are given', () => {
+    const { fx, emitted } = build();
+    fx.handle(EVENTS.HIT, 130, 170, 3, 0, 0);
+    for (const p of emitted.additive) expect(p.slice(0, 3)).toEqual([10, 0, 10]);
   });
 });
 
