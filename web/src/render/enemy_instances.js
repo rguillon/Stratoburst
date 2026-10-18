@@ -13,6 +13,9 @@ const BASE_COLORS = {
   TURRET: [0.4, 0.44, 0.38], // grey-green
 };
 const FALLBACK_COLOR = [0.45, 0.45, 0.4];
+const FLASH = 3;
+// HDR white, so a hit enemy crosses the bloom threshold while it flashes (ENMY-08).
+const FLASH_COLOR = [2.2, 2.2, 2.2];
 
 // Collision radii of the Python kinds (tuning.ENEMY_RADIUS); the primitive shapes are sized to them.
 const RADII = { JET: 9, HELI: 10, CARRIER: 14, TANK: 11, TURRET: 10 };
@@ -90,12 +93,13 @@ export function createEnemyInstances({
       matrix.compose(position, quaternion, scale);
       const slot = counts[entry.index]++;
       entry.mesh.setMatrixAt(slot, matrix);
-      const rgb = entry.baseColor;
+      const rgb = data[base + FLASH] > 0 ? FLASH_COLOR : entry.baseColor;
       entry.mesh.setColorAt(slot, color.setRGB(rgb[0], rgb[1], rgb[2]));
     }
     for (let k = 0; k < meshes.length; k++) {
       const mesh = meshes[k];
       mesh.count = counts[k];
+      if (counts[k] === 0) continue; // nothing was written, so nothing to upload
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceColor.needsUpdate = true;
     }
