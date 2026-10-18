@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildJet } from '../../../src/render/models/jet.js';
+import {
+  expectGunmetal,
+  expectNoBulletHue,
+  expectRedNeon,
+  hasColour,
+} from '../../helpers/vertex_colours.js';
 
 const vertexCount = (geometry) => geometry.getAttribute('position').count;
 const channels = (geometry) => Array.from(geometry.getAttribute('color').array);
@@ -80,5 +86,23 @@ describe('buildJet', () => {
     expect(Array.from(a.glow.getAttribute('position').array)).toEqual(
       Array.from(b.glow.getAttribute('position').array),
     );
+  });
+});
+
+describe('buildJet faction colours (D-38)', () => {
+  it('is dark gunmetal in the body', () => {
+    expectGunmetal(buildJet('high').body, 'jet body');
+  });
+
+  it('glows red: engine discs and neon strips, never orange-yellow', () => {
+    const { glow } = buildJet('high');
+    expectRedNeon(glow, 'jet glow');
+    expect(hasColour(glow, PALETTE.ENGINE.rgb)).toBe(true);
+    expect(hasColour(glow, PALETTE.NEON_RED.rgb)).toBe(true);
+    expectNoBulletHue(glow, 'jet glow');
+  });
+
+  it('keeps the neon strips at every detail level', () => {
+    for (const detail of ['high', 'mid', 'low']) expect(hasColour(buildJet(detail).glow, PALETTE.NEON_RED.rgb)).toBe(true);
   });
 });

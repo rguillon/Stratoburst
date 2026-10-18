@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../../src/fx/palette.js';
 import { buildHeli } from '../../../src/render/models/heli.js';
+import {
+  expectGunmetal,
+  expectNoBulletHue,
+  expectRedNeon,
+  hasColour,
+} from '../../helpers/vertex_colours.js';
 
 const vertexCount = (geometry) => geometry.getAttribute('position').count;
 const channels = (geometry) => Array.from(geometry.getAttribute('color').array);
@@ -43,11 +50,20 @@ describe('buildHeli', () => {
     }
   });
 
-  it('has a warm white and a green nav light, and never pink', () => {
-    const lights = colours(buildHeli('high').glow);
-    expect(lights.some(([r, g, b]) => r > 1 && g > 1 && b > 1)).toBe(true);
+  it('has a red and a green nav light, and no orange-yellow', () => {
+    const { glow } = buildHeli('high');
+    const lights = colours(glow);
+    expect(hasColour(glow, PALETTE.NEON_RED.rgb)).toBe(true);
     expect(lights.some(([r, g, b]) => g > 1 && g > r * 2 && g > b)).toBe(true);
     expect(lights.every(([r, g, b]) => !(r > 1 && b > 1 && g < r * 0.5))).toBe(true);
+    expectNoBulletHue(glow, 'heli glow');
+  });
+
+  it('is dark gunmetal in the body and the rotor, with red neon in the glow', () => {
+    const { body, top, glow } = buildHeli('high');
+    expectGunmetal(body, 'heli body');
+    expectGunmetal(top, 'heli rotor');
+    expectRedNeon(glow, 'heli glow');
   });
 
   it('centres the rotor on the model origin so it can spin about Y', () => {

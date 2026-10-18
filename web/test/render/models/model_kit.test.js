@@ -6,6 +6,7 @@ import {
   beveledExtrude,
   capsule,
   lathe,
+  neonStrip,
   normalizeDetail,
   place,
   segmentsFor,
@@ -217,5 +218,45 @@ describe('bake', () => {
     const a = build();
     const b = build();
     expect(Array.from(a.getAttribute('position').array)).toEqual(Array.from(b.getAttribute('position').array));
+  });
+});
+
+describe('neonStrip', () => {
+  const rgb = [3.4, 0.25, 0.45];
+
+  it('is a thin capsule running from one end point to the other, tinted with the colour', () => {
+    const strip = neonStrip([0, 0, 0], [0, 0, 10], 0.2, rgb, 'mid');
+    strip.computeBoundingBox();
+    const { min, max } = strip.boundingBox;
+    expect(min.z).toBeCloseTo(-0.2, 1);
+    expect(max.z).toBeCloseTo(10.2, 1);
+    expect(max.x - min.x).toBeLessThan(0.5);
+    expect(max.y - min.y).toBeLessThan(0.5);
+    const color = strip.getAttribute('color');
+    expect([color.getX(0), color.getY(0), color.getZ(0)]).toEqual(rgb.map(Math.fround));
+  });
+
+  it('follows a slanted direction and is centred between its end points', () => {
+    const strip = neonStrip([2, 1, -4], [8, 1, 2], 0.2, rgb, 'low');
+    strip.computeBoundingBox();
+    const centre = new THREE.Vector3();
+    strip.boundingBox.getCenter(centre);
+    expect(centre.x).toBeCloseTo(5, 1);
+    expect(centre.y).toBeCloseTo(1, 1);
+    expect(centre.z).toBeCloseTo(-1, 1);
+    expect(strip.boundingBox.max.x - strip.boundingBox.min.x).toBeGreaterThan(5.5);
+  });
+
+  it('has fewer vertices at a lower detail', () => {
+    const count = (detail) => vertexCount(neonStrip([0, 0, 0], [0, 0, 4], 0.2, rgb, detail));
+    expect(count('high')).toBeGreaterThan(count('low'));
+  });
+
+  it('survives a strip pointing straight down the capsule axis in either direction', () => {
+    for (const to of [[0, 6, 0], [0, -6, 0]]) {
+      const strip = neonStrip([0, 0, 0], to, 0.2, rgb, 'low');
+      strip.computeBoundingBox();
+      expect(Math.abs(strip.boundingBox.max.y - strip.boundingBox.min.y)).toBeGreaterThan(6);
+    }
   });
 });

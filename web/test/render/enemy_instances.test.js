@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ROTOR_RATE, basicEnemyGeometry, createEnemyInstances } from '../../src/render/enemy_instances.js';
+import { saturationOf } from '../../src/fx/palette.js';
+import {
+  BASE_COLORS,
+  FALLBACK_COLOR,
+  ROTOR_RATE,
+  basicEnemyGeometry,
+  createEnemyInstances,
+} from '../../src/render/enemy_instances.js';
 import { enemyModel } from '../../src/render/models/enemy_models.js';
 
 const STRIDE = 8;
@@ -167,7 +174,7 @@ function colourOf(mesh, i) {
 }
 
 describe('createEnemyInstances hit flash and bad data', () => {
-  it('colours a resting enemy (1, 1, 1) and a flashing one (6, 6, 6)', () => {
+  it('colours a resting enemy (1, 1, 1) and a flashing one (10, 10, 10)', () => {
     const { data, enemies, byName } = build();
     setEnemy(data, 0, { x: 10, y: 10, flash: 0, kind: KINDS.TANK });
     setEnemy(data, 1, { x: 20, y: 20, flash: 1, kind: KINDS.TANK });
@@ -175,8 +182,8 @@ describe('createEnemyInstances hit flash and bad data', () => {
     enemies.update(3);
     const tank = byName['enemy-tank'];
     expect(colourOf(tank, 0)).toEqual([1, 1, 1]);
-    expect(colourOf(tank, 1)).toEqual([6, 6, 6]);
-    expect(colourOf(tank, 2)).toEqual([6, 6, 6]);
+    expect(colourOf(tank, 1)).toEqual([10, 10, 10]);
+    expect(colourOf(tank, 2)).toEqual([10, 10, 10]);
   });
 
   it('keeps every body vertex colour below 1.0 so only the flash crosses the bloom threshold', () => {
@@ -198,7 +205,7 @@ describe('createEnemyInstances hit flash and bad data', () => {
       playfieldH: 320,
     });
     const colours = Array.from(enemies.meshes[0].geometry.getAttribute('color').array.slice(0, 3));
-    expect(colours).toEqual([expect.closeTo(0.45), expect.closeTo(0.45), expect.closeTo(0.4)]);
+    expect(colours).toEqual([expect.closeTo(0.2), expect.closeTo(0.21), expect.closeTo(0.24)]);
   });
 
   it('an enemy that stops flashing goes back to the base colour', () => {
@@ -538,5 +545,15 @@ describe('createEnemyInstances ground layer', () => {
     setEnemy(data, 0, { x: 100, y: 50, kind: KINDS.TANK });
     enemies.update(1);
     expect(positionOf(byName['enemy-tank'], 0).toArray()).toEqual([-20, 0, -110]);
+  });
+});
+
+describe('createEnemyInstances fallback primitives (D-38)', () => {
+  it('are dark gunmetal for every kind and for an unknown one', () => {
+    expect(Object.keys(BASE_COLORS).sort()).toEqual(['CARRIER', 'HELI', 'JET', 'TANK', 'TURRET']);
+    for (const [name, rgb] of [...Object.entries(BASE_COLORS), ['fallback', FALLBACK_COLOR]]) {
+      expect(Math.max(...rgb), name).toBeLessThanOrEqual(0.3);
+      expect(saturationOf(rgb), name).toBeLessThan(0.3);
+    }
   });
 });

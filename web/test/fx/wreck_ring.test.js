@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../src/fx/palette.js';
 import { createWreckRing } from '../../src/fx/wreck_ring.js';
 import { enemyModel } from '../../src/render/models/enemy_models.js';
 
@@ -225,18 +226,6 @@ function run(ring, from, seconds, scroll = 100) {
   return from + frames / 60;
 }
 
-function hueOf([r, g, b]) {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  if (max === min) return 0;
-  const d = max - min;
-  let h;
-  if (max === r) h = ((g - b) / d) % 6;
-  else if (max === g) h = (b - r) / d + 2;
-  else h = (r - g) / d + 4;
-  return (h * 60 + 360) % 360;
-}
-
 describe('the smouldering trickle', () => {
   it('puffs dark smoke on the normal layer about every 0.18 s at particleScale 1', () => {
     const { ring, emitted } = smouldering();
@@ -271,16 +260,13 @@ describe('the smouldering trickle', () => {
     expect(emitted.normal.length - before).toBeGreaterThanOrEqual(9);
   });
 
-  it('paints the flames orange and never pink', () => {
+  it('paints the flames with PALETTE.FIRE: red, never orange-yellow', () => {
     const { ring, emitted } = smouldering();
     ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
     run(ring, 0, 3);
     expect(emitted.additive.length).toBeGreaterThan(0);
     for (const p of emitted.additive) {
-      const rgb = [p[9], p[10], p[11]];
-      const hue = hueOf(rgb);
-      expect(hue).toBeGreaterThanOrEqual(15);
-      expect(hue).toBeLessThanOrEqual(45);
+      expect([p[9], p[10], p[11]].map((v) => Math.fround(v))).toEqual(PALETTE.FIRE.rgb.map(Math.fround));
       expect(p[7]).toBeLessThan(6); // small
     }
   });

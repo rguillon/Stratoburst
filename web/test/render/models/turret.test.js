@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../../src/fx/palette.js';
 import { buildTurret } from '../../../src/render/models/turret.js';
+import {
+  expectGunmetal,
+  expectNoBulletHue,
+  expectRedNeon,
+  hasColour,
+} from '../../helpers/vertex_colours.js';
 
 const vertexCount = (geometry) => geometry.getAttribute('position').count;
 const channels = (geometry) => Array.from(geometry.getAttribute('color').array);
@@ -55,6 +62,15 @@ describe('buildTurret', () => {
     const lights = colours(buildTurret('high').glow);
     expect(lights.some(([r, g, b]) => g > 1 && g > r * 2 && g > b)).toBe(true);
     expect(lights.every(([r, g, b]) => !(r > 1 && b > 1 && g < r * 0.5))).toBe(true);
+  });
+
+  it('is dark gunmetal in the base and the gun, with red neon beside the green status light', () => {
+    const { body, top, glow } = buildTurret('high');
+    expectGunmetal(body, 'turret body');
+    expectGunmetal(top, 'turret gun');
+    expectRedNeon(glow, 'turret glow');
+    expect(hasColour(glow, PALETTE.NEON_RED.rgb)).toBe(true);
+    expectNoBulletHue(glow, 'turret glow');
   });
 
   it('centres the gun on the pedestal axis so it can turn about Y, with both barrels toward +Z', () => {
