@@ -9,7 +9,7 @@
       body {
         margin: 0;
         height: 100%;
-        background: #0b0a09;
+        background: #07061a;
         overflow: hidden;
       }
       #app {
@@ -35,8 +35,8 @@
         align-items: center;
         justify-content: center;
         gap: 20px;
-        background: #0b0a09;
-        color: #f2e8d5;
+        background: #07061a;
+        color: #e6ebff;
         font-family: system-ui, sans-serif;
         text-align: center;
         padding: 16px;
@@ -49,21 +49,22 @@
         font-size: clamp(40px, 12vmin, 112px);
         font-weight: 800;
         letter-spacing: 0.22em;
-        color: #ff8a3d;
+        color: rgb(27, 215, 255);
+        text-shadow: 0 0 18px rgba(27, 215, 255, 0.55);
         text-indent: 0.22em;
       }
       #progress {
         position: relative;
         width: min(70vw, 360px);
         height: 10px;
-        border: 1px solid #ff8a3d;
+        border: 1px solid rgb(27, 215, 255);
         border-radius: 2px;
         overflow: hidden;
       }
       #progress-fill {
         height: 100%;
         width: 0%;
-        background: #ffb347;
+        background: rgb(255, 30, 225);
         transition: width 0.15s linear;
       }
       #progress.indeterminate #progress-fill {
@@ -94,10 +95,10 @@
       #start-gate {
         min-height: 56px;
         padding: 14px 28px;
-        border: 2px solid #ff8a3d;
+        border: 2px solid rgb(27, 215, 255);
         border-radius: 4px;
         background: transparent;
-        color: #ffb347;
+        color: rgb(27, 215, 255);
         font: 700 clamp(18px, 4.5vmin, 30px) system-ui, sans-serif;
         letter-spacing: 0.12em;
         cursor: pointer;
@@ -108,8 +109,9 @@
       }
       #start-gate:hover,
       #start-gate:focus-visible {
-        background: #ff8a3d;
-        color: #0b0a09;
+        background: rgb(255, 30, 225);
+        border-color: rgb(255, 30, 225);
+        color: #07061a;
         outline: none;
       }
       #status-readout {
@@ -120,16 +122,17 @@
         pointer-events: none;
         font: 700 13px/1.2 ui-monospace, Menlo, Consolas, monospace;
         letter-spacing: 0.08em;
-        color: #f2e8d5;
+        color: #e6ebff;
         text-shadow: 0 0 3px #000, 0 0 6px #000;
         user-select: none;
       }
       #status-readout[hidden] {
         display: none;
       }
-      /* The bomb pickup's amber (PALETTE.BOMB_PICKUP 3.2, 2.4, 0.4 scaled so its largest channel is 255). */
+      /* The bomb pickup's acid green (PALETTE.BOMB_PICKUP 0.8, 3.6, 0.5 scaled so its largest channel
+         is 255). Orange-yellow belongs to enemy bullets alone (D-39). */
       #status-readout .bombs {
-        color: rgb(255, 191, 32);
+        color: rgb(57, 255, 35);
         letter-spacing: 0.25em;
       }
       #max-flash {
@@ -143,18 +146,18 @@
         font: 900 clamp(48px, 14vmin, 128px) / 1 system-ui, sans-serif;
         letter-spacing: 0.18em;
         text-indent: 0.18em;
-        color: #ffd27a;
+        color: #ffffff;
         text-shadow:
-          0 0 10px #ff9a2e,
-          0 0 28px #ff7a14,
-          0 0 56px rgba(255, 122, 20, 0.7),
-          0 2px 0 #7a3a08;
+          0 0 10px rgb(27, 215, 255),
+          0 0 28px rgb(27, 215, 255),
+          0 0 56px rgba(27, 215, 255, 0.7),
+          0 2px 0 #06303a;
         user-select: none;
       }
       #max-flash[hidden] {
         display: none;
       }
-      /* The touch bomb button (INPT-03): the bomb pickup's amber, never pink. data-no-steer keeps
+      /* The touch bomb button (INPT-03): the bomb pickup's acid green, never orange-yellow. data-no-steer keeps
          touch_input from treating a press on it as a drag. */
       #bomb-button {
         position: fixed;
@@ -167,10 +170,10 @@
         width: clamp(72px, 15vmin, 112px);
         height: clamp(72px, 15vmin, 112px);
         padding: 0;
-        border: 3px solid rgba(255, 191, 32, 0.85);
+        border: 3px solid rgba(57, 255, 35, 0.85);
         border-radius: 50%;
-        background: rgba(255, 191, 32, 0.28);
-        color: rgba(255, 220, 140, 0.95);
+        background: rgba(57, 255, 35, 0.28);
+        color: rgba(190, 255, 180, 0.95);
         font: 900 clamp(28px, 6vmin, 44px) / 1 system-ui, sans-serif;
         text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
         touch-action: none;
@@ -183,7 +186,7 @@
         display: none;
       }
       #bomb-button:active {
-        background: rgba(255, 191, 32, 0.55);
+        background: rgba(57, 255, 35, 0.55);
       }
       #paused {
         position: fixed;
@@ -194,8 +197,8 @@
         align-items: center;
         justify-content: center;
         gap: 12px;
-        background: rgba(11, 10, 9, 0.72);
-        color: #f2e8d5;
+        background: rgba(7, 6, 26, 0.72);
+        color: #e6ebff;
         font-family: system-ui, sans-serif;
         text-align: center;
         user-select: none;
@@ -209,7 +212,7 @@
         font-size: clamp(36px, 10vmin, 96px);
         font-weight: 800;
         letter-spacing: 0.2em;
-        color: #ff8a3d;
+        color: rgb(255, 30, 225);
       }
       #paused .hint {
         font-size: clamp(14px, 3.2vmin, 24px);

@@ -3,16 +3,17 @@
 // (the bombs as one pip character each), and only when a value changes, so calling update() every
 // frame never touches the DOM.
 
-// CSS counterparts of the crystal colours (red, blue, purple). None is in the reserved enemy-bullet orange-yellow.
+// CSS counterparts of the crystal colours (crimson, blue, purple; PALETTE.CRYSTAL_RED normalised).
+// None is in the orange-yellow band reserved for enemy bullets (D-39).
 export const WEAPON_CSS = Object.freeze({
-  VULCAN: 'rgb(255, 90, 60)',
+  VULCAN: 'rgb(255, 28, 64)',
   LASER: 'rgb(80, 168, 255)',
   HOMING: 'rgb(170, 110, 255)',
 });
 
 const UNKNOWN_NAME = '?';
 
-// One pip per bomb, 0..BOMB_PIPS_MAX (the stock cap, protocol BOMB_MAX_STOCK). The amber colour is
+// One pip per bomb, 0..BOMB_PIPS_MAX (the stock cap, protocol BOMB_MAX_STOCK). The acid green colour is
 // the bomb pickup's, written as a literal in index.html's stylesheet.
 export const BOMB_PIP = '\u25cf';
 export const BOMB_PIPS_MAX = 7;
