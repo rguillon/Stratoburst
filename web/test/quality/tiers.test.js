@@ -19,6 +19,9 @@ describe('TIERS', () => {
       modelDetail: 'high',
       maxDecals: 48,
       lights: 3,
+      rain: 600,
+      reflections: true,
+      plumes: true,
     });
     expect(TIERS.mid).toEqual({
       name: 'mid',
@@ -30,6 +33,9 @@ describe('TIERS', () => {
       modelDetail: 'mid',
       maxDecals: 32,
       lights: 2,
+      rain: 300,
+      reflections: true,
+      plumes: true,
     });
     expect(TIERS.low).toEqual({
       name: 'low',
@@ -41,6 +47,9 @@ describe('TIERS', () => {
       modelDetail: 'low',
       maxDecals: 16,
       lights: 0,
+      rain: 0,
+      reflections: false,
+      plumes: false,
     });
     for (const tier of Object.values(TIERS)) expect(Object.isFrozen(tier)).toBe(true);
     expect(Object.isFrozen(TIERS)).toBe(true);
