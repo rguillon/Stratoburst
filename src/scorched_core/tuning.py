@@ -32,6 +32,10 @@ ENEMY_BULLET_RADIUS: Final = 2.5
 
 # Terrain scroll in terrain units per 60 Hz step (about 48 units per second); STGE-02.
 SCROLL_SPEED: Final = 0.8
+SCROLL_ACCEL: Final = 0.01  # most the scroll speed may change per step toward its target
+MIDBOSS_CRAWL_SPEED: Final = 0.2  # D-06: the terrain slows to a crawl for the mid-boss
+BOSS_CRAWL_SPEED: Final = 0.12  # D-06: and slower still for the boss
+AT_LEAD: Final = 320.0  # distance before a marker that ``?at=`` starts at: about one screen
 
 # Touch drag catch-up: the most finger movement (in units) the ship may still owe (INPT-02).
 TOUCH_LAG_CAP: Final = 40.0

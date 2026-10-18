@@ -527,6 +527,29 @@ def test_ground_scroll_speed_is_the_terrain_scroll_times_the_exported_ratio() ->
     assert SCROLL_SPEED * GROUND_SCROLL_RATIO == pytest.approx(0.752)  # noqa: SIM300
 
 
+def test_ground_moves_by_the_ground_scroll_it_is_given() -> None:
+    pool = EnemyPool()
+    tank(pool)
+    pool.step(SHIP_X, SHIP_Y, 0.1)
+    assert pool.y[0] == pytest.approx(-16.0 + 0.1, abs=1e-5)
+    pool.step(SHIP_X, SHIP_Y, 0.0)
+    assert pool.y[0] == pytest.approx(-16.0 + 0.1, abs=1e-5)  # a stopped terrain holds it still
+
+
+def test_ground_scroll_adds_to_the_units_own_crawl() -> None:
+    pool = EnemyPool()
+    tank(pool, vy=0.3)
+    pool.step(SHIP_X, SHIP_Y, 0.1)
+    assert pool.y[0] == pytest.approx(-16.0 + 0.4, abs=1e-5)
+
+
+def test_ground_scroll_does_not_move_air_units() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.JET, 100.0, 50.0, MotionKind.DIVE, 0.0, 2.0)
+    pool.step(SHIP_X, SHIP_Y, 5.0)
+    assert pool.y[0] == pytest.approx(52.0)
+
+
 def test_ground_adds_its_own_crawl_to_the_scroll() -> None:
     pool = EnemyPool()
     tank(pool, vx=0.25, vy=0.1)

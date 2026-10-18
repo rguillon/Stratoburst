@@ -1,3 +1,4 @@
+import hashlib
 import itertools
 import math
 import random
@@ -79,7 +80,10 @@ from scorched_core.protocol import (
 )
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.stage_1 import STAGE_1
+from scorched_core.stages.stage_data import StageData
+from scorched_core.stages.wave_entry import WaveEntry
 from scorched_core.tuning import (
+    AT_LEAD,
     BOMB_BLAST_TICKS,
     BOMB_DAMAGE,
     BOMB_INVULN_TAIL_TICKS,
@@ -92,10 +96,12 @@ from scorched_core.tuning import (
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
+    GROUND_SCROLL_RATIO,
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
     INVULN_RESPAWN_TICKS,
     PICKUP_RADIUS,
+    SCROLL_ACCEL,
     SCROLL_SPEED,
     SHIP_HALF_H,
     SHIP_HALF_W,
@@ -2619,3 +2625,105 @@ def test_a_stage_game_exposes_its_stage_and_director() -> None:
     assert game.stage is STAGE_1
     assert game.director is not None
     assert game.director.stage is STAGE_1
+
+
+def _gallery_digest(ticks: int) -> str:
+    """Hash the header slots 0-29 and the live enemy rows of every tick of a fixed gallery run."""
+    game = Game(seed=1, god=True)
+    sha = hashlib.sha256()
+    for i in range(ticks):
+        game.tick(STEP_MS, Button.FIRE, math.sin(i / 40.0), 0.0, 0.0, 0.0)
+        sha.update(game.buffers["header"][:30].tobytes())
+        n = int(game.buffers["header"][H_ENEMY_N])
+        sha.update(game.buffers["enemies"][: n * ENEMY_STRIDE].tobytes())
+    return sha.hexdigest()
+
+
+def test_the_gallery_is_byte_identical_to_the_phase_two_core_over_1200_steps() -> None:
+    # Recorded from the core before the variable scroll speed and the stage director landed.
+    expected = "3cf3728aa65ef07d368e01ba7cdc355a7b12c67eb39727defb64609cc468d2b4"
+    assert _gallery_digest(1200) == expected
+
+
+def _spaced_stage() -> StageData:
+    """One row before the 1000 marker's jump, one just after it, one far after."""
+    jet = WaveEntry(at=100.0, kind=EnemyKind.JET, x=120.0)
+    return StageData(
+        number=9,
+        length=2000.0,
+        waves=(
+            jet,
+            WaveEntry(at=680.0, kind=EnemyKind.JET, x=120.0),
+            WaveEntry(at=700.0, kind=EnemyKind.HELI, x=120.0),
+        ),
+        markers=(("midboss", 500.0), ("boss", 1000.0)),
+    )
+
+
+def test_starting_at_a_marker_begins_one_lead_before_it() -> None:
+    game = Game(stage=STAGE_1, at="boss")
+    assert game.terrain.distance == STAGE_1.marker("boss") - AT_LEAD
+    midboss = Game(stage=STAGE_1, at="midboss")
+    assert midboss.terrain.distance == STAGE_1.marker("midboss") - AT_LEAD
+
+
+def test_the_header_reports_the_jumped_scroll_distance() -> None:
+    game = Game(stage=STAGE_1, at="boss")
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_SCROLL_Y] == pytest.approx(
+        STAGE_1.marker("boss") - AT_LEAD + SCROLL_SPEED
+    )
+
+
+def test_a_jump_skips_every_entry_at_or_before_the_start_distance() -> None:
+    game = Game(stage=_spaced_stage(), at="boss", god=True)
+    assert game.terrain.distance == 1000.0 - AT_LEAD
+    assert game.director is not None
+    assert game.director.cursor == 2  # the rows at 100 and 680 are skipped, never spawned
+    for _ in range(24):  # 24 * 0.8 = 19.2 units: still short of 700
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 0
+    for _ in range(2):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 1
+    assert game.enemies.kind[0] == EnemyKind.HELI
+
+
+def test_a_marker_closer_than_one_lead_starts_at_zero_and_keeps_the_whole_timeline() -> None:
+    stage = StageData(
+        number=9,
+        length=400.0,
+        waves=(WaveEntry(at=0.0, kind=EnemyKind.JET, x=120.0),),
+        markers=(("boss", 100.0),),
+    )
+    game = Game(stage=stage, at="boss", god=True)
+    assert game.terrain.distance == 0.0
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 1
+
+
+def test_at_without_a_stage_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="stage"):
+        Game(at="boss")
+
+
+def test_an_unknown_marker_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="nowhere"):
+        Game(stage=STAGE_1, at="nowhere")
+
+
+def test_ground_units_follow_the_current_scroll_speed() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    game.terrain.speed = game.terrain.target = 0.2  # a crawl
+    game.enemies.spawn(EnemyKind.TANK, 80.0, 50.0, MotionKind.GROUND, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.y[0] == pytest.approx(50.0 + 0.2 * GROUND_SCROLL_RATIO, abs=1e-4)
+
+
+def test_ground_units_slow_with_a_scroll_ramp() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    game.terrain.set_target(0.0)
+    game.enemies.spawn(EnemyKind.TANK, 80.0, 50.0, MotionKind.GROUND, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    speed = SCROLL_SPEED - SCROLL_ACCEL
+    assert game.enemies.y[0] == pytest.approx(50.0 + speed * GROUND_SCROLL_RATIO, abs=1e-4)
