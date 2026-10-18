@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from scorched_core.patterns.pattern_library import pattern_index
 from scorched_core.stages.wave_entry import WaveEntry
 
 
@@ -20,7 +21,7 @@ class StageData:
     markers: tuple[tuple[str, float], ...]
 
     def __post_init__(self) -> None:
-        """Reject a timeline that is unsorted or a distance outside ``[0, length]``."""
+        """Reject a timeline that is unsorted, out of range or names an unknown bullet pattern."""
         previous = 0.0
         for index, wave in enumerate(self.waves):
             if not 0.0 <= wave.at <= self.length:
@@ -30,6 +31,15 @@ class StageData:
                 msg = f"wave {index} (at={wave.at}) breaks the order: waves must be sorted by at"
                 raise ValueError(msg)
             previous = wave.at
+            if wave.pattern is not None:
+                try:
+                    pattern_index(wave.pattern)
+                except ValueError as error:
+                    msg = (
+                        f"wave {index} (at={wave.at}, {wave.kind.name}) "
+                        f"names an unknown pattern {wave.pattern!r}"
+                    )
+                    raise ValueError(msg) from error
         for name, distance in self.markers:
             if not 0.0 <= distance <= self.length:
                 msg = f"marker {name!r} (at={distance}) is outside the stage [0, {self.length}]"

@@ -24,3 +24,4 @@ class WaveEntry:
     vx: float = 0.0
     vy: float = 2.0
     drop: PickupKind | None = None
+    pattern: str | None = None
