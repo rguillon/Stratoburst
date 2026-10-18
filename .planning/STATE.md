@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-22-PLAN.md
-last_updated: "2026-10-18T06:08:58.117Z"
+stopped_at: Completed 02-23-PLAN.md
+last_updated: "2026-10-18T06:18:31.385Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: a2d9a64bfdcfe08696798ecdabf89c57f971b402
+state_head: fbecdb9a4c51cf14a68ec9454f4933fd8f0be682
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 32
+  completed_plans: 33
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 23 of 33
+Plan: 24 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -88,6 +88,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P20 | 7 min | 2 tasks | 10 files |
 | Phase 02 P21 | 15 min | 2 tasks | 12 files |
 | Phase 02 P22 | 9 min | 2 tasks | 13 files |
+| Phase 02 P23 | 9 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-21: the beam draws additive at renderOrder 4 with gains 0.42 core / 0.5 glow / 0.9 flare (full HDR tone-mapped to white) and is shown once before the second prewarm so its shaders compile at load
 - [Phase 02]: 02-22: the bomb press is latched in tick() and cleared in _step whether or not the launch succeeds, so a refused press never fires later; the bomb steps before remove_dead so its kills join the normal kill pass
 - [Phase 02]: 02-22: blast radius is 20 on the first blast step and 230 from step 30, damage lands on blast steps 1, 7, 13; the launch-step invulnerability grant protects 143 steps because that step already decrements it
+- [Phase 02]: 02-23: homing missiles are a baked violet lathe model turned by minus the angle, with 50 ms trail puffs of min(count, max(1, round(count * particleScale))) from a rotating start index
+- [Phase 02]: 02-23: perf_node.mjs validates --weapon itself (exit 2) and fails a held-fire run whose weapon output slot never rises, so the per-weapon gate cannot pass on an idle weapon
 
 ### Pending Todos
 
@@ -182,6 +185,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T06:08:53.704Z
-Stopped at: Completed 02-22-PLAN.md
+Last session: 2026-10-18T06:18:31.291Z
+Stopped at: Completed 02-23-PLAN.md
 Resume file: None
