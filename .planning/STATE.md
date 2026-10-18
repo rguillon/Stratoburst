@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-10-PLAN.md
-last_updated: "2026-10-18T17:19:36.724Z"
+stopped_at: Completed 03-11-PLAN.md
+last_updated: "2026-10-18T17:35:30.901Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 5a7cd131ded154a17bc80c624c898054cd2dba84
+state_head: 43f2ba0d864323d4aba51db379f89e3fe031d23c
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 53
+  completed_plans: 54
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 11 of 28
+Plan: 12 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -110,6 +110,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P08 | 9 min | 2 tasks | 24 files |
 | Phase 03 P09 | 12 min | 2 tasks | 7 files |
 | Phase 03 P10 | 11 min | 2 tasks | 18 files |
+| Phase 03 P11 | 25 min | 2 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -223,6 +224,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-09: #game-over sits outside #app at z-index 8 (below #paused) and carries data-no-steer; restart keys are the KEY_BINDINGS fire keys
 - [Phase 03]: 03-10: a stage run (and every restart) opens with the respawn fly-in via PlayerLife.begin_fly_in(ship, 0), so the intro grants no invulnerability while a death respawn keeps 150; StageFlow starts in INTRO, pushes STAGE_START once and reaches PLAY after INTRO_TICKS (120); header FLOW_T is the intro progress
 - [Phase 03]: 03-10: wreck and scorch rings clear on events.STAGE_START (guarded for older events tables) because the scroll restarts at 0; the banner overlay is state-driven from FLOW, STAGE and FLOW_T
+- [Phase 03]: 03-11: a medal stores no velocity; PickupPool.step(ground_speed) drifts it by the live ground speed, and only a medal leaving the playfield increments medals_missed (a refused spawn or an eviction is never a miss)
+- [Phase 03]: 03-11: Game._step_pickups drains medals_missed into chain.miss() after the catch callbacks, a confirmed death calls chain.miss(), stage_reset() zeroes only the stage catch count; the wreck ring takes only ground kinds with a JS model (hasModel)
 
 ### Pending Todos
 
@@ -246,6 +249,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T17:19:36.514Z
-Stopped at: Completed 03-10-PLAN.md
+Last session: 2026-10-18T17:35:30.631Z
+Stopped at: Completed 03-11-PLAN.md
 Resume file: None
