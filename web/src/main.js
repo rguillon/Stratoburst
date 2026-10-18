@@ -20,6 +20,7 @@ import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing } from './fx/wreck_ring.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
+import { createShadowInstances } from './fx/shadow_instances.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -199,6 +200,19 @@ async function main() {
   });
   for (const light of lightPool.lights) rig.scene.add(light);
   const applyLights = (tierName) => lightPool.setEnabled(TIERS[tierName].lights);
+  // Every aircraft and the ship cast a soft blob on the terrain, displaced along the sun direction
+  // by their altitude. They live in the scene, not the ground layer: the offset is the altitude cue.
+  const shadows = createShadowInstances({
+    data: bridge.channels.enemies,
+    capacity: manifest.channels.enemies.cap,
+    kinds: manifest.enemy_kinds,
+    groundKinds,
+    radii: manifest.tuning.enemy_radius,
+    sunPosition: rig.sun.position,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(shadows.mesh);
   const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool] });
   let fxTime = 0;
 
@@ -322,6 +336,8 @@ async function main() {
         fxTime,
         header[slots.ALPHA] * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
       );
+      // The ship stays visible in this plan; the respawn plan passes false while it is hidden.
+      shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], true);
       rig.terrain.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
@@ -418,6 +434,9 @@ async function main() {
         },
         get lightsFlashed() {
           return lightPool.flashes;
+        },
+        get shadows() {
+          return shadows.mesh.count;
         },
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).

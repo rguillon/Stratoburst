@@ -47,3 +47,13 @@ test('a heavy kill flashes a pooled explosion light', async ({ page }) => {
   expect(await flashed()).toBeGreaterThanOrEqual(1);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// VISL-06: every aircraft casts a blob shadow, the player's ship included, so a running game
+// always draws at least the ship's.
+test('the ship casts a shadow on the terrain', async ({ page }) => {
+  await bootGame(page, '?debug&tier=high');
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.shadows), { timeout: 10_000 })
+    .toBeGreaterThanOrEqual(1);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

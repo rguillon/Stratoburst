@@ -60,9 +60,9 @@ describe('createShadowInstances', () => {
     expect(material.blending).toBe(THREE.NormalBlending);
     expect(material.uniforms.uColor.value.toArray()).toEqual(PALETTE.SHADOW.rgb);
     expect(material.uniforms.uAlpha.value).toBe(0.45);
-    // The quad lies flat: every vertex shares one height.
-    const ys = new Set(Array.from(mesh.geometry.getAttribute('position').array).filter((_, k) => k % 3 === 1));
-    expect(ys.size).toBe(1);
+    // The quad lies flat: every vertex is at height zero (to rounding).
+    const heights = Array.from(mesh.geometry.getAttribute('position').array).filter((_, k) => k % 3 === 1);
+    expect(Math.max(...heights.map(Math.abs))).toBeLessThan(1e-6);
   });
 
   it('draws one shadow per air enemy plus the ship, displaced along the sun direction by 40 units', () => {
