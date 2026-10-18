@@ -130,6 +130,7 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
     PROTOCOL_VERSION,
 )
+from scorched_core.scoring.score_keeper import ScoreKeeper
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.stage_1 import STAGE_1
@@ -149,6 +150,7 @@ from scorched_core.tuning import (
     BOMB_RADIUS_MIN,
     BOMB_START_STOCK,
     ENEMY_GROUND,
+    ENEMY_POINTS,
     ENEMY_RADIUS,
     GRID_CELL,
     GROUND_SCROLL_RATIO,
@@ -156,6 +158,7 @@ from scorched_core.tuning import (
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
     HOMING_DAMAGE,
+    MAX_BONUS_POINTS,
     MAX_LEVEL,
     MISSILE_RADIUS,
     PICKUP_RADIUS,
@@ -301,6 +304,7 @@ class Game:
         "pickups",
         "refresh",
         "rng",
+        "score",
         "ship",
         "stage",
         "storm",
@@ -324,6 +328,7 @@ class Game:
         bombs: int = BOMB_START_STOCK,
         stage: StageData | None = None,
         at: str | None = None,
+        high_score: int = 0,
     ) -> None:
         self.fault = fault
         self.god = god  # test flag: hits are ignored so automated runs are never disturbed
@@ -347,7 +352,8 @@ class Game:
         self.events = EventRing()
         self.enemies = EnemyPool()
         self.pickups = PickupPool()
-        self.max_bonus = 0  # same-colour catches at the top level; scored in Phase 3 (D-06)
+        self.max_bonus = 0  # same-colour catches at the top level (D-06), each also paid in points
+        self.score = ScoreKeeper(high_score=max(high_score, 0))
         self._on_pickup = self._collect_pickup  # bound once: no closure is built per step
         self.gallery = GallerySpawner()
         self.stage = stage
@@ -543,6 +549,11 @@ class Game:
         header[H_LEVEL] = self.loadout.level
         header[H_BEAM_W] = self.laser.half_width
         header[H_MAX_BONUS] = self.max_bonus
+        score = self.score
+        header[H_SCORE] = score.score
+        header[H_HIGH_SCORE] = score.high_score
+        header[H_LIVES] = score.lives
+        header[H_NEW_RECORD] = 1 if score.new_record else 0
         header[H_PLAYER_PHASE] = int(self.life.phase)
         header[H_INVULN] = self.life.invuln
         header[H_DEATHS] = self.life.deaths
@@ -552,6 +563,19 @@ class Game:
         header[H_BOMB_X] = bomb.x
         header[H_BOMB_Y] = bomb.y
         header[H_BOMB_T] = bomb.progress
+
+    def _settle_kills(self) -> None:
+        """Remove the dead, then pay for them and drop what they carried."""
+        self.enemies.remove_dead(self.events)
+        self._award_kills()
+        self._drop_pickups()
+
+    def _award_kills(self) -> None:
+        """Pay the fixed points of every enemy killed this step, at its kill position (SCOR-01)."""
+        enemies = self.enemies
+        for k in range(enemies.kill_n):
+            kind, x, y = enemies.kill_kind[k], enemies.kill_x[k], enemies.kill_y[k]
+            self.score.award(ENEMY_POINTS[kind], self.events, x, y)
 
     def _drop_pickups(self) -> None:
         """Spawn what every enemy killed this step drops at its kill position.
@@ -581,7 +605,8 @@ class Game:
         else:
             outcome = self.loadout.collect(WeaponKind(color))
             if outcome is PickupOutcome.MAXED:
-                self.max_bonus += 1  # D-06: recorded now, the points are awarded in Phase 3
+                self.max_bonus += 1  # D-06: counted, and paid as a flat bonus
+                self.score.award(MAX_BONUS_POINTS, self.events, x, y)
         self.events.push(EV_PICKUP, x, y, kind, outcome, color)
 
     def _on_death(self) -> None:
@@ -695,8 +720,7 @@ class Game:
             self.events,
             radius=MISSILE_RADIUS,
         )
-        self.enemies.remove_dead(self.events)
-        self._drop_pickups()
+        self._settle_kills()
         self.pickups.step()
         if life.can_control:
             resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)

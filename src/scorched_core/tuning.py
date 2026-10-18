@@ -134,6 +134,20 @@ ENEMY_FIRE_DELAY: Final = 45
 ENEMY_FIRE_MAX_Y: Final = PLAYFIELD_H * 0.7
 ENEMY_PATTERN: Final = ("jet_aimed", "heli_ring", None, "tank_aimed", "turret_aimed")
 
+# Scoring (SCOR-01, SCOR-04, D-17, D-19), all tunable. A kill pays a fixed amount by kind, indexed
+# by EnemyKind (JET, HELI, CARRIER, TANK, TURRET): no multiplier and no point-blank bonus. The
+# deferred Lv5 MAX catch pays a flat MAX_BONUS_POINTS. The score is a Python int clamped at
+# SCORE_CAP, seven digits, so the float32 header slot always holds it exactly. The player starts
+# with LIVES_START ships (never more than LIVES_CAP) and earns an extend at EXTEND_FIRST and then
+# every EXTEND_EVERY.
+ENEMY_POINTS: Final = (300, 800, 2000, 1000, 1200)
+SCORE_CAP: Final = 9_999_999
+MAX_BONUS_POINTS: Final = 10_000
+LIVES_START: Final = 3
+LIVES_CAP: Final = 9
+EXTEND_FIRST: Final = 200_000
+EXTEND_EVERY: Final = 500_000
+
 # Helicopters (D-17): descend to HOVER_STOP_Y, hold there drifting side to side, then leave.
 HOVER_STOP_Y: Final = 96.0
 HOVER_HOLD_TICKS: Final = 240

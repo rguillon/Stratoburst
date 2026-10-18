@@ -1,7 +1,7 @@
-// Weapon, level and bomb stock readout (bottom-left, inside the safe area): stands in for the
-// Phase 3 HUD. Text goes in through textContent only, from manifest weapon names and integers
-// (the bombs as one pip character each), and only when a value changes, so calling update() every
-// frame never touches the DOM.
+// The HUD values: score and high score along the top, weapon, level and bomb stock at the bottom
+// left (inside the safe area). Text goes in through textContent only, from manifest weapon names
+// and integers (the bombs as one pip character each), and only when a value changes, so calling
+// update() every frame never touches the DOM.
 
 // CSS counterparts of the crystal colours (crimson, blue, purple; PALETTE.CRYSTAL_RED normalised).
 // None is in the orange-yellow band reserved for enemy bullets (D-39).
@@ -22,6 +22,10 @@ export const BOMB_PIPS_MAX = 7;
 const pipCount = (bombs) =>
   Number.isFinite(bombs) ? Math.min(Math.max(Math.trunc(bombs), 0), BOMB_PIPS_MAX) : 0;
 
+// Whole number for a header value (the score is an exact integer in the float32 slot, up to seven
+// digits); anything that is not a finite number shows 0.
+const wholeNumber = (value) => (Number.isFinite(value) ? Math.round(value) : 0);
+
 // The MAX flash (D-06) stays up for this long, fading over its last FADE_MS.
 export const FLASH_MS = 900;
 const FADE_MS = 400;
@@ -36,11 +40,15 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   const weaponEl = el.querySelector('.weapon');
   const levelEl = el.querySelector('.level');
   const bombsEl = el.querySelector('.bombs');
+  const scoreEl = el.querySelector('.score');
+  const hiscoreEl = el.querySelector('.hiscore');
   const nameByValue = new Map(Object.entries(weapons).map(([name, value]) => [value, name]));
 
   let shownWeapon = Number.NaN;
   let shownLevel = Number.NaN;
   let shownPips = -1;
+  let shownScore = -1;
+  let shownHiscore = -1;
   // The flash starts counting at the first tick after the catch, so the 900 ms follow the frame
   // clock; a catch while it is up resets the count instead of stacking a second flash.
   let flashing = false;
@@ -48,7 +56,10 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
 
   return {
     el,
-    update(weapon, level, bombs) {
+    // `header` is the frame's Float32Array and `slots` the manifest's header slot names.
+    update(header, slots) {
+      const weapon = header[slots.WEAPON];
+      const level = header[slots.LEVEL];
       if (weapon !== shownWeapon) {
         shownWeapon = weapon;
         const name = nameByValue.get(weapon) ?? UNKNOWN_NAME;
@@ -59,10 +70,20 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
         shownLevel = level;
         levelEl.textContent = `Lv ${level}`;
       }
-      const pips = pipCount(bombs);
+      const pips = pipCount(header[slots.BOMBS]);
       if (pips !== shownPips) {
         shownPips = pips;
         bombsEl.textContent = BOMB_PIP.repeat(pips);
+      }
+      const score = wholeNumber(header[slots.SCORE]);
+      if (score !== shownScore) {
+        shownScore = score;
+        scoreEl.textContent = String(score);
+      }
+      const hiscore = wholeNumber(header[slots.HIGH_SCORE]);
+      if (hiscore !== shownHiscore) {
+        shownHiscore = hiscore;
+        hiscoreEl.textContent = String(hiscore);
       }
     },
     show() {
