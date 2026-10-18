@@ -136,6 +136,7 @@ from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
+from scorched_core.stages.stage_flow import StageFlow
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import (
@@ -158,6 +159,8 @@ from scorched_core.tuning import (
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
     HOMING_DAMAGE,
+    LIVES_CAP,
+    LIVES_START,
     MAX_BONUS_POINTS,
     MAX_LEVEL,
     MISSILE_RADIUS,
@@ -272,6 +275,7 @@ class Game:
     """Pure simulation core; knows nothing about JS."""
 
     __slots__ = (
+        "_at",
         "_bomb_requested",
         "_ebullet_channel_cap",
         "_firing",
@@ -280,6 +284,10 @@ class Game:
         "_on_pickup",
         "_runner",
         "_scratch",
+        "_start_bombs",
+        "_start_level",
+        "_start_lives",
+        "_start_weapon",
         "bomb",
         "buffers",
         "director",
@@ -288,6 +296,7 @@ class Game:
         "enemies",
         "events",
         "fault",
+        "flow",
         "gallery",
         "god",
         "grid",
@@ -329,6 +338,7 @@ class Game:
         stage: StageData | None = None,
         at: str | None = None,
         high_score: int = 0,
+        lives: int = LIVES_START,
     ) -> None:
         self.fault = fault
         self.god = god  # test flag: hits are ignored so automated runs are never disturbed
@@ -341,11 +351,17 @@ class Game:
         self.storm_pool = BulletPool(self.ebullet_cap)  # harmless stress load, never lethal
         self.ebullets = BulletPool(EBULLET_GAME_CAP)  # gameplay enemy bullets
         self.pbullets = BulletPool(PBULLET_CAP)
-        self.loadout = WeaponLoadout(kind=weapon, level=min(max(level, 1), MAX_LEVEL))
+        # What a restart returns to: the run's own starting options (D-28).
+        self._start_weapon = weapon
+        self._start_level = min(max(level, 1), MAX_LEVEL)
+        self._start_bombs = min(max(bombs, 0), BOMB_MAX_STOCK)
+        self._start_lives = min(max(lives, 1), LIVES_CAP)
+        self._at = at
+        self.loadout = WeaponLoadout(kind=weapon, level=self._start_level)
         self.vulcan = Vulcan()
         self.homing = HomingLauncher()
         self.laser = LaserBeam()
-        self.bomb = Bomb(stock=min(max(bombs, 0), BOMB_MAX_STOCK))
+        self.bomb = Bomb(stock=self._start_bombs)
         self.hitstop = Hitstop()  # steps still frozen by a bomb detonation or a death (D-26)
         self._bomb_requested = False  # a press latched until a live step consumes it
         self.missiles = MissilePool()
@@ -353,11 +369,17 @@ class Game:
         self.enemies = EnemyPool()
         self.pickups = PickupPool()
         self.max_bonus = 0  # same-colour catches at the top level (D-06), each also paid in points
-        self.score = ScoreKeeper(high_score=max(high_score, 0))
+        self.score = ScoreKeeper(lives=self._start_lives, high_score=max(high_score, 0))
         self._on_pickup = self._collect_pickup  # bound once: no closure is built per step
         self.gallery = GallerySpawner()
         self.stage = stage
         self.director = StageDirector(stage) if stage is not None else None
+        # The gallery has no run to lose (Phase 2 D-18): infinite lives and no flow.
+        self.flow = (
+            StageFlow(life=self.life, score=self.score, events=self.events)
+            if stage is not None
+            else None
+        )
         self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, ENEMY_CAP)
         self._scratch = array("i", bytes(4 * ENEMY_CAP))
         self.storm = (
@@ -403,6 +425,55 @@ class Game:
         self.terrain.jump(distance)
         if distance > 0.0:  # a clamped start is the stage's own start: its first rows are kept
             self.director.jump(distance)
+
+    @property
+    def save_requested(self) -> bool:
+        """Return whether the run ended and the high score is waiting to be stored."""
+        return self.flow is not None and self.flow.save_requested
+
+    def clear_save_request(self) -> None:
+        """Acknowledge a save request once the high score has been stored."""
+        if self.flow is not None:
+            self.flow.save_requested = False
+
+    def restart(self) -> None:
+        """Start a fresh run in place (D-28); the high score is kept as the new best at start.
+
+        Score, lives, weapon, level and bombs return to their starting values, every pool is
+        emptied, and the stage begins again from its start (or the ``?at=`` marker). The
+        shooting gallery has no run to restart.
+        """
+        director, flow = self.director, self.flow
+        if director is None or flow is None:
+            msg = "the shooting gallery has no run to restart"
+            raise ValueError(msg)
+        self.events.clear()
+        self.ship = PlayerShip()
+        self.life.reset()
+        self.score.reset_run(self._start_lives)
+        self.loadout = WeaponLoadout(kind=self._start_weapon, level=self._start_level)
+        self.bomb = Bomb(stock=self._start_bombs)
+        self.vulcan.cooldown = 0
+        self.homing.cooldown = 0
+        self.laser.half_width = 0.0
+        self.laser.timer = 0
+        self.pbullets.clear()
+        self.ebullets.clear()
+        self.enemies.clear()
+        self.enemies.kills = 0
+        self.missiles.clear()
+        self.pickups.clear()
+        self.max_bonus = 0
+        self.hitstop.ticks = 0
+        self._bomb_requested = False
+        terrain = self.terrain
+        terrain.distance = 0.0
+        terrain.speed = terrain.target = SCROLL_SPEED
+        director.reset()
+        if self._at is not None:
+            self._jump_to_marker(self._at)
+        flow.reset()
+        self._pack_header(0)
 
     def manifest(self) -> dict[str, object]:
         """Describe the boundary layout so JS can allocate matching typed arrays."""
@@ -528,7 +599,7 @@ class Game:
         header[H_SCROLL_RATE] = self.terrain.speed
         stage = self.stage
         header[H_STAGE] = 0 if stage is None else stage.number
-        header[H_FLOW] = -1 if stage is None else int(FlowState.PLAY)
+        header[H_FLOW] = -1 if self.flow is None else int(self.flow.state)
         header[H_STAGE_DIST] = 0 if stage is None else self.terrain.distance
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
@@ -648,6 +719,24 @@ class Game:
             self.events.push(EV_BOMB_LAUNCH, self.ship.x, self.ship.y)
             life.grant_invuln(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS)
 
+    def _step_life(self) -> None:
+        """Advance the player's life cycle; a confirmed death costs a life in stage mode.
+
+        ``final`` is refreshed from the lives left before every step, so an extend earned at any
+        point before the DYING window ends (including on the step the death is confirmed) sends
+        the ship back in instead of out. The gallery never takes a life (Phase 2 D-18).
+        """
+        life = self.life
+        was_dying = life.phase == PlayerPhase.DYING
+        life.final = self.score.lives == 0
+        if life.step(self.ship, self.events):
+            self._on_death()
+            self.hitstop.trigger(HITSTOP_DEATH_TICKS)  # only a confirmed death, never the grace
+            if self.flow is not None:
+                self.score.lose_life()
+        if was_dying and life.phase == PlayerPhase.RESPAWN:
+            self.bomb.stock = max(self.bomb.stock, BOMB_START_STOCK)  # D-10: a new life restocks
+
     def _step(self) -> None:
         # Hitstop (D-27): a frozen step does nothing at all, so no state moves and TICK_COUNT stays
         # put. The bomb press stays latched: it is resolved only after this gate.
@@ -657,12 +746,7 @@ class Game:
         self.terrain.step()
         life = self.life
         self._resolve_bomb_request()
-        was_dying = life.phase == PlayerPhase.DYING
-        if life.step(self.ship, self.events):
-            self._on_death()
-            self.hitstop.trigger(HITSTOP_DEATH_TICKS)  # only a confirmed death, never the grace
-        if was_dying and life.phase == PlayerPhase.RESPAWN:
-            self.bomb.stock = max(self.bomb.stock, BOMB_START_STOCK)  # D-10: a new life restocks
+        self._step_life()
         if life.can_control:
             self.ship.step(self._move_x, self._move_y)
         else:
@@ -690,10 +774,11 @@ class Game:
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.ebullets.integrate()
         self.ebullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
-        if self.director is not None:
-            self.director.step(self.terrain.distance, self.enemies)
-        else:
+        director, flow = self.director, self.flow
+        if director is None or flow is None:
             self.gallery.step(self.enemies)
+        elif flow.spawning:  # nothing new comes once the run is over
+            director.step(self.terrain.distance, self.enemies)
         self.enemies.step(self.ship.x, self.ship.y, self.terrain.speed * GROUND_SCROLL_RATIO)
         self.enemies.fire(self.ebullets, self.ship.x, self.ship.y, self.events)
         self.missiles.steer(self.enemies)
@@ -726,6 +811,8 @@ class Game:
             resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)
         if life.vulnerable and not self.god and self._lethal_contact():
             life.hit(self.ship.x, self.ship.y, self.events)
+        if flow is not None:
+            flow.step()
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1

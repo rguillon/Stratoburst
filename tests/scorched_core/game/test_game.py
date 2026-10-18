@@ -3173,8 +3173,9 @@ def test_with_two_lives_the_ship_flies_back_in_and_one_life_is_left_lives() -> N
     _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
     assert _header(game, H_LIVES) == 1
     assert _header(game, H_FLOW) == FlowState.PLAY
-    assert _count_game_over_events(game, 300) == 0
-    assert game.life.phase is PlayerPhase.ALIVE
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert EV_GAME_OVER not in _event_kinds(game)
 
 
 def test_a_life_is_taken_on_the_confirmed_death_and_not_on_the_hit_lives() -> None:
@@ -3221,7 +3222,7 @@ def test_an_extend_on_the_step_the_death_is_confirmed_leads_to_a_respawn_lives()
     game.score.score = EXTEND_FIRST - ENEMY_POINTS[EnemyKind.JET]
     _put_bullet_on_ship(game)
     _tick(game)  # the hit
-    _tick_n(game, DEATHBOMB_TICKS - 2)
+    _tick_n(game, DEATHBOMB_TICKS - 1)
     _shoot_down(game, EnemyKind.JET)  # its kill lands on the step that confirms the death
     _tick(game)
     assert _header(game, H_PLAYER_PHASE) == PlayerPhase.DYING

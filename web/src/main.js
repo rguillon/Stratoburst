@@ -496,9 +496,12 @@ async function main() {
         fxTime,
         alpha * header[slots.SCROLL_RATE] * manifest.tuning.ground_scroll_ratio,
       );
-      // A dying ship is gone: its model, hitbox marker and shadow all hide. Otherwise only the hull
-      // blinks while invulnerable (hitbox marker always shown, Pitfall 9) and control is untouched.
-      const shipVisible = header[slots.PLAYER_PHASE] !== manifest.phases.DYING;
+      // A dying ship is gone: its model, hitbox marker and shadow all hide, and so does the last
+      // one after game over (OUT). Otherwise only the hull blinks while invulnerable (hitbox marker
+      // always shown, Pitfall 9) and control is untouched.
+      const shipVisible =
+        header[slots.PLAYER_PHASE] !== manifest.phases.DYING &&
+        header[slots.PLAYER_PHASE] !== manifest.phases.OUT;
       ship.visible = shipVisible;
       if (shipVisible) ship.userData.setHullVisible(hullVisibleFor(header[slots.INVULN]));
       shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);

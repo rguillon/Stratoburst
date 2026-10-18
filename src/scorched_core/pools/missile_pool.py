@@ -138,6 +138,10 @@ class MissilePool:
             self.retarget[i] = self.retarget[last]
         self.n = last
 
+    def clear(self) -> None:
+        """Remove every missile at once."""
+        self.n = 0
+
     def pack_into(self, out: array) -> None:
         """Write ``x, y, angle, life fraction`` at stride 4 for the live missiles."""
         n = self.n

@@ -39,6 +39,7 @@ def test_a_step_while_the_ship_lives_changes_nothing() -> None:
 def test_the_first_step_in_out_ends_the_game_with_one_event_and_a_save_request() -> None:
     flow = make()
     flow.score.score = 12_345
+    flow.score.best_at_start = 20_000
     flow.life.phase = PlayerPhase.OUT
     flow.step()
     assert flow.state == FlowState.GAME_OVER

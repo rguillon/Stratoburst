@@ -363,6 +363,11 @@ class EnemyPool:
                 self._remove_at(i)
                 self.kills += 1
 
+    def clear(self) -> None:
+        """Remove every enemy and forget this step's kills (a new run); ``uid`` keeps counting."""
+        self.n = 0
+        self.kill_n = 0
+
     def pack_into(self, out: array) -> None:
         """Write ``x, y, angle, flash, hp, kind, aux, spare`` at stride 8 for live enemies."""
         for i in range(self.n):

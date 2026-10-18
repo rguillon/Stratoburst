@@ -136,6 +136,10 @@ class PickupPool:
             self.age[i] = self.age[last]
         self.n = last
 
+    def clear(self) -> None:
+        """Remove every pickup at once."""
+        self.n = 0
+
     def pack_into(self, out: array) -> None:
         """Write ``x, y, colour index, kind`` at stride 4 for the live pickups.
 

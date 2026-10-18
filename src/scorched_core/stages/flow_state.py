@@ -6,7 +6,7 @@ from enum import IntEnum
 class FlowState(IntEnum):
     """Flow states. Values never change: they cross the boundary as the FLOW header slot.
 
-    The state machine that moves between them (``StageFlow``) arrives in plan 03-08.
+    The state machine that moves between them is ``StageFlow``.
     """
 
     INTRO = 0

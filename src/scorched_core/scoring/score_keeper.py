@@ -49,6 +49,11 @@ class ScoreKeeper:
                 events.push(EV_EXTEND, x, y, self.lives)
         return granted
 
+    def lose_life(self) -> bool:
+        """Take one ship (never below zero); return True when none is left."""
+        self.lives = max(self.lives - 1, 0)
+        return self.lives == 0
+
     def reset_run(self, lives: int = LIVES_START) -> None:
         """Start a new run: zero score, ``lives`` ships, the first threshold, today's best kept."""
         self.score = 0

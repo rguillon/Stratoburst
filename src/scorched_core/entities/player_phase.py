@@ -10,3 +10,4 @@ class PlayerPhase(IntEnum):
     GRACE = 1
     DYING = 2
     RESPAWN = 3
+    OUT = 4  # terminal: the last ship is gone and no other flies in
