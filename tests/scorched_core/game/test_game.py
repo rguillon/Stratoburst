@@ -90,6 +90,7 @@ from scorched_core.tuning import (
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
     HITSTOP_BOMB_TICKS,
+    HITSTOP_DEATH_TICKS,
     INVULN_RESPAWN_TICKS,
     PICKUP_RADIUS,
     SHIP_HALF_H,
@@ -2438,4 +2439,80 @@ def test_hitstop_does_not_eat_the_deathbomb_window_it_has_not_started_yet() -> N
     assert _header(game, H_HITSTOP) == 0
     _press_bomb(game)
     assert game.life.phase == PlayerPhase.ALIVE
+    assert _header(game, H_HITSTOP) == 0
+
+
+def test_death_hitstop_the_death_step_freezes_six_steps_to_come() -> None:
+    game = _bomb_game()
+    _die(game)
+    assert _header(game, H_DEATHS) == 1
+    assert _header(game, H_HITSTOP) == HITSTOP_DEATH_TICKS == 6
+
+
+def test_death_hitstop_freezes_the_next_six_steps_and_then_the_ship_flies_in() -> None:
+    game = _bomb_game()
+    _die(game)
+    before = _state_bytes(game)
+    ticks = game.tick_count
+    for left in range(HITSTOP_DEATH_TICKS - 1, -1, -1):
+        _tick(game)
+        assert _header(game, H_HITSTOP) == left
+        assert _state_bytes(game) == before
+        assert game.tick_count == ticks
+    _tick(game)
+    assert game.tick_count == ticks + 1
+
+
+def test_death_hitstop_a_hit_that_only_starts_the_grace_window_triggers_none() -> None:
+    game = _bomb_game()
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    assert _header(game, H_HITSTOP) == 0
+    for _ in range(DEATHBOMB_TICKS - 1):  # every step of the window is a live one
+        _tick(game)
+        assert _header(game, H_HITSTOP) == 0
+        assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+
+
+def test_death_hitstop_never_delays_the_grace_window_it_runs_after_it() -> None:
+    game = _bomb_game()
+    _put_bullet_on_ship(game)
+    steps = _tick_until(game, lambda g: g.life.phase == PlayerPhase.DYING)
+    assert steps == DEATHBOMB_TICKS + 1  # the hit step, then exactly eight live steps
+
+
+def test_death_hitstop_keeps_the_larger_value_when_a_bomb_freeze_is_already_owed() -> None:
+    game = _bomb_game()
+    game.hitstop.trigger(2)  # a smaller freeze still owed
+    _die(game)
+    assert _header(game, H_HITSTOP) == HITSTOP_DEATH_TICKS
+    game = _bomb_game()
+    game.hitstop.trigger(HITSTOP_DEATH_TICKS + 3)  # a larger one is not cut short
+    game.hitstop.trigger(HITSTOP_DEATH_TICKS)
+    assert game.hitstop.ticks == HITSTOP_DEATH_TICKS + 3
+
+
+def test_no_hitstop_on_kills_twenty_kills_by_bolts_and_missiles_never_freeze() -> None:
+    game = Game(weapon=WeaponKind.HOMING, level=5, god=True)
+    enemies = game.enemies
+    for _ in range(4000):
+        move_x = 0.0
+        if enemies.n:
+            lowest = max(range(enemies.n), key=lambda i: enemies.y[i])
+            dx = enemies.x[lowest] - game.ship.x
+            move_x = 0.0 if abs(dx) < 2.0 else (1.0 if dx > 0 else -1.0)
+        game.tick(STEP_MS, Button.FIRE, move_x, 0.0, 0.0, 0.0)
+        assert _header(game, H_HITSTOP) == 0
+        if enemies.kills >= 20:
+            break
+    assert enemies.kills >= 20
+
+
+def test_no_hitstop_on_kills_ordinary_hits_and_the_deathbomb_save_never_freeze() -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, 3)
+    _press_bomb(game)  # a deathbomb save
+    assert _header(game, H_HITSTOP) == 0
+    _tick_n(game, 5)
     assert _header(game, H_HITSTOP) == 0

@@ -6,10 +6,26 @@ import {
   SHAKE_BOMB,
   SHAKE_DEATH,
   createShake,
+  effectClockDelta,
   withCameraOffset,
 } from '../../src/fx/shake.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2, BOMB_DETONATE: 10 };
+// The manifest's event table, as Python publishes it: only two of these are big enough to shake.
+const EVENTS = {
+  EXPLOSION: 1,
+  HIT: 2,
+  SHOT: 3,
+  PICKUP: 4,
+  ENEMY_FIRE: 5,
+  PLAYER_HIT: 6,
+  PLAYER_DEATH: 7,
+  RESPAWN: 8,
+  BOMB_LAUNCH: 9,
+  BOMB_DETONATE: 10,
+  DEATHBOMB_SAVE: 11,
+  SFX: 12,
+};
+const BIG = new Set(['BOMB_DETONATE', 'PLAYER_DEATH']);
 const STEP = 1 / 60;
 
 function build() {
@@ -201,11 +217,51 @@ describe('createShake', () => {
       expect(magnitude(out)).toBeCloseTo(SHAKE_BOMB.amplitude * (1 - STEP / SHAKE_BOMB.durationS) ** 2, 6);
     });
 
-    it('leaves the shake idle for ordinary events', () => {
+    it('triggers the medium death shake on PLAYER_DEATH and counts it', () => {
       const shake = build();
-      for (const type of [EVENTS.EXPLOSION, EVENTS.HIT]) shake.handle(type, 10, 10, 2, 0, 0);
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.PLAYER_DEATH, 120, 280, 0, 0, 0);
+      expect(shake.active).toBe(true);
+      expect(shake.count).toBe(1);
+      shake.update(STEP);
+      shake.offset(out);
+      expect(magnitude(out)).toBeCloseTo(SHAKE_DEATH.amplitude * (1 - STEP / SHAKE_DEATH.durationS) ** 2, 6);
+      for (let frame = 0; frame < 21; frame += 1) shake.update(STEP); // 0.35 s and a little more
       expect(shake.active).toBe(false);
-      expect(shake.count).toBe(0);
+    });
+
+    it.each(Object.entries(EVENTS).filter(([name]) => !BIG.has(name)))(
+      'leaves the shake idle for %s (event %i)',
+      (name, type) => {
+        const shake = build();
+        shake.handle(type, 10, 10, 2, 1, 0);
+        shake.update(STEP);
+        expect(shake.active).toBe(false);
+        expect(shake.count).toBe(0);
+      },
+    );
+
+    it('ignores an unknown event type', () => {
+      const shake = build();
+      shake.handle(999, 0, 0, 0, 0, 0);
+      expect(shake.active).toBe(false);
+    });
+
+    it('shakes only for the two big events', () => {
+      const shake = build();
+      for (const type of Object.values(EVENTS)) shake.handle(type, 0, 0, 0, 0, 0);
+      expect(shake.count).toBe(BIG.size);
+    });
+
+    it('keeps the bomb shake when a death lands during it', () => {
+      const shake = build();
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.BOMB_DETONATE, 0, 0, 0, 0, 0);
+      shake.update(0.05);
+      shake.handle(EVENTS.PLAYER_DEATH, 0, 0, 0, 0, 0);
+      shake.update(STEP);
+      shake.offset(out);
+      expect(magnitude(out)).toBeCloseTo(3 * (1 - (0.05 + STEP) / 0.5) ** 2, 6);
     });
   });
 });
@@ -257,5 +313,45 @@ describe('withCameraOffset', () => {
     const rig = { calls: 0, render() { rig.calls += 1; } };
     withCameraOffset(cam, { x: 0, z: 0 }, rig.render);
     expect(rig.calls).toBe(1);
+  });
+});
+
+describe('effectClockDelta', () => {
+  it('advances the effect clock by the frame time in seconds while the game runs', () => {
+    expect(effectClockDelta(16.5, { paused: false, hitstop: false })).toBeCloseTo(0.0165, 9);
+    expect(effectClockDelta(0, { paused: false, hitstop: false })).toBe(0);
+  });
+
+  it('holds the effect clock during hitstop', () => {
+    expect(effectClockDelta(16.5, { paused: false, hitstop: true })).toBe(0);
+  });
+
+  it('holds the effect clock while paused', () => {
+    expect(effectClockDelta(16.5, { paused: true, hitstop: false })).toBe(0);
+  });
+
+  it('holds the effect clock when both hold', () => {
+    expect(effectClockDelta(16.5, { paused: true, hitstop: true })).toBe(0);
+  });
+
+  it('lets effects continue from where they stopped after resuming', () => {
+    let clock = 0;
+    const frame = (state) => {
+      clock += effectClockDelta(1000 / 60, state);
+    };
+    for (let i = 0; i < 30; i += 1) frame({ paused: false, hitstop: false });
+    const before = clock;
+    for (let i = 0; i < 50; i += 1) frame({ paused: true, hitstop: false });
+    for (let i = 0; i < 4; i += 1) frame({ paused: false, hitstop: true });
+    expect(clock).toBe(before);
+    frame({ paused: false, hitstop: false });
+    expect(clock).toBeCloseTo(before + 1 / 60, 9);
+  });
+
+  it('reads a reused state object without allocating', () => {
+    const state = { paused: false, hitstop: false };
+    expect(effectClockDelta(10, state)).toBeCloseTo(0.01, 9);
+    state.hitstop = true;
+    expect(effectClockDelta(10, state)).toBe(0);
   });
 });
