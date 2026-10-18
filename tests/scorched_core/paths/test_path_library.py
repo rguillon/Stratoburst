@@ -1,6 +1,7 @@
 import math
 
 import pytest
+
 from scorched_core.paths.path_library import (
     PATH_NAMES,
     PATH_TABLE,
@@ -60,12 +61,12 @@ def test_a_full_loop_closes_on_its_start() -> None:
 
 
 def test_an_s_curve_starts_at_the_origin_and_runs_down_the_length() -> None:
-    points = s_curve_points(30.0, 200.0, 10)
-    assert len(points) == 11
+    points = s_curve_points(30.0, 200.0, 12)
+    assert len(points) == 13
     assert points[0] == (0.0, 0.0)
     assert points[-1] == pytest.approx((0.0, 200.0), abs=1e-9)
-    assert max(x for x, _ in points) == pytest.approx(30.0, abs=1.0)
-    assert min(x for x, _ in points) == pytest.approx(-30.0, abs=1.0)
+    assert max(x for x, _ in points) == pytest.approx(30.0)
+    assert min(x for x, _ in points) == pytest.approx(-30.0)
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@
 from bisect import bisect_right
 from dataclasses import dataclass, field
 
+from scorched_core.paths.path_library import path_index
 from scorched_core.patterns.pattern_library import pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.stages.stage_data import StageData
@@ -14,9 +15,9 @@ class StageDirector:
 
     The terrain advances by a float each step (0.8, or less during a crawl), so an entry is due
     when ``at <= distance``: an equality test would skip it whenever the sum steps over ``at``.
-    Entries sharing an ``at`` spawn on the same step in declared order. A wave's pattern name is
-    resolved to a registry index once, in ``__post_init__``. An entry the pool refuses
-    (the alive cap) is skipped, never queued.
+    Entries sharing an ``at`` spawn on the same step in declared order. A wave's pattern name and
+    path name are resolved to registry indices once, in ``__post_init__``. An entry the pool
+    refuses (the alive cap) is skipped, never queued.
     """
 
     stage: StageData
@@ -24,6 +25,8 @@ class StageDirector:
         init=False, repr=False
     )  # built once: nothing allocates per step
     _patterns: tuple[int | None, ...] = field(init=False, repr=False)  # names resolved once
+    _paths: tuple[int, ...] = field(init=False, repr=False)  # -1 where a wave has no path
+    _flips: tuple[int, ...] = field(init=False, repr=False)  # -1 for a mirrored path
     cursor: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
@@ -32,10 +35,15 @@ class StageDirector:
             None if wave.pattern is None else pattern_index(wave.pattern)
             for wave in self.stage.waves
         )
+        self._paths = tuple(
+            -1 if wave.path is None else path_index(wave.path) for wave in self.stage.waves
+        )
+        self._flips = tuple(-1 if wave.mirror else 1 for wave in self.stage.waves)
 
     def step(self, distance: float, enemies: EnemyPool) -> int:
         """Spawn every entry due at ``distance``; return how many the pool accepted."""
         waves, ats, patterns = self.stage.waves, self._ats, self._patterns
+        paths, flips = self._paths, self._flips
         cursor, spawned = self.cursor, 0
         while cursor < len(waves) and ats[cursor] <= distance:
             wave = waves[cursor]
@@ -49,6 +57,8 @@ class StageDirector:
                 wave.vy,
                 drop,
                 pattern=patterns[cursor],
+                path=paths[cursor],
+                flip=flips[cursor],
             ):
                 spawned += 1
             cursor += 1

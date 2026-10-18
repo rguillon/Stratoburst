@@ -8,6 +8,7 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
+from scorched_core.paths.path_library import PATH_TABLE
 from scorched_core.patterns.bullet_patterns import run_pattern
 from scorched_core.patterns.pattern_library import PATTERN_TABLE, pattern_index
 from scorched_core.pools.bullet_pool import BulletPool
@@ -67,6 +68,11 @@ _COLUMNS: Final = (
     "pattern",
     "volley",
     "burst_left",
+    "path",
+    "seg",
+    "seg_t",
+    "base_y",
+    "flip",
 )
 _PHASE_STEP: Final = math.tau / ENEMY_SWAY_PERIOD
 _HOVER_PHASE_STEP: Final = math.tau / HOVER_DRIFT_PERIOD
@@ -75,6 +81,7 @@ _AIMING: Final = (EnemyKind.TANK, EnemyKind.TURRET)  # kinds whose turret tracks
 _EXIT_BOTTOM: Final = PLAYFIELD_H + ENEMY_EXIT_MARGIN
 _EXIT_LEFT: Final = -2.0 * ENEMY_EXIT_MARGIN
 _EXIT_RIGHT: Final = PLAYFIELD_W + 2.0 * ENEMY_EXIT_MARGIN
+_EXIT_TOP: Final = -2.0 * ENEMY_EXIT_MARGIN  # only a PATH row can leave upward
 
 
 @dataclass(slots=True)
@@ -107,6 +114,11 @@ class EnemyPool:
     pattern: array = field(init=False)
     volley: array = field(init=False)
     burst_left: array = field(init=False)
+    path: array = field(init=False)
+    seg: array = field(init=False)
+    seg_t: array = field(init=False)
+    base_y: array = field(init=False)
+    flip: array = field(init=False)
     kill_x: array = field(init=False)
     kill_y: array = field(init=False)
     kill_kind: array = field(init=False)
@@ -139,6 +151,11 @@ class EnemyPool:
         self.pattern = array("i", zeros)
         self.volley = array("i", zeros)
         self.burst_left = array("i", zeros)
+        self.path = array("i", zeros)
+        self.seg = array("i", zeros)
+        self.seg_t = array("f", zeros)
+        self.base_y = array("f", zeros)
+        self.flip = array("i", zeros)
         self.kill_x = array("f", zeros)
         self.kill_y = array("f", zeros)
         self.kill_kind = array("i", zeros)
@@ -155,16 +172,23 @@ class EnemyPool:
         drop: int = -1,
         *,
         pattern: int | None = None,
+        path: int = -1,
+        flip: int = 1,
     ) -> bool:
         """Add an enemy of ``kind``; return False when ``ENEMY_MAX_ALIVE`` are already alive.
 
         ``motion`` is a ``MotionKind``; a HOVER enemy starts with its full hold timer.
         ``pattern`` is an index into ``PATTERN_TABLE``: None takes the kind's default and -1
-        never fires. The fire timer starts at the pattern's delay.
+        never fires. The fire timer starts at the pattern's delay. A PATH enemy follows
+        ``PATH_TABLE[path]`` from its spawn point, mirrored when ``flip`` is -1; a PATH spawn
+        without a valid ``path`` index is a ValueError, never a silent wrong path.
         """
         i = self.n
         if i >= ENEMY_MAX_ALIVE:
             return False
+        if motion == MotionKind.PATH and not 0 <= path < len(PATH_TABLE):
+            msg = f"PATH motion needs a path index in [0, {len(PATH_TABLE)}), got {path}"
+            raise ValueError(msg)
         self.x[i] = x
         self.y[i] = y
         self.vx[i] = vx
@@ -186,12 +210,19 @@ class EnemyPool:
         self.pattern[i] = chosen
         self.volley[i] = 0
         self.burst_left[i] = 0
+        self.path[i] = path
+        self.seg[i] = 0
+        self.seg_t[i] = 0.0
+        self.base_y[i] = y
+        self.flip[i] = flip
         self.fire_timer[i] = ENEMY_FIRE_DELAY if chosen < 0 else PATTERN_TABLE[chosen].delay
         self._next_uid += 1
         self.n = i + 1
         return True
 
-    def step(self, ship_x: float, ship_y: float, ground_scroll: float = _GROUND_SCROLL) -> None:
+    def step(  # noqa: PLR0912 - one flat match arm per motion kind keeps the hot loop readable
+        self, ship_x: float, ship_y: float, ground_scroll: float = _GROUND_SCROLL
+    ) -> None:
         """Advance one 60 Hz step by each enemy's motion, aim turrets and decay the hit flash.
 
         SWAY sways down the screen facing its heading. DIVE flies a straight line facing it.
@@ -199,7 +230,11 @@ class EnemyPool:
         there drifting side to side, then leaves downward, always facing the player (angle 0).
         GROUND moves by ``ground_scroll`` (the terrain speed times the ground ratio) plus its own
         crawl, so a ground unit stays anchored while the scroll slows down.
-        Enemies that left the playfield alive are removed with neither a kill nor an event.
+        PATH walks its ``PathSpec`` polyline at the path speed, facing the current segment; a
+        ground kind on a path also rides ``ground_scroll`` so a tank follows its road with the
+        terrain. SCRIPTED never moves by itself and is never removed by the exit margins.
+        Other enemies that left the playfield alive (a PATH row also off the top) are removed
+        with neither a kill nor an event.
         """
         x, y, vx, vy, base_x = self.x, self.y, self.vx, self.vy, self.base_x
         phase, angle, flash, age = self.phase, self.angle, self.flash, self.age
@@ -232,10 +267,19 @@ class EnemyPool:
                     x[i] += vx[i]
                     y[i] += ground_scroll + vy[i]
                     angle[i] = math.atan2(vx[i], vy[i])
+                case MotionKind.PATH:
+                    self._follow_path(i, ground_scroll)
+                case MotionKind.SCRIPTED:
+                    pass  # the boss controller owns this row's position
                 case unknown:
                     msg = f"unknown motion {unknown} on enemy slot {i}"
                     raise ValueError(msg)
-            if y[i] > _EXIT_BOTTOM or x[i] < _EXIT_LEFT or x[i] > _EXIT_RIGHT:
+            if motion[i] != MotionKind.SCRIPTED and (
+                y[i] > _EXIT_BOTTOM
+                or x[i] < _EXIT_LEFT
+                or x[i] > _EXIT_RIGHT
+                or (motion[i] == MotionKind.PATH and y[i] < _EXIT_TOP)
+            ):
                 self._remove_at(i)
                 continue
             if kind[i] in _AIMING:
@@ -332,6 +376,28 @@ class EnemyPool:
             out[base + 5] = kind
             out[base + 6] = self.aux[i]
             out[base + 7] = 0.0
+
+    def _follow_path(self, i: int, ground_scroll: float) -> None:
+        """Advance PATH enemy ``i`` one step along its polyline (distance carries over segments)."""
+        spec = PATH_TABLE[self.path[i]]
+        lengths = spec.seg_len
+        last = len(lengths) - 1
+        segment = self.seg[i]
+        travelled = self.seg_t[i] + spec.speed
+        while segment < last and travelled >= lengths[segment]:
+            travelled -= lengths[segment]
+            segment += 1
+        self.seg[i] = segment
+        self.seg_t[i] = travelled
+        if ENEMY_GROUND[self.kind[i]]:
+            self.base_y[i] += ground_scroll  # terrain-anchored: the road scrolls under the tank
+        side = self.flip[i]
+        dx = spec.seg_dx[segment] * side
+        dy = spec.seg_dy[segment]
+        point_x, point_y = spec.points[segment]
+        self.x[i] = self.base_x[i] + side * point_x + dx * travelled
+        self.y[i] = self.base_y[i] + point_y + dy * travelled
+        self.angle[i] = math.atan2(dx, dy)
 
     def _remove_at(self, i: int) -> None:
         last = self.n - 1

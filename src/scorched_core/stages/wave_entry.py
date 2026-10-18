@@ -12,8 +12,9 @@ class WaveEntry:
     """A single spawn: ``at`` is the stage-local scroll distance at which the row spawns (D-04).
 
     ``y`` is the spawn row (above the top edge by default) and ``vx`` / ``vy`` the velocity the
-    motion model starts from. ``drop`` is the pickup a kill leaves, ``None`` for nothing. Plans
-    03-05 and 03-06 append ``pattern``, ``path`` and ``mirror`` fields with defaults.
+    motion model starts from. ``drop`` is the pickup a kill leaves, ``None`` for nothing.
+    ``pattern`` names a bullet pattern, ``path`` a registered enemy path (the ``PATH`` motion
+    follows it) and ``mirror`` flips that path's x offsets.
     """
 
     at: float
@@ -25,3 +26,5 @@ class WaveEntry:
     vy: float = 2.0
     drop: PickupKind | None = None
     pattern: str | None = None
+    path: str | None = None
+    mirror: bool = False
