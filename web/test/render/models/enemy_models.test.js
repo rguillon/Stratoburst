@@ -65,7 +65,8 @@ describe('TANK', () => {
   });
 });
 
-const MANIFEST_KINDS = ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET'];
+const CITY_KINDS = ['HOUSE', 'FUEL_TANK', 'DEPOT', 'BILLBOARD'];
+const MANIFEST_KINDS = ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET', ...CITY_KINDS];
 
 describe('the manifest roster', () => {
   it('has a builder for every manifest kind, so no primitive shape is drawn', () => {
@@ -81,6 +82,27 @@ describe('the manifest roster', () => {
     for (const name of ['TANK', 'TURRET']) {
       for (const detail of ['high', 'mid', 'low']) expect(enemyModel(name, detail).top).not.toBeNull();
     }
+  });
+});
+
+describe('the city targets', () => {
+  it('registers HOUSE, FUEL_TANK, DEPOT and BILLBOARD', () => {
+    for (const name of CITY_KINDS) expect(hasModel(name)).toBe(true);
+  });
+
+  it('returns the fuel tank for FUEL_TANK, cached per detail, without a turning top', () => {
+    for (const detail of ['high', 'mid', 'low']) {
+      const model = enemyModel('FUEL_TANK', detail);
+      expect(model).toBe(enemyModel('FUEL_TANK', detail));
+      expect(model.top).toBeNull();
+    }
+    expect(vertexCount(enemyModel('FUEL_TANK', 'high').body)).toBeGreaterThan(
+      vertexCount(enemyModel('FUEL_TANK', 'low').body),
+    );
+  });
+
+  it('warms the four names', () => {
+    expect(warmModels(CITY_KINDS)).toEqual(CITY_KINDS);
   });
 });
 

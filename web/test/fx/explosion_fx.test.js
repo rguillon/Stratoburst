@@ -12,6 +12,7 @@ import {
   PICKUP_RECIPE,
   PLAYER_DEATH_RECIPE,
   PLAYER_HIT_RECIPE,
+  CITY_SPARKS,
   RECIPES,
   createExplosionFx,
   mulberry32,
@@ -427,5 +428,62 @@ describe('the MEDAL sparkle', () => {
     const built = build();
     built.fx.handle(14, 130, 170, 4, 0, 0);
     expect(built.emitted.additive).toHaveLength(0);
+  });
+});
+
+describe('city target bursts (D-33, D-40)', () => {
+  const HOUSE = 8;
+  const TANK = 3;
+
+  function burstOf(kind, options = {}) {
+    const built = build({ cityKinds: new Set([HOUSE]), ...options });
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, kind);
+    return built;
+  }
+
+  it('adds cyan sparks, magenta embers and a white flash on top of the blast recipe for a city kind', () => {
+    const plain = burstOf(TANK);
+    const city = burstOf(HOUSE);
+    const extra = CITY_SPARKS.reduce((sum, e) => sum + e.count, 0);
+    expect(city.emitted.additive).toHaveLength(plain.emitted.additive.length + extra);
+    expect(city.emitted.normal).toHaveLength(plain.emitted.normal.length);
+    const rgbs = city.emitted.additive.map((p) => p.slice(9, 12));
+    expect(rgbs).toContainEqual(PALETTE.SPARK.rgb);
+    expect(rgbs).toContainEqual(PALETTE.EMBER.rgb);
+    expect(rgbs).toContainEqual(PALETTE.FIRE_CORE.rgb);
+  });
+
+  it('bursts the extra sparks where the blast is, in the ground layer when the kill was on the ground', () => {
+    const { emitted } = burstOf(HOUSE);
+    const sparks = emitted.additive.filter((p) => p.slice(9, 12).join() === PALETTE.SPARK.rgb.join());
+    expect(sparks.length).toBeGreaterThan(0);
+    for (const p of sparks) expect(p.slice(0, 3)).toEqual([1000, -40, 160 - 160]);
+  });
+
+  it('counts a city burst and leaves other kinds, and the default, at zero', () => {
+    const none = build();
+    none.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, HOUSE);
+    expect(none.fx.cityBursts).toBe(0);
+
+    const built = build({ cityKinds: new Set([HOUSE]) });
+    expect(built.fx.cityBursts).toBe(0);
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, TANK);
+    expect(built.fx.cityBursts).toBe(0);
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, HOUSE);
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.LARGE, 1, HOUSE);
+    expect(built.fx.cityBursts).toBe(2);
+  });
+
+  it('scales the spark counts with the tier like every recipe, never below one per emitter', () => {
+    const full = burstOf(HOUSE).emitted.additive.length;
+    const small = burstOf(HOUSE, { getScale: () => 0.35 }).emitted.additive.length;
+    expect(small).toBeLessThan(full);
+    const tiny = burstOf(HOUSE, { getScale: () => 0.001 }).emitted.additive;
+    expect(tiny.length).toBeGreaterThanOrEqual(CITY_SPARKS.length);
+  });
+
+  it('keeps every colour in the palette and out of the bullet band', () => {
+    const palette = Object.values(PALETTE).map((entry) => entry.rgb.join());
+    for (const e of CITY_SPARKS) expect(palette).toContain(e.color.join());
   });
 });
