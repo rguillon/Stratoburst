@@ -78,6 +78,7 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
 )
 from scorched_core.stages.gallery_spawner import GallerySpawner
+from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.tuning import (
     BOMB_BLAST_TICKS,
     BOMB_DAMAGE,
@@ -95,6 +96,7 @@ from scorched_core.tuning import (
     HITSTOP_DEATH_TICKS,
     INVULN_RESPAWN_TICKS,
     PICKUP_RADIUS,
+    SCROLL_SPEED,
     SHIP_HALF_H,
     SHIP_HALF_W,
     SHIP_SPEED,
@@ -2572,3 +2574,48 @@ def test_no_hitstop_on_kills_ordinary_hits_and_the_deathbomb_save_never_freeze()
     assert _header(game, H_HITSTOP) == 0
     _tick_n(game, 5)
     assert _header(game, H_HITSTOP) == 0
+
+
+def _steps_until_distance(at: float) -> int:
+    """Return how many scroll steps the accumulated distance needs to reach ``at``."""
+    distance, steps = 0.0, 0
+    while distance < at:
+        distance += SCROLL_SPEED
+        steps += 1
+    return steps
+
+
+def test_a_stage_game_spawns_the_first_entry_on_the_step_its_distance_is_reached() -> None:
+    first = STAGE_1.waves[0]
+    game = Game(stage=STAGE_1, god=True)
+    due = _steps_until_distance(first.at)
+    assert due > 1
+    for _ in range(due - 1):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        assert game.enemies.n == 0
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n >= 1
+    assert game.enemies.kind[0] == first.kind
+
+
+def test_a_stage_game_does_not_run_the_gallery_script() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    for _ in range(31):  # the gallery's first jet would spawn on tick 30
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 0
+
+
+def test_a_game_without_a_stage_keeps_running_the_gallery() -> None:
+    game = Game(god=True)
+    assert game.stage is None
+    assert game.director is None
+    for _ in range(31):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 1
+
+
+def test_a_stage_game_exposes_its_stage_and_director() -> None:
+    game = Game(stage=STAGE_1)
+    assert game.stage is STAGE_1
+    assert game.director is not None
+    assert game.director.stage is STAGE_1

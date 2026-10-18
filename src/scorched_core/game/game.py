@@ -99,6 +99,8 @@ from scorched_core.protocol import (
     PROTOCOL_VERSION,
 )
 from scorched_core.stages.gallery_spawner import GallerySpawner
+from scorched_core.stages.stage_data import StageData
+from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import (
@@ -210,6 +212,7 @@ class Game:
         "_scratch",
         "bomb",
         "buffers",
+        "director",
         "ebullet_cap",
         "ebullets",
         "enemies",
@@ -232,6 +235,7 @@ class Game:
         "refresh",
         "rng",
         "ship",
+        "stage",
         "storm",
         "storm_hits",
         "storm_pool",
@@ -251,6 +255,7 @@ class Game:
         level: int = 1,
         god: bool = False,
         bombs: int = BOMB_START_STOCK,
+        stage: StageData | None = None,
     ) -> None:
         self.fault = fault
         self.god = god  # test flag: hits are ignored so automated runs are never disturbed
@@ -277,6 +282,8 @@ class Game:
         self.max_bonus = 0  # same-colour catches at the top level; scored in Phase 3 (D-06)
         self._on_pickup = self._collect_pickup  # bound once: no closure is built per step
         self.gallery = GallerySpawner()
+        self.stage = stage
+        self.director = StageDirector(stage) if stage is not None else None
         self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, ENEMY_CAP)
         self._scratch = array("i", bytes(4 * ENEMY_CAP))
         self.storm = (
