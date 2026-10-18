@@ -14,6 +14,8 @@ import {
   unitBoxModel,
   windowCapacity,
 } from '../../src/render/city_layer.js';
+import { PALETTE } from '../../src/fx/palette.js';
+import { sceneryModel, sceneryTint } from '../../src/render/models/scenery_models.js';
 
 const W = 240;
 const H = 320;
@@ -27,7 +29,7 @@ const ASPECTS = {
   '16/9': 16 / 9,
 };
 // scenery_kinds as the manifest ships them: name -> value.
-const KINDS = { SLUM_HOUSE: 0, TOWER: 2, SIGN: 3, FIRE: 7 };
+const KINDS = { SLUM_HOUSE: 0, TOWER: 2, SIGN: 3, RUNWAY_LIGHT: 6, FIRE: 7 };
 const TOWER = 2;
 const SIGN = 3;
 
@@ -51,6 +53,7 @@ function build(records, extra = {}) {
     y0: Y0,
     playfieldW: W,
     playfieldH: H,
+    geometryFor: unitBoxModel,
     ...extra,
   });
 }
@@ -429,5 +432,67 @@ describe('createCityLayer', () => {
     expect(model.body.boundingBox.min.y).toBe(0);
     expect(model.body.boundingBox.max.y).toBe(1);
     expect(Math.max(...Array.from(model.body.getAttribute('color').array))).toBeLessThan(1);
+  });
+
+  it('draws sceneryModel by default and tints the glow of SIGN, TOWER and RUNWAY_LIGHT by variant', () => {
+    const layer = createCityLayer({
+      layout: flat([
+        [SIGN, 10, 0, 2, 8, 0],
+        [SIGN, 20, 1, 2, 8, 3],
+        [TOWER, 30, 2, 10, 20, 5],
+        [6, 40, 3, 1.5, 0.6, 0],
+        [6, 50, 4, 1.5, 0.6, 1],
+        [7, 60, 5, 10, 2, 1],
+      ]),
+      stride: STRIDE,
+      kinds: KINDS,
+      ratio: RATIO,
+      y0: Y0,
+      playfieldW: W,
+      playfieldH: H,
+    });
+    layer.update(0);
+    expect(meshNamed(layer, 'city-sign').geometry).toBe(sceneryModel('SIGN', 'high').body);
+    const glowColours = (name) => {
+      const glow = meshNamed(layer, name);
+      return Array.from({ length: glow.count }, (_, i) => glow.getColorAt(i, new THREE.Color()).toArray());
+    };
+    const near = (a, b) => a.every((v, k) => Math.abs(v - b[k]) < 1e-5);
+    const [first, second] = glowColours('city-sign-glow');
+    expect(near(first, PALETTE.NEON_CYAN.rgb)).toBe(true);
+    expect(near(second, PALETTE.NEON_VIOLET.rgb)).toBe(true);
+    expect(near(glowColours('city-tower-glow')[0], PALETTE.NEON_GREEN.rgb)).toBe(true);
+    const [blue, green] = glowColours('city-runway-light-glow');
+    expect(near(blue, PALETTE.NEON_BLUE.rgb)).toBe(true);
+    expect(near(green, PALETTE.NEON_GREEN.rgb)).toBe(true);
+    // A kind with no tint keeps no instance colour at all.
+    expect(meshNamed(layer, 'city-fire-glow').instanceColor).toBeNull();
+  });
+
+  it('retints after a jump so every drawn glow instance keeps its own variant hue', () => {
+    const records = [];
+    for (let d = 0; d < 2000; d += 10) records.push([SIGN, 10, d, 2, 8, (d / 10) % 6]);
+    const layer = createCityLayer({
+      layout: flat(records),
+      stride: STRIDE,
+      kinds: KINDS,
+      ratio: RATIO,
+      y0: Y0,
+      playfieldW: W,
+      playfieldH: H,
+    });
+    layer.update(1000);
+    layer.update(30);
+    const glow = meshNamed(layer, 'city-sign-glow');
+    const body = meshNamed(layer, 'city-sign');
+    expect(glow.count).toBe(body.count);
+    expect(glow.count).toBeGreaterThan(5);
+    for (let i = 0; i < glow.count; i++) {
+      const z = localPosition(body, i).z + H / 2;
+      const d = Math.round((Y0 + RATIO * 30 - z) / RATIO / 10) * 10;
+      const expected = sceneryTint('SIGN', (d / 10) % 6);
+      const rgb = glow.getColorAt(i, new THREE.Color()).toArray();
+      expect(rgb.every((v, k) => Math.abs(v - expected[k]) < 1e-5)).toBe(true);
+    }
   });
 });
