@@ -76,6 +76,7 @@ from scorched_core.tuning import (
     BOMB_DAMAGE,
     BOMB_INVULN_TAIL_TICKS,
     BOMB_LAUNCH_TICKS,
+    BOMB_RADIUS_MIN,
     DEATHBOMB_TICKS,
     DYING_TICKS,
     ENEMY_FIRE_DELAY,
@@ -1857,3 +1858,118 @@ def test_the_stock_counts_down_and_a_press_with_none_left_does_nothing_stock() -
     assert game.bomb.phase == BombPhase.NONE
     assert _header(game, H_BOMBS) == 0
     assert EV_BOMB_LAUNCH not in _event_kinds(game)
+
+
+def test_a_bomb_press_on_a_zero_step_frame_still_fires_on_the_next_step_zero_step_latch() -> None:
+    game = _bomb_game()
+    steps = game.tick(STEP_MS / 2, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
+    assert steps == 0
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 3
+    steps = game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    assert steps == 1
+    assert game.bomb.phase == BombPhase.LAUNCH
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_a_zero_step_latch_launches_exactly_once_zero_step_latch() -> None:
+    game = _bomb_game()
+    game.tick(STEP_MS / 2, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
+    _tick_n(game, 3)
+    assert _header(game, H_BOMBS) == 2
+    assert game.bomb.timer == 3
+
+
+def test_a_press_while_paused_is_remembered_and_fires_on_the_first_live_step_latch() -> None:
+    game = _bomb_game()
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    assert game.paused
+    _tick(game)
+    _press_bomb(game)
+    assert game.paused
+    assert game.bomb.phase == BombPhase.NONE
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)  # resume, bomb button already up
+    _tick(game)
+    assert not game.paused
+    assert game.bomb.phase == BombPhase.LAUNCH
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_a_press_with_no_stock_is_consumed_and_never_fires_later_ignored() -> None:
+    game = _bomb_game()
+    game.bomb.stock = 0
+    _press_bomb(game)
+    game.bomb.stock = 3
+    _tick_n(game, 5)
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 3
+
+
+def test_a_press_while_a_bomb_is_active_is_consumed_and_never_fires_later_ignored() -> None:
+    game = _bomb_game()
+    _press_bomb(game)
+    _tick_n(game, 3)
+    _press_bomb(game)  # refused: one bomb at a time
+    assert _header(game, H_BOMBS) == 2
+    _tick_n(game, BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + 20)
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 2  # the refused press did not wait for the blast to end
+
+
+@pytest.mark.parametrize("phase", [PlayerPhase.DYING, PlayerPhase.RESPAWN])
+def test_a_press_while_the_ship_has_no_control_is_consumed_without_effect_ignored(
+    phase: PlayerPhase,
+) -> None:
+    game = _bomb_game()
+    game.life.phase = phase
+    game.life.timer = 10_000
+    game.ship.y = 400.0
+    _press_bomb(game)
+    assert game.bomb.phase == BombPhase.NONE
+    game.life.phase = PlayerPhase.ALIVE
+    _tick_n(game, 5)
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 3
+
+
+def test_a_held_bomb_button_is_one_press_not_a_stream_ignored() -> None:
+    game = _bomb_game()
+    for _ in range(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + 10):
+        game.tick(STEP_MS, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_a_bullet_inside_the_growing_radius_is_cleared_and_one_outside_survives_blast() -> None:
+    game = _bomb_game()
+    _detonate(game)
+    centre_x, centre_y = game.bomb.x, game.bomb.y
+    game.ebullets.spawn(centre_x + BOMB_RADIUS_MIN - 1.0, centre_y, 0.0, 0.0)
+    game.ebullets.spawn(centre_x + 60.0, centre_y, 0.0, 0.0)  # beyond the first radius of 20
+    _tick(game)
+    assert game.ebullets.n == 1
+    assert game.ebullets.x[0] == pytest.approx(centre_x + 60.0)
+
+
+def test_a_bullet_fired_into_the_fireball_is_removed_on_its_step_blast() -> None:
+    game = _bomb_game()
+    _detonate(game)
+    _tick_n(game, 40)  # the fireball is at its full radius
+    game.ebullets.spawn(game.bomb.x + 100.0, game.bomb.y, 0.0, 0.0)
+    assert game.ebullets.n == 1
+    _tick(game)
+    assert game.ebullets.n == 0
+
+
+def _bomb_run(seed: int) -> bytes:
+    game = Game(seed=seed, god=True)
+    snapshots = bytearray()
+    for step in range(400):
+        buttons = Button.FIRE | (Button.BOMB if step in (30, 150, 151, 300) else 0)
+        game.tick(STEP_MS, buttons, math.sin(step / 25), 0.0, 0.0, 0.0)
+        snapshots += bytes(game.buffers["header"]) + bytes(game.buffers["enemies"])
+        snapshots += bytes(game.buffers["ebullets"]) + bytes(game.buffers["events"])
+    return bytes(snapshots)
+
+
+def test_the_bomb_is_deterministic_for_one_seed_and_inputs_determinism() -> None:
+    assert _bomb_run(7) == _bomb_run(7)
