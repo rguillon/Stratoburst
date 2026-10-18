@@ -24,6 +24,7 @@ import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
 import { createBeamMesh } from './fx/beam_mesh.js';
+import { createBombFx } from './fx/bomb_fx.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -248,7 +249,25 @@ async function main() {
   });
   rig.scene.add(pickups.mesh);
   pickups.mesh.count = 1;
-  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool] });
+  // The nuke: a rising missile, then a fireball that fills the screen, with one burst, one light, one
+  // scorch and one bloom pulse at the detonation. Python owns the bomb; this only draws it. Added
+  // before the second prewarm so its shaders compile at load.
+  const bombFx = createBombFx({
+    layers: fxLayers,
+    events: manifest.events,
+    phases: manifest.bomb_phases,
+    tuning: manifest.tuning,
+    bloomPass: rig.pipeline.bloomPass,
+    decals,
+    lights: lightPool,
+    getScale: () => TIERS[currentTier].particleScale,
+    toWorld: (x, y, out) => rig.toWorld(x, y, out),
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(bombFx.group);
+  bombFx.showAll(true);
+  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool, bombFx] });
   let fxTime = 0;
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
@@ -283,6 +302,7 @@ async function main() {
   beam.update(0, 0, 0, 0); // compiled and rendered through both paths: hidden until the laser fires
   missiles.update(0, 0); // likewise hidden until a missile launches
   pickups.update(0, 0); // and hidden until a crystal drops
+  bombFx.showAll(false); // and the missile and fireball until a bomb flies
   loading.setProgress(1);
   loading.setStatus('Ready');
   const timeToGateMs = performance.now() - t0;
@@ -376,6 +396,14 @@ async function main() {
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);
+      bombFx.update(
+        header[slots.BOMB_PHASE],
+        header[slots.BOMB_X],
+        header[slots.BOMB_Y],
+        header[slots.BOMB_T],
+        dt / 1000,
+        fxTime,
+      );
       // Ground units extrapolate like the terrain, at the ground ratio, so they never stutter
       // against the roads.
       enemies.update(
@@ -497,6 +525,9 @@ async function main() {
         },
         get pickupsDrawn() {
           return pickups.mesh.count;
+        },
+        get bombsShown() {
+          return bombFx.shown;
         },
       },
       // False exactly while the ship is dying (e2e checks the explosion hides it).

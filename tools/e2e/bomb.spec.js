@@ -66,3 +66,17 @@ test('a bomb never touches the stress storm', async ({ page }) => {
   expect(await readSlot(page, 'STORM_N')).toBe(200);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// VISL-02: the detonation is drawn. The production build runs under software GL, so the wait is
+// generous: the timing is not under test.
+test('a detonation is displayed as a fireball and costs no error', async ({ page }) => {
+  await bootGame(page, '?debug');
+  expect(await page.evaluate(() => globalThis.__scorched.fx.bombsShown)).toBe(0);
+  await page.keyboard.press('KeyK');
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.bombsShown), { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(1);
+  await expect.poll(() => readSlot(page, 'BOMB_PHASE'), { timeout: 20_000 }).toBe(0);
+  expect(await page.evaluate(() => globalThis.__scorched.fx.bombsShown)).toBe(1);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
