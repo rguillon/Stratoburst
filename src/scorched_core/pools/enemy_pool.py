@@ -139,7 +139,8 @@ class EnemyPool:
     def step(self) -> None:
         """Advance one 60 Hz step by each enemy's motion and decay the hit flash.
 
-        SWAY sways down the screen facing its heading. HOVER descends to ``HOVER_STOP_Y``, holds
+        SWAY sways down the screen facing its heading. DIVE flies a straight line facing it.
+        HOVER descends to ``HOVER_STOP_Y``, holds
         there drifting side to side, then leaves downward, always facing the player (angle 0).
         Enemies that left the playfield alive are removed with neither a kill nor an event.
         """
@@ -156,6 +157,10 @@ class EnemyPool:
                     phase[i] += _PHASE_STEP
                     x[i] = base_x[i] + ENEMY_SWAY * math.sin(phase[i])
                     angle[i] = math.atan2(x[i] - previous_x, vy[i])
+                case MotionKind.DIVE:
+                    x[i] += vx[i]
+                    y[i] += vy[i]
+                    angle[i] = math.atan2(vx[i], vy[i])
                 case MotionKind.HOVER:
                     base_x[i] += vx[i]
                     if timer[i] == HOVER_HOLD_TICKS and y[i] < HOVER_STOP_Y:
@@ -166,7 +171,7 @@ class EnemyPool:
                     else:
                         y[i] += HOVER_EXIT_SPEED
                     x[i] = base_x[i] + HOVER_DRIFT * math.sin(phase[i])
-                case _:
+                case _:  # GROUND stays put until its arm lands
                     pass
             if y[i] > _EXIT_BOTTOM or x[i] < _EXIT_LEFT or x[i] > _EXIT_RIGHT:
                 self._remove_at(i)

@@ -395,9 +395,9 @@ def _track_lowest_enemy_and_fire(game: Game, ticks: int) -> None:
         game.tick(STEP_MS, Button.FIRE, move_x, 0.0, 0.0, 0.0)
 
 
-def test_the_header_counts_enemies_from_step_forty_on() -> None:
+def test_the_header_counts_enemies_from_step_thirty_one_on() -> None:
     game = Game()
-    for _ in range(39):
+    for _ in range(30):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_ENEMY_N] == 0
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
@@ -469,10 +469,10 @@ def test_scripted_kill_ship_tracking_the_lowest_enemy_downs_three_within_1200_ti
     assert game.enemies.kills == game.buffers["header"][H_KILLS]
 
 
-def test_live_enemies_never_exceed_the_alive_cap_over_two_thousand_steps() -> None:
+def test_live_enemies_never_exceed_the_alive_cap_over_two_loops() -> None:
     game = Game()
     peak = 0
-    for _ in range(2000):
+    for _ in range(2 * GALLERY_LOOP_TICKS):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
         peak = max(peak, game.enemies.n)
     assert 0 < peak <= ENEMY_MAX_ALIVE < ENEMY_CAP

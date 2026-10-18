@@ -439,9 +439,58 @@ def test_killing_a_hover_helicopter_pushes_a_medium_air_explosion() -> None:
     assert (ring.buf[3], ring.buf[4], ring.buf[5]) == (BLAST_MEDIUM, 0.0, float(EnemyKind.HELI))
 
 
-def test_dive_and_ground_motions_do_not_move_yet() -> None:
+def test_ground_motion_does_not_move_yet() -> None:
     pool = EnemyPool()
-    pool.spawn(EnemyKind.JET, 50.0, 50.0, MotionKind.DIVE, 1.0, 1.0)
     pool.spawn(EnemyKind.TANK, 70.0, 50.0, MotionKind.GROUND, 1.0, 1.0)
     pool.step()
-    assert [(pool.x[i], pool.y[i]) for i in range(2)] == [(50.0, 50.0), (70.0, 50.0)]
+    assert (pool.x[0], pool.y[0]) == (70.0, 50.0)
+
+
+# --- DIVE ----------------------------------------------------------------------------------
+
+
+def dive(pool: EnemyPool, x: float, y: float, vx: float, vy: float) -> int:
+    assert pool.spawn(EnemyKind.JET, x, y, MotionKind.DIVE, vx, vy)
+    return pool.n - 1
+
+
+def test_dive_flies_a_straight_line_at_its_velocity() -> None:
+    pool = EnemyPool()
+    dive(pool, 60.0, -12.0, 0.5, 2.2)
+    for k in range(1, 41):
+        pool.step()
+        assert pool.x[0] == pytest.approx(60.0 + 0.5 * k, abs=1e-3)
+        assert pool.y[0] == pytest.approx(-12.0 + 2.2 * k, abs=1e-3)
+
+
+def test_dive_faces_its_heading() -> None:
+    pool = EnemyPool()
+    dive(pool, 60.0, -12.0, 2.4, 0.9)
+    pool.step()
+    assert pool.angle[0] == pytest.approx(math.atan2(2.4, 0.9), abs=1e-5)
+    dive(pool, 120.0, -12.0, 0.0, 2.4)
+    pool.step()
+    assert pool.angle[1] == 0.0
+
+
+def test_a_dive_jet_crossing_the_field_leaves_on_the_far_side_without_a_kill_or_event() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    dive(pool, -12.0, 60.0, 2.4, 0.9)
+    for _ in range(200):
+        pool.step()
+        pool.remove_dead(ring)
+        if pool.n == 0:
+            break
+    assert pool.n == 0
+    assert pool.kills == 0
+    assert ring.n == 0
+
+
+def test_a_dive_jet_is_still_inside_while_it_crosses_the_middle_of_the_field() -> None:
+    pool = EnemyPool()
+    dive(pool, -12.0, 60.0, 2.4, 0.9)
+    for _ in range(50):
+        pool.step()
+    assert pool.n == 1
+    assert 90.0 < pool.x[0] < 120.0
