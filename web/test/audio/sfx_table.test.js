@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SFX_TABLE } from '../../src/audio/sfx_table.js';
+import { buildSamples } from '../../src/audio/zzfx_synth.js';
 
 describe('SFX_TABLE', () => {
   it.each(Object.entries(SFX_TABLE))('%s has the full entry shape', (name, entry) => {
@@ -112,3 +113,15 @@ describe('SFX_TABLE covers every sound', () => {
   });
 });
 
+
+describe('every SFX_TABLE sound renders', () => {
+  it.each(SFX_ID_NAMES)('%s synthesizes finite, audible samples', (name) => {
+    const samples = buildSamples(...SFX_TABLE[name].params, { random: () => 0.5 });
+    let peak = 0;
+    for (const v of samples) peak = Math.max(peak, Math.abs(v));
+
+    expect(samples.every(Number.isFinite)).toBe(true);
+    expect(peak).toBeGreaterThan(0.05);
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+});
