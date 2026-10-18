@@ -195,7 +195,16 @@ def test_manifest_contract() -> None:
         "MEDAL": 5,
     }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
-    assert manifest["enemy_kinds"] == {"JET": 0, "HELI": 1, "CARRIER": 2, "TANK": 3, "TURRET": 4}
+    assert manifest["enemy_kinds"] == {
+        "JET": 0,
+        "HELI": 1,
+        "CARRIER": 2,
+        "TANK": 3,
+        "TURRET": 4,
+        "TRAIN": 5,
+        "TRAIN_TURRET": 6,
+        "TRAIN_STUMP": 7,
+    }
 
 
 def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
@@ -392,8 +401,8 @@ def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
         "hitbox_radius": 2.0,
         "ground_scroll_ratio": 0.94,
         "ground_y0": -40.0,
-        "enemy_ground": [0, 0, 0, 1, 1],
-        "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0],
+        "enemy_ground": [0, 0, 0, 1, 1, 1, 1, 1],
+        "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0],
         "bomb_radius_min": 20.0,
         "bomb_radius_max": 230.0,
         "bomb_grow_ticks": 30,
@@ -1237,8 +1246,8 @@ def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
 def test_the_manifest_exports_the_ground_scroll_ratio_and_per_kind_radii() -> None:
     tuning = Game().manifest()["tuning"]
     assert tuning["ground_scroll_ratio"] == 0.94
-    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1]
-    assert tuning["enemy_radius"] == [9.0, 10.0, 14.0, 11.0, 10.0]
+    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1, 1, 1, 1]
+    assert tuning["enemy_radius"] == [9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0]
 
 
 def test_a_ground_tank_scrolls_with_the_terrain_through_the_game_step() -> None:

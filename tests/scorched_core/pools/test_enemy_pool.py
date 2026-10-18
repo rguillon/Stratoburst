@@ -73,7 +73,7 @@ def test_each_kind_takes_its_radius_and_hp_from_the_tables() -> None:
         pool.spawn(kind, 100.0, 50.0, MotionKind.SWAY, 0.0, 0.0, drop=int(kind))
     assert [pool.radius[i] for i in range(pool.n)] == list(ENEMY_RADIUS)
     assert [pool.hp[i] for i in range(pool.n)] == list(ENEMY_HP)
-    assert [pool.drop[i] for i in range(pool.n)] == [0, 1, 2, 3, 4]
+    assert [pool.drop[i] for i in range(pool.n)] == list(range(len(EnemyKind)))
 
 
 def test_uids_strictly_increase_and_are_never_reused_after_removal() -> None:

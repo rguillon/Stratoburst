@@ -258,7 +258,7 @@ def test_a_destroyed_part_becomes_a_stump_pays_its_points_and_asks_for_hitstop()
     assert boom[3] == float(ENEMY_GROUND[EnemyKind.TRAIN_TURRET])
     assert boom[4] == EnemyKind.TRAIN_STUMP
     (gone,) = rig.events_of(EV_PART_DESTROYED)
-    assert gone == (x, y, PART_POINTS, 0.0, 1.0, 0.0)
+    assert gone == (x, y, PART_POINTS, 0.0, 1.0)
 
 
 def test_the_stump_stays_after_remove_dead_and_follows_the_hull() -> None:
@@ -331,3 +331,23 @@ def test_a_hull_row_spawned_by_the_controller_never_exceeds_the_grid_limit() -> 
     biggest = max(rig.enemies.radius[i] for i in range(rig.enemies.n))
     assert biggest + 2.5 <= GRID_CELL
     assert math.isfinite(biggest)
+
+
+def test_a_hull_row_that_vanished_is_skipped_and_the_fight_goes_on() -> None:
+    rig = Rig()
+    rig.enter()
+    rig.enemies.remove_uid(rig.controller.hull_uid)
+    rig.run(3)  # neither the follow nor the settle may read a stranger's slot
+    assert rig.controller.active
+    assert rig.controller.hp_fraction == 1.0
+    assert rig.enemies.n == 2
+
+
+def test_rows_that_vanish_during_the_entrance_do_not_break_the_opening_of_the_fight() -> None:
+    rig = Rig()
+    assert rig.start()
+    rig.enemies.remove_uid(rig.controller.hull_uid)
+    rig.enemies.remove_uid(rig.controller.part_uid(0))
+    while rig.controller.state is BossState.ENTER:
+        rig.step()
+    assert rig.enemies.shield[rig.part(1)] == 0

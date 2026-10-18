@@ -104,20 +104,24 @@ class MissilePool:
 
     @staticmethod
     def _nearest(enemies: EnemyPool, x: float, y: float) -> int:
-        """Return the slot of the nearest live enemy inside the playfield, or -1.
+        """Return the slot of the nearest live, unshielded enemy inside the playfield, or -1.
+
+        A shielded row (a boss during its entrance, a phase change or its death) is never a
+        target, so a missile does not waste itself on a hit the shield would absorb.
 
         Slots are scanned in ascending order and only a strictly nearer enemy replaces the
         best, so a tie goes to the lower pool index and the choice is deterministic.
         """
         best = -1
         best_d2 = math.inf
-        ex, ey, hp = enemies.x, enemies.y, enemies.hp
+        ex, ey, hp, shield = enemies.x, enemies.y, enemies.hp, enemies.shield
         for j in range(enemies.n):
             dx = ex[j] - x
             dy = ey[j] - y
             d2 = dx * dx + dy * dy
             if (
                 hp[j] > 0
+                and shield[j] == 0
                 and 0.0 <= ex[j] <= PLAYFIELD_W
                 and 0.0 <= ey[j] <= PLAYFIELD_H
                 and d2 < best_d2

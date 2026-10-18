@@ -60,6 +60,8 @@ _COLUMNS: Final = (
     "motion",
     "timer",
     "hp",
+    "hp_max",
+    "shield",
     "flash",
     "uid",
     "drop",
@@ -77,7 +79,11 @@ _COLUMNS: Final = (
 _PHASE_STEP: Final = math.tau / ENEMY_SWAY_PERIOD
 _HOVER_PHASE_STEP: Final = math.tau / HOVER_DRIFT_PERIOD
 _GROUND_SCROLL: Final = SCROLL_SPEED * GROUND_SCROLL_RATIO  # terrain-anchored: 0.752 per step
-_AIMING: Final = (EnemyKind.TANK, EnemyKind.TURRET)  # kinds whose turret tracks the ship
+_AIMING: Final = (
+    EnemyKind.TANK,
+    EnemyKind.TURRET,
+    EnemyKind.TRAIN_TURRET,
+)  # kinds whose turret tracks the ship
 _EXIT_BOTTOM: Final = PLAYFIELD_H + ENEMY_EXIT_MARGIN
 _EXIT_LEFT: Final = -2.0 * ENEMY_EXIT_MARGIN
 _EXIT_RIGHT: Final = PLAYFIELD_W + 2.0 * ENEMY_EXIT_MARGIN
@@ -106,6 +112,8 @@ class EnemyPool:
     motion: array = field(init=False)
     timer: array = field(init=False)
     hp: array = field(init=False)
+    hp_max: array = field(init=False)
+    shield: array = field(init=False)
     flash: array = field(init=False)
     uid: array = field(init=False)
     drop: array = field(init=False)
@@ -143,6 +151,8 @@ class EnemyPool:
         self.motion = array("i", zeros)
         self.timer = array("i", zeros)
         self.hp = array("i", zeros)
+        self.hp_max = array("i", zeros)
+        self.shield = array("i", zeros)
         self.flash = array("i", zeros)
         self.uid = array("i", zeros)
         self.drop = array("i", zeros)
@@ -174,6 +184,9 @@ class EnemyPool:
         pattern: int | None = None,
         path: int = -1,
         flip: int = 1,
+        hp: int | None = None,
+        radius: float | None = None,
+        shield: int = 0,
     ) -> bool:
         """Add an enemy of ``kind``; return False when ``ENEMY_MAX_ALIVE`` are already alive.
 
@@ -182,10 +195,18 @@ class EnemyPool:
         never fires. The fire timer starts at the pattern's delay. A PATH enemy follows
         ``PATH_TABLE[path]`` from its spawn point, mirrored when ``flip`` is -1; a PATH spawn
         without a valid ``path`` index is a ValueError, never a silent wrong path.
+
+        ``hp`` and ``radius`` override the kind's table values (a boss hull and its parts) and
+        ``hp`` also becomes ``hp_max``, the denominator of the packed health fraction; an ``hp``
+        below 1 is a ValueError. A ``shield`` of 0 is vulnerable, a positive one counts down one
+        per step and -1 never ends: a shielded row takes no damage.
         """
         i = self.n
         if i >= ENEMY_MAX_ALIVE:
             return False
+        if hp is not None and hp < 1:
+            msg = f"hp must be at least 1, got {hp}"
+            raise ValueError(msg)
         if motion == MotionKind.PATH and not 0 <= path < len(PATH_TABLE):
             msg = f"PATH motion needs a path index in [0, {len(PATH_TABLE)}), got {path}"
             raise ValueError(msg)
@@ -196,12 +217,15 @@ class EnemyPool:
         self.base_x[i] = x
         self.phase[i] = 0.0
         self.angle[i] = 0.0
-        self.radius[i] = ENEMY_RADIUS[kind]
+        self.radius[i] = ENEMY_RADIUS[kind] if radius is None else radius
         self.aux[i] = 0.0
         self.kind[i] = kind
         self.motion[i] = motion
         self.timer[i] = HOVER_HOLD_TICKS if motion == MotionKind.HOVER else 0
-        self.hp[i] = ENEMY_HP[kind]
+        start_hp = ENEMY_HP[kind] if hp is None else hp
+        self.hp[i] = start_hp
+        self.hp_max[i] = start_hp
+        self.shield[i] = shield
         self.flash[i] = 0
         self.uid[i] = self._next_uid
         self.drop[i] = drop
@@ -239,6 +263,7 @@ class EnemyPool:
         x, y, vx, vy, base_x = self.x, self.y, self.vx, self.vy, self.base_x
         phase, angle, flash, age = self.phase, self.angle, self.flash, self.age
         motion, timer, kind, aux = self.motion, self.timer, self.kind, self.aux
+        shield = self.shield
         for i in range(self.n - 1, -1, -1):
             age[i] += 1
             match motion[i]:
@@ -286,6 +311,8 @@ class EnemyPool:
                 aux[i] = math.atan2(ship_x - x[i], ship_y - y[i])
             if flash[i] > 0:
                 flash[i] -= 1
+            if shield[i] > 0:
+                shield[i] -= 1
 
     def fire(self, bullets: BulletPool, ship_x: float, ship_y: float, events: EventRing) -> int:
         """Count every enemy's fire timer down and shoot into ``bullets``; return bullets spawned.
@@ -336,13 +363,45 @@ class EnemyPool:
 
         A hit on a resting enemy that survives pushes one low-priority HIT event (D-28: one
         spark burst per flash window, merged at the source). A killing blow pushes none: the
-        EXPLOSION from ``remove_dead`` already covers it.
+        EXPLOSION from ``remove_dead`` already covers it. A shielded row (``shield`` not 0) takes
+        no damage, does not flash and pushes nothing: the hit is absorbed.
         """
+        if self.shield[i] != 0:
+            return
         resting = self.flash[i] == 0
         self.hp[i] -= damage
         if resting and self.hp[i] > 0:
             events.push(EV_HIT, self.x[i], self.y[i], self.kind[i], low=True)
         self.flash[i] = ENEMY_FLASH_TICKS
+
+    def remove_uid(self, uid: int) -> bool:
+        """Remove the enemy with ``uid`` with no kill and no event; False when it is already gone.
+
+        This is how a boss controller retires its rows (a retreat, the end of a death sequence):
+        nothing is paid and no explosion is pushed here, the controller owns both.
+        """
+        i = self.index_of_uid(uid)
+        if i < 0:
+            return False
+        self._remove_at(i)
+        return True
+
+    def become_stump(self, i: int, kind: int) -> None:
+        """Convert row ``i`` in place into the stump ``kind`` a destroyed boss part leaves.
+
+        The row keeps its uid and position. It now has 1 hp, a permanent shield (so it can never
+        be hit, killed or targeted), the stump kind's radius and no pattern: it never fires.
+        """
+        self.kind[i] = kind
+        self.hp[i] = 1
+        self.hp_max[i] = 1
+        self.shield[i] = -1
+        self.radius[i] = ENEMY_RADIUS[kind]
+        self.pattern[i] = -1
+        self.volley[i] = 0
+        self.burst_left[i] = 0
+        self.drop[i] = -1
+        self.flash[i] = 0
 
     def remove_dead(self, events: EventRing) -> None:
         """Remove every enemy at or below zero HP: one EXPLOSION, one kill-buffer entry each."""
@@ -377,7 +436,7 @@ class EnemyPool:
             out[base + 1] = self.y[i]
             out[base + 2] = self.angle[i]
             out[base + 3] = self.flash[i] / ENEMY_FLASH_TICKS
-            out[base + 4] = self.hp[i] / ENEMY_HP[kind]
+            out[base + 4] = self.hp[i] / self.hp_max[i]
             out[base + 5] = kind
             out[base + 6] = self.aux[i]
             out[base + 7] = 0.0
