@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-10-18T03:16:55.836Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-10-18T03:29:38.711Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 63e8317260b8daef9f7fa44979cc5610dfac02c9
+state_head: 56ca38382595ca8d8e490f4ccd654b3a9d192300
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 13
+  completed_plans: 14
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 4 of 33
+Plan: 5 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -69,6 +69,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P01 | 6 min | 2 tasks | 11 files |
 | Phase 02 P02 | 12 min | 2 tasks | 10 files |
 | Phase 02 P03 | 11 min | 2 tasks | 14 files |
+| Phase 02 P04 | 14 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-02: particle layers draw depthTest-off at renderOrder 4 (above terrain, below the playfield mask); explosion size never scales with tier, only particle count (1, 0.6, 0.35)
 - [Phase 02]: 02-03: a killing blow pushes no HIT event; apply_hit subtracts first and pushes a low-priority HIT only for a resting survivor, so a kill is exactly one event
 - [Phase 02]: 02-03: the gallery has no RNG (scripted GALLERY_SCRIPT), so determinism means same inputs give byte-identical buffers; wire names DRONE_N/DRONES_DOWN/drones stay until 02-04
+- [Phase 02]: 02-04: enemy meshes are one InstancedMesh per kind behind a geometryFor seam; flash is HDR (2.2) instanceColor on a white shared material; mesh with zero instances is not re-uploaded
 
 ### Pending Todos
 
@@ -129,6 +131,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T03:16:55.762Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-10-18T03:29:38.644Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
