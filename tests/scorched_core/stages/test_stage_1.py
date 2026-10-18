@@ -1,4 +1,5 @@
 import itertools
+import math
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -7,7 +8,9 @@ from scorched_core.paths.path_library import PATHS, path_index
 from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
-from scorched_core.protocol import PLAYFIELD_W
+from scorched_core.protocol import CITY_STRIDE, PLAYFIELD_W
+from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_1 import (
     AIRBASE_AT,
     BOSS_QUIET,
@@ -18,7 +21,13 @@ from scorched_core.stages.stage_1 import (
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.wave_entry import WaveEntry
-from scorched_core.tuning import ENEMY_MAX_ALIVE, GROUND_SCROLL_RATIO, SCROLL_SPEED
+from scorched_core.tuning import (
+    CITY_MAX_HEIGHT,
+    CITY_PITCH,
+    ENEMY_MAX_ALIVE,
+    GROUND_SCROLL_RATIO,
+    SCROLL_SPEED,
+)
 
 ROAD_CENTRES = (80.0, 160.0)
 DISTANCE_PER_SECOND = 48.0  # 60 steps at 0.8 units each
@@ -256,3 +265,87 @@ def test_medals_are_some_of_the_ground_targets_not_all() -> None:
     ground = [w for w in STAGE_1.waves if w.kind in (EnemyKind.TANK, EnemyKind.TURRET)]
     medals = [w for w in ground if w.drop == PickupKind.MEDAL]
     assert len(medals) < len(ground) / 2 + 3
+
+
+# The city (D-33, D-34, D-35): slums, neon downtown with the maglev, then the airbase.
+def _placements(start: float, end: float, *kinds: SceneryKind) -> list[tuple[float, ...]]:
+    flat = STAGE_1.placements
+    records = [flat[i : i + CITY_STRIDE] for i in range(0, len(flat), CITY_STRIDE)]
+    wanted = {int(kind) for kind in kinds}
+    return [r for r in records if start <= r[2] < end and (not wanted or int(r[0]) in wanted)]
+
+
+def test_the_city_covers_every_block_row_in_all_three_playfield_columns() -> None:
+    rows = {
+        d: {block.col for block in STAGE_1.city if block.d == d}
+        for d in {block.d for block in STAGE_1.city}
+    }
+    expected = {CITY_PITCH * row for row in range(math.ceil(STAGE_1.length / CITY_PITCH))}
+    assert set(rows) == expected
+    assert all(cols == {0, 1, 2} for cols in rows.values())
+
+
+def test_the_city_arc_is_slums_then_downtown_then_the_airbase() -> None:
+    assert {block.style for block in STAGE_1.city} == set(CityStyle)
+    for block in STAGE_1.city:
+        if block.d < DOWNTOWN_AT:
+            assert block.style == CityStyle.SLUMS, block
+        elif block.d < AIRBASE_AT:
+            assert block.style == CityStyle.DOWNTOWN, block
+        else:
+            assert block.style == CityStyle.AIRBASE, block
+
+
+def test_the_maglev_runs_along_x_120_across_the_midboss_marker() -> None:
+    midboss = STAGE_1.marker("midboss")
+    maglev = [f for f in STAGE_1.features if f.kind == SceneryKind.MAGLEV]
+    assert len(maglev) == 1
+    assert maglev[0].x == 120.0
+    assert maglev[0].d0 <= midboss - 400.0
+    assert maglev[0].d1 >= midboss + 800.0
+    assert DOWNTOWN_AT <= maglev[0].d0 <= maglev[0].d1 <= AIRBASE_AT
+
+
+def test_the_runway_lights_lie_in_the_airbase_and_cover_the_boss_marker() -> None:
+    boss = STAGE_1.marker("boss")
+    lights = [f for f in STAGE_1.features if f.kind == SceneryKind.RUNWAY_LIGHT]
+    assert lights
+    assert all(f.d0 >= AIRBASE_AT and f.d0 <= boss <= f.d1 for f in lights)
+
+
+def test_burning_ruins_appear_in_every_section() -> None:
+    boss = STAGE_1.marker("boss")
+    for start, end in ((0.0, DOWNTOWN_AT), (DOWNTOWN_AT, AIRBASE_AT), (AIRBASE_AT, boss)):
+        assert len(_placements(start, end, SceneryKind.FIRE)) >= 4
+
+
+def test_downtown_blocks_carry_signs_and_towers() -> None:
+    downtown = [b for b in STAGE_1.city if b.style == CityStyle.DOWNTOWN]
+    assert all(b.signs >= 1 for b in downtown)
+    assert len(_placements(DOWNTOWN_AT, AIRBASE_AT, SceneryKind.TOWER)) > 20
+    assert len(_placements(DOWNTOWN_AT, AIRBASE_AT, SceneryKind.SIGN)) > 20
+
+
+def test_the_slums_are_low_with_sparse_neon_and_the_airbase_has_hangars() -> None:
+    assert not _placements(0.0, DOWNTOWN_AT, SceneryKind.TOWER)
+    slum_signs = _placements(0.0, DOWNTOWN_AT, SceneryKind.SIGN)
+    assert 0 < len(slum_signs) < len(_placements(DOWNTOWN_AT, AIRBASE_AT, SceneryKind.SIGN))
+    assert len(_placements(AIRBASE_AT, STAGE_1.length, SceneryKind.HANGAR)) > 20
+
+
+def test_the_layout_stays_small_and_below_the_gameplay_plane() -> None:
+    assert 0 < len(STAGE_1.placements) <= 3000 * CITY_STRIDE
+    assert all(r[4] <= CITY_MAX_HEIGHT for r in _placements(0.0, STAGE_1.length * 2))
+
+
+def test_the_maglev_corridor_is_kept_clear_of_buildings() -> None:
+    buildings = _placements(
+        3500.0,
+        5300.0,
+        SceneryKind.TOWER,
+        SceneryKind.LOWRISE,
+        SceneryKind.SLUM_HOUSE,
+        SceneryKind.HANGAR,
+    )
+    assert buildings
+    assert all(abs(r[1] - 120.0) - r[3] / 2 >= 6.0 - 1e-9 for r in buildings)
