@@ -9,6 +9,7 @@ from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import CITY_STRIDE, PLAYFIELD_W
+from scorched_core.stages.city_builder import target_entries
 from scorched_core.stages.city_style import CityStyle
 from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_1 import (
@@ -22,9 +23,11 @@ from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.wave_entry import WaveEntry
 from scorched_core.tuning import (
+    CITY_CORRIDOR_HALF,
     CITY_MAX_HEIGHT,
     CITY_PITCH,
     ENEMY_MAX_ALIVE,
+    ENEMY_RADIUS,
     GROUND_SCROLL_RATIO,
     SCROLL_SPEED,
 )
@@ -232,7 +235,8 @@ def test_the_whole_timeline_never_fills_the_enemy_pool() -> None:
         spawned += director.step(distance, pool)
         pool.step(120.0, 272.0, SCROLL_SPEED * GROUND_SCROLL_RATIO)
         peak = max(peak, pool.n)
-    assert spawned == len(STAGE_1.waves)  # no spawn was refused by the alive cap
+    # no spawn, wave or target row, was refused by the alive cap
+    assert spawned == len(STAGE_1.waves) + len(STAGE_1.ground)
     assert peak <= ENEMY_MAX_ALIVE // 2  # approachable (D-07): half the pool at the very most
 
 
@@ -351,3 +355,86 @@ def test_the_maglev_corridor_is_kept_clear_of_buildings() -> None:
     )
     assert buildings
     assert all(abs(r[1] - 120.0) - r[3] / 2 >= 6.0 - 1e-9 for r in buildings)
+
+
+# --- destructible city targets (plan 03-15) ----------------------------------------------------
+
+TARGET_KINDS = (EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD)
+ONE_SCREEN = 425.0  # distance units the playfield shows at once (about 8.9 s of scroll)
+
+
+def _target_kinds_in(style: CityStyle) -> set[EnemyKind]:
+    return {kind for block in STAGE_1.city if block.style == style for _, kind, _ in block.targets}
+
+
+def test_the_ground_rows_are_the_expansion_of_the_flagged_lots_and_nothing_else() -> None:
+    assert STAGE_1.ground
+    assert STAGE_1.ground == target_entries(STAGE_1.city)
+    assert {entry.kind for entry in STAGE_1.ground} <= set(TARGET_KINDS)
+
+
+def test_the_slums_have_house_and_fuel_tank_targets() -> None:
+    assert _target_kinds_in(CityStyle.SLUMS) == {EnemyKind.HOUSE, EnemyKind.FUEL_TANK}
+
+
+def test_downtown_has_billboard_and_depot_targets() -> None:
+    assert _target_kinds_in(CityStyle.DOWNTOWN) == {EnemyKind.BILLBOARD, EnemyKind.DEPOT}
+
+
+def test_the_airbase_has_fuel_tank_and_depot_targets() -> None:
+    assert _target_kinds_in(CityStyle.AIRBASE) == {EnemyKind.FUEL_TANK, EnemyKind.DEPOT}
+
+
+def test_an_early_slums_target_stands_at_x_40_in_the_left_column() -> None:
+    early = [e for e in STAGE_1.ground if e.at < 1200.0 and e.x == 40.0]
+    assert early
+    assert all(e.kind in (EnemyKind.HOUSE, EnemyKind.FUEL_TANK) for e in early)
+
+
+def test_at_least_half_of_the_targets_drop_a_medal() -> None:
+    medals = [e for e in STAGE_1.ground if e.drop == PickupKind.MEDAL]
+    assert len(medals) * 2 >= len(STAGE_1.ground)
+    assert all(e.drop in (None, PickupKind.MEDAL) for e in STAGE_1.ground)
+
+
+def test_only_selected_buildings_are_targets() -> None:
+    flagged = sum(len(block.targets) for block in STAGE_1.city)
+    assert flagged == len(STAGE_1.ground)
+    assert flagged * 4 < len(STAGE_1.city)  # a minority of the blocks, the rest is scenery
+
+
+def test_targets_keep_the_quiet_before_the_boss() -> None:
+    assert max(e.at for e in STAGE_1.ground) < STAGE_1.marker("boss") - BOSS_QUIET
+
+
+def test_no_target_stands_in_a_maglev_or_runway_corridor() -> None:
+    for feature in (f for f in STAGE_1.features if f.kind != SceneryKind.TOWER):
+        for entry in STAGE_1.ground:
+            radius = ENEMY_RADIUS[entry.kind]
+            inside_x = abs(entry.x - feature.x) < CITY_CORRIDOR_HALF + radius
+            inside_d = feature.d0 <= entry.at <= feature.d1
+            assert not (inside_x and inside_d), (entry, feature)
+
+
+def test_ground_rows_per_screen_budget_never_exceeds_twenty() -> None:
+    ats = [entry.at for entry in STAGE_1.ground]
+    for start in range(0, int(STAGE_1.length), 10):
+        assert sum(1 for at in ats if start <= at < start + ONE_SCREEN) <= 20
+
+
+def test_every_target_spawns_and_an_undamaged_one_scrolls_off_and_is_gone() -> None:
+    """Run the whole stage with nobody shooting: the budget holds and nothing is refused."""
+    director, enemies = StageDirector(STAGE_1), EnemyPool()
+    seen: set[int] = set()
+    most, distance = 0, 0.0
+    while distance < STAGE_1.length:
+        distance += SCROLL_SPEED
+        director.step(distance, enemies)
+        enemies.step(120.0, 270.0, SCROLL_SPEED * GROUND_SCROLL_RATIO)
+        alive = [i for i in range(enemies.n) if enemies.kind[i] in TARGET_KINDS]
+        seen.update(enemies.uid[i] for i in alive)
+        most = max(most, len(alive))
+    assert len(seen) == len(STAGE_1.ground)
+    assert 0 < most <= 20
+    assert not [i for i in range(enemies.n) if enemies.kind[i] in TARGET_KINDS]
+    assert enemies.kills == 0

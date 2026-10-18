@@ -2808,6 +2808,15 @@ def _steps_until_distance(at: float) -> int:
     return steps
 
 
+_TARGET_KINDS = (EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD)
+
+
+def _wave_rows(game: Game) -> list[int]:
+    """The live enemy slots that came from the timeline's waves, not the city's target rows."""
+    enemies = game.enemies
+    return [i for i in range(enemies.n) if enemies.kind[i] not in _TARGET_KINDS]
+
+
 def test_a_stage_game_spawns_the_first_entry_on_the_step_its_distance_is_reached() -> None:
     first = STAGE_1.waves[0]
     game = Game(stage=STAGE_1, god=True)
@@ -2815,10 +2824,11 @@ def test_a_stage_game_spawns_the_first_entry_on_the_step_its_distance_is_reached
     assert due > 1
     for _ in range(due - 1):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-        assert game.enemies.n == 0
+        assert not _wave_rows(game)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.enemies.n >= 1
-    assert game.enemies.kind[0] == first.kind
+    rows = _wave_rows(game)
+    assert rows
+    assert game.enemies.kind[rows[0]] == first.kind
 
 
 def test_a_stage_game_does_not_run_the_gallery_script() -> None:
@@ -2869,7 +2879,7 @@ def test_the_first_spread_wave_fires_count_bullets_fanned_around_the_ship_direct
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
         if game.ebullets.n:
             break
-    assert game.enemies.pattern[0] == pattern_index("spread3")
+    assert game.enemies.pattern[_wave_rows(game)[0]] == pattern_index("spread3")
     assert game.ebullets.n == spec.count == 3  # exactly the first volley, nothing else yet
     muzzle_x, muzzle_y = game.ebullets.x[0], game.ebullets.y[0]
     aim = math.atan2(game.ship.x - muzzle_x, -(game.ship.y - muzzle_y))
@@ -3516,7 +3526,8 @@ def test_restart_replays_the_at_marker_jump_restart() -> None:
     assert game.terrain.distance == start
     assert game.director is not None
     assert game.director.cursor > 0
-    assert game.director.step(game.terrain.distance, game.enemies) == 0  # skipped rows stay skipped
+    game.director.step(game.terrain.distance, game.enemies)
+    assert not _wave_rows(game)  # skipped waves stay skipped; only on-screen targets respawn
 
 
 def test_restart_without_a_marker_starts_at_the_top_of_the_stage_restart() -> None:
