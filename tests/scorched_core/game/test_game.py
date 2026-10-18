@@ -96,6 +96,11 @@ from scorched_core.protocol import (
     H_STEPS,
     H_STORM_HITS,
     H_STORM_N,
+    H_TALLY_BOMBS,
+    H_TALLY_BOSS,
+    H_TALLY_MEDALS,
+    H_TALLY_N,
+    H_TALLY_NO_MISS,
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
@@ -126,6 +131,7 @@ from scorched_core.tuning import (
     BOMB_RADIUS_MIN,
     BOMB_START_STOCK,
     BOSS_CRAWL_SPEED,
+    CLEAR_TICKS,
     DEATHBOMB_TICKS,
     DYING_TICKS,
     ENEMY_FIRE_DELAY,
@@ -156,6 +162,11 @@ from scorched_core.tuning import (
     SHIP_SPEED,
     SHIP_START_X,
     SHIP_START_Y,
+    TALLY_BOMB_BONUS,
+    TALLY_BOSS_BONUS,
+    TALLY_LINE_TICKS,
+    TALLY_MEDAL_BONUS,
+    TALLY_NO_MISS_BONUS,
     WARNING_TICKS,
 )
 from scorched_core.weapons.bomb_phase import BombPhase
@@ -4358,7 +4369,7 @@ def test_the_bomber_is_destroyed_by_the_laser_and_the_stage_goes_on_to_clear() -
     assert header[H_BOSS_ACTIVE] == 0
     assert game.enemies.n == 0  # the bomber's rows are gone and so is everything else
     assert game.ebullets.n == 0
-    for _ in range(120):  # CLEAR holds, and nothing can hit the ship while it plays out
+    for _ in range(CLEAR_TICKS - 1):  # CLEAR holds, and nothing can hit the ship while it plays
         _fire_tick(game)
         assert header[H_FLOW] == FlowState.CLEAR
         assert game.enemies.n == 0
@@ -4490,3 +4501,69 @@ def test_shooting_the_bomber_down_pays_only_its_parts_not_the_kill() -> None:
             break
     assert game.flow.boss_destroyed is True
     assert header[H_SCORE] == 28000  # the hull kill itself pays nothing (D-18)
+
+
+# --- the stage-clear tally (plan 03-21) -------------------------------------------------------
+
+_TALLY_SLOTS = (H_TALLY_BOSS, H_TALLY_MEDALS, H_TALLY_NO_MISS, H_TALLY_BOMBS)
+
+
+def _tally_header(game: Game) -> list[int]:
+    header = game.buffers["header"]
+    return [int(header[slot]) for slot in (*_TALLY_SLOTS, H_TALLY_N)]
+
+
+def test_the_tally_slots_are_zero_before_the_boss_and_in_the_gallery() -> None:
+    game = _boss_game()
+    _tick_n(game, 5)
+    assert _tally_header(game) == [0, 0, 0, 0, 0]
+    gallery = Game()
+    _tick_n(gallery, 5)
+    assert _tally_header(gallery) == [0, 0, 0, 0, 0]
+
+
+def test_the_boss_kill_leads_to_clear_then_a_tally_that_adds_four_lines_to_the_score() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    states: list[int] = []
+    for _ in range(9000):
+        _fire_tick(game)
+        state = int(header[H_FLOW])
+        if not states or states[-1] != state:
+            states.append(state)
+        if state == FlowState.TALLY:
+            break
+    assert states[-2:] == [FlowState.CLEAR, FlowState.TALLY]
+    assert _tally_header(game)[4] == 0  # nothing revealed on the first TALLY step
+    medals = game.chain.collected
+    expected = [
+        TALLY_BOSS_BONUS,
+        medals * TALLY_MEDAL_BONUS,
+        TALLY_NO_MISS_BONUS,
+        game.bomb.stock * TALLY_BOMB_BONUS,
+    ]
+    assert _tally_header(game)[:4] == expected
+    before = int(header[H_SCORE])
+    revealed: list[int] = []
+    for _ in range(3 * TALLY_LINE_TICKS + 1):
+        _fire_tick(game)
+        n = int(header[H_TALLY_N])
+        if not revealed or revealed[-1] != n:
+            revealed.append(n)
+    assert revealed == [1, 2, 3, 4]
+    assert int(header[H_SCORE]) == before + sum(expected)
+    assert int(header[H_FLOW]) == FlowState.TALLY
+
+
+def test_the_tally_slots_return_to_zero_when_the_run_restarts() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    for _ in range(9000):
+        _fire_tick(game)
+        if header[H_FLOW] == FlowState.TALLY:
+            break
+    _tick_n(game, TALLY_LINE_TICKS + 5)
+    assert _tally_header(game)[4] >= 1
+    game.restart()
+    assert _tally_header(game) == [0, 0, 0, 0, 0]
+    assert game.flow.tally.revealed == 0

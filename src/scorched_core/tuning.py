@@ -200,6 +200,20 @@ LIVES_CAP: Final = 9
 EXTEND_FIRST: Final = 200_000
 EXTEND_EVERY: Final = 500_000
 
+# The stage-clear tally (SCOR-03, D-18, D-27), all tunable. The boss's end holds CLEAR_TICKS, then
+# the four bonus lines are counted up one every TALLY_LINE_TICKS and held TALLY_HOLD_TICKS after
+# the last; STAGE CLEAR shows for STAGE_CLEAR_TICKS before stage 1 starts again. Lines: the boss
+# (nothing if it retreated), each medal caught this stage, a flawless stage (no ship lost) and each
+# bomb still in stock.
+CLEAR_TICKS: Final = 120
+TALLY_LINE_TICKS: Final = 60
+TALLY_HOLD_TICKS: Final = 120
+STAGE_CLEAR_TICKS: Final = 150
+TALLY_BOSS_BONUS: Final = 100_000
+TALLY_MEDAL_BONUS: Final = 1_000
+TALLY_NO_MISS_BONUS: Final = 50_000
+TALLY_BOMB_BONUS: Final = 10_000
+
 # Helicopters (D-17): descend to HOVER_STOP_Y, hold there drifting side to side, then leave.
 HOVER_STOP_Y: Final = 96.0
 HOVER_HOLD_TICKS: Final = 240

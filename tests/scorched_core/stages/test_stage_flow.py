@@ -11,11 +11,14 @@ from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import (
     EV_BOSS_WARNING,
     EV_EXPLOSION,
+    EV_EXTEND,
     EV_GAME_OVER,
     EV_STAGE_START,
+    EV_TALLY_LINE,
     EVENT_SOFT_CAP,
     EVENT_STRIDE,
 )
+from scorched_core.scoring.medal_chain import MedalChain
 from scorched_core.scoring.score_keeper import ScoreKeeper
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.stage_data import StageData
@@ -23,10 +26,14 @@ from scorched_core.stages.stage_flow import StageFlow
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.tuning import (
     BOSS_CRAWL_SPEED,
+    CLEAR_TICKS,
     ENEMY_MAX_ALIVE,
+    EXTEND_FIRST,
     INTRO_TICKS,
     MIDBOSS_CRAWL_SPEED,
     SCROLL_SPEED,
+    TALLY_HOLD_TICKS,
+    TALLY_LINE_TICKS,
     WARNING_TICKS,
 )
 
@@ -471,7 +478,7 @@ def test_clear_holds_and_pushes_nothing_more() -> None:
     flow.boss.state = BossState.GONE
     flow.step()
     flow.events.clear()
-    for _ in range(600):
+    for _ in range(CLEAR_TICKS - 1):
         flow.step()
     assert flow.state == FlowState.CLEAR
     assert flow.events.n == 0
@@ -601,3 +608,203 @@ def test_a_boss_state_with_no_controller_clears_as_not_destroyed() -> None:
     flow.step()
     assert flow.state == FlowState.CLEAR
     assert flow.boss_destroyed is False
+
+
+# --- the stage-clear tally (plan 03-21) ----------------------------------------------------------
+
+
+def make_clear_flow(
+    *, destroyed: bool = True, medals: int = 0, bombs: int = 0, deaths: int = 0
+) -> StageFlow:
+    """A flow just inside CLEAR: ``medals`` caught, ``deaths`` ships lost, ``bombs`` left."""
+    flow = make(FlowState.CLEAR)
+    flow.chain = MedalChain(collected=medals)
+    flow.get_bombs = lambda: bombs
+    flow.life.deaths = deaths
+    flow.boss_destroyed = destroyed
+    return flow
+
+
+def enter_tally(flow: StageFlow) -> None:
+    """Step a CLEAR flow through its hold into the first TALLY state, no line revealed yet."""
+    for _ in range(CLEAR_TICKS):
+        flow.step()
+    assert flow.state == FlowState.TALLY
+    flow.events.clear()
+
+
+def tally_lines(flow: StageFlow) -> list[tuple[int, int]]:
+    """Every TALLY_LINE event in the ring as (index, amount)."""
+    found = []
+    for i in range(flow.events.n):
+        kind, _, _, index, amount, _ = record(flow, i)
+        if kind == EV_TALLY_LINE:
+            found.append((int(index), int(amount)))
+    return found
+
+
+def test_the_tally_constants_pin_the_timing_of_the_design() -> None:
+    assert (CLEAR_TICKS, TALLY_LINE_TICKS, TALLY_HOLD_TICKS) == (120, 60, 120)
+
+
+def test_clear_holds_for_clear_ticks_and_then_the_tally_begins() -> None:
+    flow = make_clear_flow()
+    for _ in range(CLEAR_TICKS - 1):
+        flow.step()
+        assert flow.state == FlowState.CLEAR
+    flow.step()
+    assert flow.state == FlowState.TALLY
+    assert flow.timer == 0
+    assert flow.spawning is False
+
+
+def test_a_flow_has_an_empty_tally_until_the_tally_begins() -> None:
+    flow = make_clear_flow(medals=3)
+    assert flow.tally.amounts == [0, 0, 0, 0]
+    flow.step()
+    assert flow.tally.amounts == [0, 0, 0, 0]
+
+
+def test_the_tally_is_worked_out_from_the_stage_results_when_it_begins() -> None:
+    flow = make_clear_flow(destroyed=True, medals=7, bombs=2, deaths=0)
+    enter_tally(flow)
+    assert flow.tally.amounts == [100_000, 7_000, 50_000, 20_000]
+    assert flow.tally.revealed == 0
+
+
+def test_a_retreated_boss_a_lost_ship_and_no_bombs_pay_zero_on_their_lines() -> None:
+    flow = make_clear_flow(destroyed=False, medals=2, bombs=0, deaths=0)
+    flow.life.deaths = 1  # a ship lost this stage
+    enter_tally(flow)
+    assert flow.tally.amounts == [0, 2_000, 0, 0]
+
+
+def test_the_bomb_line_counts_the_bombs_in_stock_when_the_tally_begins() -> None:
+    stock = [3]
+    flow = make_clear_flow()
+    flow.get_bombs = lambda: stock[0]
+    for _ in range(CLEAR_TICKS - 1):
+        flow.step()
+    stock[0] = 1  # a bomb used during the last step of the hold
+    flow.step()
+    assert flow.tally.amounts[3] == 10_000
+
+
+def test_deaths_and_medals_are_counted_from_the_start_of_the_stage() -> None:
+    flow = make(FlowState.INTRO)
+    flow.chain = MedalChain(collected=9)
+    flow.life.deaths = 4  # lost in an earlier loop
+    flow.step()  # the first INTRO step re-bases both counters
+    assert flow.chain.collected == 0
+    flow.state = FlowState.CLEAR
+    flow.chain.collected = 2
+    flow.boss_destroyed = True
+    enter_tally(flow)
+    assert flow.tally.amounts == [100_000, 2_000, 50_000, 0]
+    flow2 = make(FlowState.INTRO)
+    flow2.life.deaths = 4
+    flow2.step()
+    flow2.life.deaths = 5  # and one ship lost during this stage
+    flow2.state = FlowState.CLEAR
+    enter_tally(flow2)
+    assert flow2.tally.amounts[2] == 0
+
+
+def test_the_first_line_is_revealed_at_once_and_one_more_every_line_interval() -> None:
+    flow = make_clear_flow(medals=7, bombs=2)
+    enter_tally(flow)
+    expected = [(0, 100_000), (1, 7_000), (2, 50_000), (3, 20_000)]
+    for line, pair in enumerate(expected):
+        flow.events.clear()
+        flow.step()
+        assert flow.tally.revealed == line + 1
+        assert tally_lines(flow) == [pair]
+        for _ in range(TALLY_LINE_TICKS - 1):
+            flow.events.clear()
+            flow.step()
+            assert tally_lines(flow) == []
+            assert flow.state == FlowState.TALLY
+
+
+def test_each_revealed_line_is_added_to_the_score_exactly_once() -> None:
+    flow = make_clear_flow(medals=7, bombs=2)
+    enter_tally(flow)
+    scores = []
+    for _ in range(3 * TALLY_LINE_TICKS + 1):
+        flow.step()
+        if not scores or scores[-1] != flow.score.score:
+            scores.append(flow.score.score)
+    assert scores == [100_000, 107_000, 157_000, 177_000]
+    for _ in range(TALLY_HOLD_TICKS + 5):
+        flow.step()
+    assert flow.score.score == 177_000
+
+
+def test_a_line_that_crosses_an_extend_threshold_grants_the_ship() -> None:
+    flow = make_clear_flow()
+    flow.score.score = EXTEND_FIRST - 1
+    lives = flow.score.lives
+    enter_tally(flow)
+    flow.step()  # the boss line, 100000 on top of a score just under the threshold
+    assert flow.score.lives == lives + 1
+    kinds = [record(flow, i)[0] for i in range(flow.events.n)]
+    assert EV_EXTEND in kinds
+    assert EV_TALLY_LINE in kinds
+
+
+def test_an_all_zero_tally_still_reveals_four_lines() -> None:
+    flow = make_clear_flow(destroyed=False, medals=0, bombs=0)
+    flow.life.deaths = 1
+    enter_tally(flow)
+    seen = []
+    for _ in range(3 * TALLY_LINE_TICKS + 1):
+        flow.step()
+        seen.extend(tally_lines(flow))
+        flow.events.clear()
+    assert seen == [(0, 0), (1, 0), (2, 0), (3, 0)]
+    assert flow.score.score == 0
+
+
+def test_the_tally_holds_after_the_fourth_line_and_then_the_stage_clear_follows() -> None:
+    flow = make_clear_flow()
+    enter_tally(flow)
+    for _ in range(3 * TALLY_LINE_TICKS + 1):
+        flow.step()
+    assert flow.tally.revealed == 4
+    for _ in range(TALLY_HOLD_TICKS - 1):
+        flow.step()
+        assert flow.state == FlowState.TALLY
+    flow.step()
+    assert flow.state == FlowState.STAGE_CLEAR
+    assert flow.spawning is False
+
+
+def test_the_tally_amounts_stay_until_the_stage_clear_restarts_the_stage() -> None:
+    flow = make_clear_flow(medals=1)
+    enter_tally(flow)
+    for _ in range(3 * TALLY_LINE_TICKS + 1 + TALLY_HOLD_TICKS):
+        flow.step()
+    assert flow.state == FlowState.STAGE_CLEAR
+    assert flow.tally.amounts == [100_000, 1_000, 50_000, 0]
+    assert flow.tally.revealed == 4
+
+
+def test_game_over_during_the_tally_wins_and_forgets_it() -> None:
+    flow = make_clear_flow(medals=3)
+    enter_tally(flow)
+    flow.step()
+    assert flow.tally.revealed == 1
+    flow.life.phase = PlayerPhase.OUT
+    flow.step()
+    assert flow.state == FlowState.GAME_OVER
+    assert flow.tally.amounts == [0, 0, 0, 0]
+    assert flow.tally.revealed == 0
+
+
+def test_reset_forgets_the_tally() -> None:
+    flow = make_clear_flow(medals=3)
+    enter_tally(flow)
+    flow.step()
+    flow.reset()
+    assert flow.tally.amounts == [0, 0, 0, 0]
+    assert flow.tally.revealed == 0
