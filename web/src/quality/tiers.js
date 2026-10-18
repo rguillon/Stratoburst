@@ -1,10 +1,11 @@
-// Quality tier ladder. Presentation only: DPR, canvas pixel budget and bloom mode.
+// Quality tier ladder. Presentation only: DPR, canvas pixel budget, bloom mode and the share of
+// each explosion's particles that is spawned (the explosion's size never changes).
 // Nothing here reaches Python, so every device plays the same simulation.
 
 export const TIERS = Object.freeze({
-  high: Object.freeze({ name: 'high', dprCap: 2, maxPixels: 2_800_000, bloom: 'full' }),
-  mid: Object.freeze({ name: 'mid', dprCap: 1.5, maxPixels: 1_200_000, bloom: 'half' }),
-  low: Object.freeze({ name: 'low', dprCap: 1, maxPixels: 600_000, bloom: 'off' }),
+  high: Object.freeze({ name: 'high', dprCap: 2, maxPixels: 2_800_000, bloom: 'full', particleScale: 1 }),
+  mid: Object.freeze({ name: 'mid', dprCap: 1.5, maxPixels: 1_200_000, bloom: 'half', particleScale: 0.6 }),
+  low: Object.freeze({ name: 'low', dprCap: 1, maxPixels: 600_000, bloom: 'off', particleScale: 0.35 }),
 });
 
 // Lowest to highest; the controller steps down by moving toward index 0.

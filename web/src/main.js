@@ -119,6 +119,7 @@ async function main() {
     events: manifest.events,
     blast: manifest.blast,
     toWorld: (x, y, out) => rig.toWorld(x, y, out),
+    getScale: () => TIERS[currentTier].particleScale,
   });
   const fx = createFxDispatcher({ handlers: [explosionFx] });
   let fxTime = 0;

@@ -20,10 +20,10 @@ function build(options = {}) {
 }
 
 describe('createExplosionFx', () => {
-  it('turns a SMALL explosion into one core flash plus 20 sparks on the additive layer', () => {
+  it('spawns a SMALL explosion on the additive layer at the converted event position', () => {
     const { fx, emitted } = build();
     fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.SMALL, 0, 0);
-    expect(emitted.additive).toHaveLength(21);
+    expect(emitted.additive).toHaveLength(27);
     expect(emitted.normal).toHaveLength(0);
     const [core] = emitted.additive;
     expect(core.slice(0, 3)).toEqual([10, 0, 10]); // toWorld(130, 170)
@@ -34,7 +34,7 @@ describe('createExplosionFx', () => {
   it('throws sparks in horizontal directions at 30-70 units per second', () => {
     const { fx, emitted } = build();
     fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.SMALL, 0, 0);
-    for (const p of emitted.additive.slice(1)) {
+    for (const p of emitted.additive.slice(1, 21)) {
       expect(p[4]).toBe(0); // no vertical velocity
       const speed = Math.hypot(p[3], p[5]);
       expect(speed).toBeGreaterThanOrEqual(30 - 1e-6);
@@ -52,7 +52,6 @@ describe('createExplosionFx', () => {
 
   it('ignores other event types', () => {
     const { fx, emitted } = build();
-    fx.handle(EVENTS.HIT, 1, 2, 0, 0, 0);
     fx.handle(99, 1, 2, 0, 0, 0);
     expect(emitted.additive).toHaveLength(0);
   });

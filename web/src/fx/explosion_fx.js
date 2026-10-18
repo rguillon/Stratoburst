@@ -19,34 +19,48 @@ export function mulberry32(seed) {
   };
 }
 
-const CORE_SMALL = {
-  layer: 'additive',
-  count: 1,
-  life: [0.18, 0.18],
-  speed: [0, 0],
-  size: [10, 18],
-  color: [4.0, 2.6, 1.2],
-  gravity: 0,
-  spread: 0,
-};
-const SPARKS_SMALL = {
-  layer: 'additive',
-  count: 20,
-  life: [0.35, 0.6],
-  speed: [30, 70],
-  size: [2.5, 0.5],
-  color: [3.2, 2.2, 0.9],
-  gravity: 0,
-  spread: 0,
-};
+// Emitter fields: layer, count (at full quality), life [min, max] s, speed [min, max] world
+// units/s, size [start, end], HDR colour, gravity scale (negative rises) and spread (share of the
+// speed thrown upward; 0 keeps the burst flat on the ground plane).
+function emitter(layer, count, life, speed, size, color, gravity = 0, spread = 0) {
+  return Object.freeze({ layer, count, life, speed, size, color, gravity, spread });
+}
 
-// Keyed by blast class value (filled from the manifest in createExplosionFx).
+const CORE = (size, life, color) => emitter('additive', 1, [life, life], [0, 0], size, color);
+const SPARKS = (count) => emitter('additive', count, [0.35, 0.6], [30, 70], [2.5, 0.5], [3.2, 2.2, 0.9]);
+const FIRE = (count, speed, size, life) =>
+  emitter('additive', count, life, speed, size, [3.4, 1.6, 0.4], 0, 0.3);
+const SMOKE = (count) =>
+  emitter('normal', count, [1.0, 1.6], [8, 20], [6, 16], [0.18, 0.16, 0.15], -0.15, 0.4);
+
+// Keyed by the manifest blast class names (SMALL, MEDIUM, LARGE).
 export const RECIPES = Object.freeze({
-  SMALL: Object.freeze([CORE_SMALL, SPARKS_SMALL]),
+  SMALL: Object.freeze([
+    CORE([10, 18], 0.18, [4.0, 2.6, 1.2]),
+    SPARKS(20),
+    emitter('additive', 6, [0.6, 0.9], [10, 25], [2, 0.6], [3.0, 1.4, 0.4], 0.3, 0.5),
+  ]),
+  MEDIUM: Object.freeze([
+    CORE([18, 30], 0.25, [4.0, 2.4, 1.0]),
+    FIRE(16, [15, 40], [6, 12], [0.5, 0.8]),
+    SPARKS(10),
+    SMOKE(10),
+  ]),
+  LARGE: Object.freeze([
+    CORE([26, 44], 0.32, [4.0, 2.4, 1.0]),
+    FIRE(30, [20, 55], [8, 16], [0.6, 1.0]),
+    SMOKE(18),
+    emitter('normal', 14, [0.8, 1.4], [30, 60], [3, 2], [0.12, 0.1, 0.09], 1, 0.9),
+    SPARKS(12),
+  ]),
 });
 
+export const HIT_RECIPE = Object.freeze([
+  emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], [3, 3, 3]),
+]);
+
 export function createExplosionFx({ layers, events, blast, toWorld, getScale = () => 1, rng = mulberry32(0x5c0c7ed) }) {
-  const byBlast = new Map([[blast.SMALL, RECIPES.SMALL]]);
+  const byBlast = new Map(Object.keys(RECIPES).map((name) => [blast[name], RECIPES[name]]));
 
   function between(range) {
     return range[0] + (range[1] - range[0]) * rng();
@@ -85,6 +99,8 @@ export function createExplosionFx({ layers, events, blast, toWorld, getScale = (
     if (type === events.EXPLOSION) {
       const emitters = byBlast.get(a);
       if (emitters) burst(emitters, x, y);
+    } else if (type === events.HIT) {
+      burst(HIT_RECIPE, x, y);
     }
   }
 
