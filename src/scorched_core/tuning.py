@@ -4,6 +4,7 @@ from typing import Final
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL, PLAYFIELD_H, PLAYFIELD_W
 
 # About 1.2 s to cross the playfield width at 60 steps per second (D-10).
@@ -90,6 +91,7 @@ _SWAY: Final = MotionKind.SWAY
 _GROUND: Final = MotionKind.GROUND
 _TANK: Final = EnemyKind.TANK
 _TURRET: Final = EnemyKind.TURRET
+_CRYSTAL: Final = PickupKind.CRYSTAL
 GALLERY_SCRIPT: Final = (
     (30, _JET, 60.0, -12.0, _DIVE, 0.5, 2.2, -1),  # a V from the top
     (42, _JET, 120.0, -12.0, _DIVE, 0.0, 2.4, -1),
@@ -98,7 +100,7 @@ GALLERY_SCRIPT: Final = (
     (230, _HELI, 160.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (300, _TANK, 70.0, -16.0, _GROUND, 0.25, 0.0, -1),  # ground units crawl with the terrain
     (340, _TURRET, 60.0, -16.0, _GROUND, 0.0, 0.0, -1),
-    (400, _CARRIER, 120.0, -18.0, _SWAY, 0.0, 0.5, -1),
+    (400, _CARRIER, 120.0, -18.0, _SWAY, 0.0, 0.5, _CRYSTAL),
     (520, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),  # sweeping in from the left
     (535, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),
     (550, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),
@@ -110,12 +112,23 @@ GALLERY_SCRIPT: Final = (
     (860, _HELI, 120.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (900, _JET, 50.0, -12.0, _SWAY, 0.0, 1.1, -1),
     (900, _JET, 190.0, -12.0, _SWAY, 0.0, 1.1, -1),
-    (1000, _CARRIER, 70.0, -18.0, _SWAY, 0.0, 0.5, -1),
+    (1000, _CARRIER, 70.0, -18.0, _SWAY, 0.0, 0.5, _CRYSTAL),
     (1060, _JET, 100.0, -12.0, _DIVE, 0.3, 2.3, -1),
     (1072, _JET, 140.0, -12.0, _DIVE, -0.3, 2.3, -1),
     (1120, _TANK, 90.0, -16.0, _GROUND, 0.2, 0.0, -1),
     (1135, _TANK, 150.0, -16.0, _GROUND, -0.2, 0.0, -1),
 )
+
+# Pickups (PLYR-04, D-16): a carrier's crystal cycles red, blue, purple every CRYSTAL_CYCLE_TICKS,
+# is launched up and sideways at CRYSTAL_SPEED, and is caught by the ship's body (a grab circle
+# around its centre), not by the small hitbox core. After PICKUP_LIFE_TICKS it stops bouncing
+# and drifts off the bottom at PICKUP_EXIT_SPEED.
+CRYSTAL_CYCLE_TICKS: Final = 90
+CRYSTAL_SPEED: Final = 0.8
+PICKUP_RADIUS: Final = 6.0
+PICKUP_GRAB_RADIUS: Final = 10.0
+PICKUP_LIFE_TICKS: Final = 600
+PICKUP_EXIT_SPEED: Final = 0.8
 
 # Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS must stay at or below it
 # so a 3x3 query suffices.

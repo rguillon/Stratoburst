@@ -8,8 +8,10 @@ from typing import Final
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.clock.refresh_estimator import RefreshEstimator
 from scorched_core.collision.circle_hits import resolve_shots_vs_enemies
+from scorched_core.collision.ship_hits import resolve_pickups_vs_ship
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.events.event_ring import EventRing
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
@@ -17,6 +19,7 @@ from scorched_core.input.button import Button
 from scorched_core.input.input_frame import InputFrame
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
+from scorched_core.pools.pickup_pool import PickupPool
 from scorched_core.protocol import (
     BLAST_LARGE,
     BLAST_MEDIUM,
@@ -51,6 +54,7 @@ from scorched_core.protocol import (
     H_KILLS,
     H_LEVEL,
     H_PBULLET_N,
+    H_PICKUP_N,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
@@ -61,6 +65,8 @@ from scorched_core.protocol import (
     HEADER_LEN,
     PBULLET_CAP,
     PBULLET_STRIDE,
+    PICKUP_CAP,
+    PICKUP_STRIDE,
     PLAYFIELD_H,
     PLAYFIELD_W,
     PROTOCOL_VERSION,
@@ -101,6 +107,7 @@ _HEADER_SLOTS: dict[str, int] = {
     "EVENT_N": H_EVENT_N,
     "EVENT_DROPPED": H_EVENT_DROPPED,
     "WEAPON": H_WEAPON,
+    "PICKUP_N": H_PICKUP_N,
     "LEVEL": H_LEVEL,
 }
 
@@ -133,6 +140,7 @@ class Game:
         "_firing",
         "_move_x",
         "_move_y",
+        "_on_pickup",
         "_runner",
         "_scratch",
         "buffers",
@@ -147,6 +155,7 @@ class Game:
         "loadout",
         "paused",
         "pbullets",
+        "pickups",
         "refresh",
         "rng",
         "ship",
@@ -178,6 +187,8 @@ class Game:
         self.vulcan = Vulcan()
         self.events = EventRing()
         self.enemies = EnemyPool()
+        self.pickups = PickupPool()
+        self._on_pickup = self._collect_pickup  # bound once: no closure is built per step
         self.gallery = GallerySpawner()
         self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, ENEMY_CAP)
         self._scratch = array("i", bytes(4 * ENEMY_CAP))
@@ -197,6 +208,7 @@ class Game:
             "pbullets": array("f", bytes(4 * PBULLET_STRIDE * PBULLET_CAP)),
             "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self.ebullet_cap)),
             "enemies": array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP)),
+            "pickups": array("f", bytes(4 * PICKUP_STRIDE * PICKUP_CAP)),
             "events": self.events.buf,
         }
 
@@ -210,6 +222,7 @@ class Game:
                 "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
                 "ebullets": {"stride": EBULLET_STRIDE, "cap": self.ebullet_cap},
                 "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
+                "pickups": {"stride": PICKUP_STRIDE, "cap": PICKUP_CAP},
                 "events": {"stride": EVENT_STRIDE, "cap": EVENT_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
@@ -217,6 +230,7 @@ class Game:
             "events": dict(_EVENT_KINDS),
             "blast": dict(_BLAST_CLASSES),
             "enemy_kinds": {kind.name: kind.value for kind in EnemyKind},
+            "pickup_kinds": {kind.name: kind.value for kind in PickupKind},
             "weapons": {kind.name: kind.value for kind in WeaponKind},
             "outcomes": {outcome.name: outcome.value for outcome in PickupOutcome},
             "tuning": {
@@ -274,6 +288,7 @@ class Game:
         if steps > 0:
             self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
             self.enemies.pack_into(self.buffers["enemies"])
+            self.pickups.pack_into(self.buffers["pickups"])
             self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 
@@ -291,6 +306,7 @@ class Game:
         header[H_TICK_COUNT] = self.tick_count
         header[H_PBULLET_N] = self.pbullets.n
         header[H_ENEMY_N] = self.enemies.n
+        header[H_PICKUP_N] = self.pickups.n
         header[H_KILLS] = self.enemies.kills
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
@@ -298,6 +314,22 @@ class Game:
         header[H_EVENT_DROPPED] = self.events.dropped
         header[H_WEAPON] = int(self.loadout.kind)
         header[H_LEVEL] = self.loadout.level
+
+    def _drop_crystals(self) -> None:
+        """Spawn a crystal at the position of every enemy killed this step that drops one."""
+        enemies = self.enemies
+        for k in range(enemies.kill_n):
+            if enemies.kill_drop[k] == PickupKind.CRYSTAL:
+                self.pickups.spawn_crystal(enemies.kill_x[k], enemies.kill_y[k])
+
+    def _collect_pickup(self, kind: int, color: int, x: float, y: float) -> None:
+        """Apply a caught pickup to the loadout and announce it as one PICKUP event.
+
+        A BOMB is not a weapon colour; plan 02-26 adds its STOCKED path, and until then no BOMB
+        pickup is ever spawned.
+        """
+        outcome = self.loadout.collect(WeaponKind(color))
+        self.events.push(EV_PICKUP, x, y, kind, outcome, color)
 
     def _step(self) -> None:
         self.terrain.step()
@@ -319,6 +351,9 @@ class Game:
             self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events
         )
         self.enemies.remove_dead(self.events)
+        self._drop_crystals()
+        self.pickups.step()
+        resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1

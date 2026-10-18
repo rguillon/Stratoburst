@@ -2,6 +2,7 @@ import pytest
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import PLAYFIELD_W
 from scorched_core.stages.gallery_spawner import GallerySpawner, ScriptEntry
@@ -195,3 +196,10 @@ def test_script_entries_enter_from_outside_the_visible_field_with_a_known_kind()
         assert from_top or from_left or from_right
         assert -ENEMY_EXIT_MARGIN < x < PLAYFIELD_W + ENEMY_EXIT_MARGIN
         assert drop >= -1
+
+
+def test_both_carriers_carry_a_crystal_and_nothing_else_drops_anything() -> None:
+    carriers = [entry for entry in GALLERY_SCRIPT if entry[1] == EnemyKind.CARRIER]
+    assert len(carriers) == 2
+    assert all(entry[7] == PickupKind.CRYSTAL for entry in carriers)
+    assert all(entry[7] == -1 for entry in GALLERY_SCRIPT if entry[1] != EnemyKind.CARRIER)

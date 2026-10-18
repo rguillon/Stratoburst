@@ -9,6 +9,7 @@ import pytest
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
@@ -18,6 +19,7 @@ from scorched_core.protocol import (
     ENEMY_STRIDE,
     EV_EXPLOSION,
     EV_HIT,
+    EV_PICKUP,
     EV_SHOT,
     EVENT_CAP,
     EVENT_STRIDE,
@@ -32,6 +34,7 @@ from scorched_core.protocol import (
     H_KILLS,
     H_LEVEL,
     H_PBULLET_N,
+    H_PICKUP_N,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
@@ -42,6 +45,8 @@ from scorched_core.protocol import (
     HEADER_LEN,
     PBULLET_CAP,
     PBULLET_STRIDE,
+    PICKUP_CAP,
+    PICKUP_STRIDE,
 )
 from scorched_core.tuning import (
     ENEMY_MAX_ALIVE,
@@ -69,15 +74,18 @@ def test_manifest_contract() -> None:
     assert header["len"] == 48
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
-    assert len(header["slots"]) == 16
+    assert header["slots"]["PICKUP_N"] == 15 == H_PICKUP_N
+    assert len(header["slots"]) == 17
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
         "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
+        "pickups": {"stride": 4, "cap": 16},
         "events": {"stride": 6, "cap": 128},
     }
+    assert manifest["pickup_kinds"] == {"RED": 0, "BLUE": 1, "PURPLE": 2, "CRYSTAL": 3, "BOMB": 4}
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
     assert manifest["enemy_kinds"] == {"JET": 0, "HELI": 1, "CARRIER": 2, "TANK": 3, "TURRET": 4}
 
@@ -176,6 +184,7 @@ def test_buffer_lengths_and_zero_fill() -> None:
         "pbullets": PBULLET_STRIDE * PBULLET_CAP,
         "ebullets": EBULLET_STRIDE * 750,
         "enemies": ENEMY_STRIDE * ENEMY_CAP,
+        "pickups": PICKUP_STRIDE * PICKUP_CAP,
         "events": EVENT_STRIDE * EVENT_CAP,
     }
     assert all(v == 0.0 for buf in game.buffers.values() for v in buf)
@@ -901,3 +910,105 @@ def test_a_turret_aims_at_the_ship_through_the_game_step() -> None:
     assert game.enemies.aux[0] == pytest.approx(expected, abs=1e-5)
     assert game.buffers["enemies"][6] == game.enemies.aux[0]
     assert game.enemies.aux[0] < 0.0
+
+
+# --- carrier drops and crystal pickups (plan 02-10) -----------------------------------------
+
+
+def _kill_carrier(game: Game, x: float, y: float, drop: int = PickupKind.CRYSTAL) -> None:
+    """Park a one-hp carrier carrying ``drop`` just above a bolt that reaches it next step."""
+    enemies = game.enemies
+    enemies.n = 0
+    enemies.spawn(EnemyKind.CARRIER, x, y, MotionKind.SWAY, 0.0, 0.0, drop)
+    enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def _tick(game: Game) -> None:
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_a_killed_carrier_drops_one_crystal_at_its_kill_position() -> None:
+    game = Game()
+    _kill_carrier(game, 120.0, 80.0)
+    _tick(game)
+    pickups = game.pickups
+    assert pickups.n == 1
+    assert pickups.kind[0] == PickupKind.CRYSTAL
+    assert pickups.x[0] == pytest.approx(120.0, abs=3.0)  # the carrier swayed one step
+    assert pickups.y[0] == pytest.approx(80.0, abs=1.0)  # then the crystal was launched upward
+    assert game.buffers["header"][H_PICKUP_N] == 1
+
+
+def test_a_killed_enemy_without_a_drop_leaves_no_pickup() -> None:
+    game = Game()
+    _kill_carrier(game, 120.0, 80.0, drop=-1)
+    _tick(game)
+    assert game.buffers["header"][H_KILLS] == 1
+    assert game.pickups.n == 0
+    assert game.buffers["header"][H_PICKUP_N] == 0
+
+
+def test_the_pickups_channel_carries_position_colour_and_kind() -> None:
+    game = Game()
+    _kill_carrier(game, 120.0, 80.0)
+    _tick(game)
+    out = game.buffers["pickups"]
+    assert out[0] == pytest.approx(game.pickups.x[0])
+    assert out[1] == pytest.approx(game.pickups.y[0])
+    assert (out[2], out[3]) == (0.0, float(PickupKind.CRYSTAL))
+
+
+def test_a_zero_step_tick_keeps_the_pickups_buffer_but_reports_the_count() -> None:
+    game = Game()
+    _kill_carrier(game, 120.0, 80.0)
+    _tick(game)
+    before = game.buffers["pickups"].tobytes()
+    game.tick(0.0, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["pickups"].tobytes() == before
+    assert game.buffers["header"][H_PICKUP_N] == 1
+
+
+def _drop_and_stand_on_it(game: Game) -> None:
+    """Kill a carrier, then put the ship's centre where the crystal it dropped is."""
+    _kill_carrier(game, 120.0, 80.0)
+    _tick(game)
+    game.ship.x = game.pickups.x[0]
+    game.ship.y = game.pickups.y[0]
+
+
+def test_scripted_catch_a_red_crystal_from_a_carrier_raises_the_vulcan_one_level() -> None:
+    game = Game()
+    _drop_and_stand_on_it(game)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_WEAPON], header[H_LEVEL], header[H_PICKUP_N]) == (0.0, 2.0, 0.0)
+    assert header[H_EVENT_N] == 1
+    events = game.buffers["events"]
+    assert events[0] == EV_PICKUP
+    assert events[1] == pytest.approx(game.ship.x, abs=1.0)
+    assert events[2] == pytest.approx(game.ship.y, abs=1.0)
+    # kind CRYSTAL, outcome RAISED (0), colour index at the catch red (0)
+    assert (events[3], events[4], events[5]) == (float(PickupKind.CRYSTAL), 0.0, 0.0)
+    assert game.pickups.n == 0
+
+
+def test_scripted_catch_a_blue_crystal_switches_the_weapon_and_keeps_the_level() -> None:
+    game = Game(level=3)
+    _drop_and_stand_on_it(game)
+    game.pickups.age[0] = 100  # second third of the cycle: blue
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_WEAPON], header[H_LEVEL]) == (float(WeaponKind.LASER), 3.0)
+    events = game.buffers["events"]
+    assert (events[3], events[4], events[5]) == (float(PickupKind.CRYSTAL), 1.0, 1.0)
+
+
+def test_a_crystal_far_from_the_ship_is_not_caught() -> None:
+    game = Game()
+    _kill_carrier(game, 120.0, 80.0)
+    _tick(game)
+    _tick(game)
+    assert game.pickups.n == 1
+    assert game.buffers["header"][H_EVENT_N] == 0
+    assert game.loadout.level == 1
