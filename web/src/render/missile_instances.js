@@ -5,7 +5,7 @@ import { bake, lathe, tint } from './models/model_kit.js';
 // The homing missiles (PLYR-05, D-03): one InstancedMesh of a small smooth violet missile, turned by
 // the angle Python publishes (0 = up the screen), and a glowing violet exhaust trail puffed into the
 // additive particle layer. `data` is the channel Python assigns into (stride 4: x, y, angle, life
-// fraction). Violet is far from the reserved enemy-bullet pink (D-23).
+// fraction). Violet is far from the reserved enemy-bullet orange-yellow (D-39).
 const STRIDE = 4;
 const ANGLE = 2;
 

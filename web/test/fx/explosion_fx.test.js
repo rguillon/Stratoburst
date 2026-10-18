@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTE } from '../../src/fx/palette.js';
+import {
+  BULLET_EXCLUSION_DEGREES,
+  BULLET_MIN_SATURATION,
+  PALETTE,
+  hueDistance,
+  hueOf,
+  saturationOf,
+} from '../../src/fx/palette.js';
 import {
   HIT_RECIPE,
   PICKUP_RECIPE,
@@ -222,19 +229,7 @@ describe('unknown blast class', () => {
   });
 });
 
-describe('recipe colours (D-23)', () => {
-  function hue([r, g, b]) {
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    if (max === min) return 0;
-    const d = max - min;
-    let h;
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    return (h * 60 + 360) % 360;
-  }
-
+describe('recipe colours (D-39)', () => {
   it('take every colour from the palette, with no inline literals', () => {
     const emitters = [
       ...Object.values(RECIPES).flat(),
@@ -248,7 +243,7 @@ describe('recipe colours (D-23)', () => {
     }
   });
 
-  it('stay out of the hot-pink band reserved for enemy bullets', () => {
+  it('stay out of the orange-yellow band reserved for enemy bullets', () => {
     const emitters = [
       ...Object.values(RECIPES).flat(),
       ...HIT_RECIPE,
@@ -257,8 +252,9 @@ describe('recipe colours (D-23)', () => {
     ];
     expect(emitters.length).toBeGreaterThan(10);
     for (const e of emitters) {
-      const h = hue(e.color);
-      expect(h < 310 || h > 350).toBe(true);
+      const saturated = saturationOf(e.color) >= BULLET_MIN_SATURATION;
+      const distance = hueDistance(hueOf(e.color), hueOf(PALETTE.ENEMY_BULLET_HALO.rgb));
+      expect(!saturated || distance >= BULLET_EXCLUSION_DEGREES, e.color.join(',')).toBe(true);
     }
   });
 });

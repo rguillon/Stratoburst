@@ -5,7 +5,7 @@ import { PALETTE } from './palette.js';
 // white-hot core and a wider blue glow, running from the ship's nose to a little beyond the top of
 // the playfield, plus a small flare at the muzzle. Python only publishes the half-width (0 when the
 // beam is off); everything else is drawn here. All colours are HDR so the beam blooms, and none of
-// them is near the reserved enemy-bullet pink (D-23).
+// them is near the reserved enemy-bullet orange-yellow (D-39).
 
 const GLOW_FACTOR = 3.2; // the glow is this many times as wide as the core
 const OVERSHOOT = 8; // units the beam runs past the top edge so it never visibly ends on screen

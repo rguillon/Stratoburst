@@ -1,7 +1,7 @@
 // Turns EXPLOSION (and HIT) events into particle bursts. The recipes are data keyed by the
 // manifest blast classes; `emitters` of a recipe list how many particles of which look go on
 // which layer. Every colour comes from PALETTE, whose test keeps saturated colours out of the
-// hot-pink band around 330 degrees that belongs to enemy bullets.
+// orange-yellow band around 40 degrees that belongs to enemy bullets (D-39).
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
 

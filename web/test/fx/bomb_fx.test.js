@@ -212,12 +212,12 @@ describe('createBombFx', () => {
       expect(duration).toBe(FLASH_DURATION_S);
     });
 
-    it('never uses a colour near the enemy-bullet pink', () => {
-      const pink = hueOf(PALETTE.ENEMY_BULLET_HALO.rgb);
+    it('never uses a colour near the enemy-bullet orange-yellow', () => {
+      const bulletHue = hueOf(PALETTE.ENEMY_BULLET_HALO.rgb);
       for (const key of ['BOMB_FIRE', 'FIRE', 'FIRE_CORE', 'SPARK', 'SMOKE', 'LIGHT_EXPLOSION']) {
         const rgb = PALETTE[key].rgb;
         if (saturationOf(rgb) < 0.25) continue;
-        expect(hueDistance(hueOf(rgb), pink), key).toBeGreaterThan(35);
+        expect(hueDistance(hueOf(rgb), bulletHue), key).toBeGreaterThan(35);
       }
     });
   });

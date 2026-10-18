@@ -3,7 +3,7 @@
 // (the bombs as one pip character each), and only when a value changes, so calling update() every
 // frame never touches the DOM.
 
-// CSS counterparts of the crystal colours (red, blue, purple). None is in the reserved enemy pink.
+// CSS counterparts of the crystal colours (red, blue, purple). None is in the reserved enemy-bullet orange-yellow.
 export const WEAPON_CSS = Object.freeze({
   VULCAN: 'rgb(255, 90, 60)',
   LASER: 'rgb(80, 168, 255)',

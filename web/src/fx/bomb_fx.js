@@ -8,7 +8,7 @@ import { bake, lathe, tint } from '../render/models/model_kit.js';
 // missile rises from the ship (LAUNCH), then an expanding HDR fireball fills the screen (BLAST) at
 // the radius Python's blast uses. The detonation event adds one big particle burst (its COUNT scales
 // with the quality tier, never its size), one large light flash, one scorch mark on the terrain and a
-// single bloom pulse. Nothing here is pink and nothing strobes: a detonation is exactly one rising,
+// single bloom pulse. Nothing here is orange-yellow and nothing strobes: a detonation is exactly one rising,
 // then decaying, pulse (photosensitivity, WCAG 2.3.1).
 
 // One detonation burst at tier scale 1: [fire, smoke, sparks].
