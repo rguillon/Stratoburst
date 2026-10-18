@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-19-PLAN.md
-last_updated: "2026-10-18T05:33:25.794Z"
+stopped_at: Completed 02-20-PLAN.md
+last_updated: "2026-10-18T05:41:38.886Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: c6ffa953f030594721047f8e3aa83a56c7ae2bf3
+state_head: f716dcf81e9dfcd297fb59309e1124b0636fafb9
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 29
+  completed_plans: 30
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 20 of 33
+Plan: 21 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -85,6 +85,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P17 | 7 min | 2 tasks | 11 files |
 | Phase 02 P18 | 9 min | 2 tasks | 10 files |
 | Phase 02 P19 | 10 min | 2 tasks | 8 files |
+| Phase 02 P20 | 7 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-18: Helicopter rings alternate phase by pi/ENEMY_RING_COUNT via (age // interval) % 2 so consecutive rings interleave; ENEMY_FIRE events are pushed only for volleys that spawned a bullet
 - [Phase 02]: 02-19: explosion lights flash one of a fixed pool of 3 PointLights with a budget of 3 fresh pulses per second (re-trigger the lit newest light or drop), tier lights 3/2/0
 - [Phase 02]: 02-19: air shadows are uncompensated blob quads at terrain depth + 0.3 displaced along the sun ray by 40 units, renderOrder 3, ship included, shipVisible false hides its own
+- [Phase 02]: 02-20: lethal contact checks gameplay bullets then live air bodies only while the ship is vulnerable and not god; ground units and the storm never kill, and drag owed while the ship cannot be controlled is dropped
+- [Phase 02]: 02-20: the ?god flag is presence-only in JS and Python accepts only a real boolean True; e2e bootGame boots god unless mortal is asked for and the perf harness always passes god
 
 ### Pending Todos
 
@@ -173,6 +176,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:33:25.700Z
-Stopped at: Completed 02-19-PLAN.md
+Last session: 2026-10-18T05:41:34.767Z
+Stopped at: Completed 02-20-PLAN.md
 Resume file: None
