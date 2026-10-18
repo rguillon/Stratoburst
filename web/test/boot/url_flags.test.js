@@ -12,6 +12,7 @@ describe('parseUrlFlags', () => {
       level: null,
       god: false,
       bombs: null,
+      gallery: false,
     });
   });
 
@@ -94,6 +95,13 @@ describe('parseUrlFlags', () => {
     expect(parseUrlFlags('?debug').god).toBe(false);
   });
 
+  it('detects gallery as a bare flag', () => {
+    expect(parseUrlFlags('?gallery').gallery).toBe(true);
+    expect(parseUrlFlags('?debug&gallery=0').gallery).toBe(true);
+    expect(parseUrlFlags('?debug').gallery).toBe(false);
+    expect(parseUrlFlags('').gallery).toBe(false);
+  });
+
   it('ignores unknown parameters', () => {
     expect(parseUrlFlags('?evil=1&debug')).toEqual({
       debug: true,
@@ -104,6 +112,7 @@ describe('parseUrlFlags', () => {
       level: null,
       god: false,
       bombs: null,
+      gallery: false,
     });
   });
 

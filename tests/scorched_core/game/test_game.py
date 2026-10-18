@@ -51,18 +51,23 @@ from scorched_core.protocol import (
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_FLOW,
     H_HITSTOP,
     H_INVULN,
     H_KILLS,
     H_LEVEL,
     H_MAX_BONUS,
     H_MISSILE_N,
+    H_NEW_RECORD,
     H_PBULLET_N,
     H_PICKUP_N,
     H_PLAYER_PHASE,
+    H_SCROLL_RATE,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
+    H_STAGE,
+    H_STAGE_DIST,
     H_STEPS,
     H_STORM_HITS,
     H_STORM_N,
@@ -78,6 +83,7 @@ from scorched_core.protocol import (
     PLAYFIELD_H,
     PLAYFIELD_W,
 )
+from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.stages.stage_data import StageData
@@ -116,7 +122,7 @@ from scorched_core.weapons.weapon_kind import WeaponKind
 
 def test_manifest_contract() -> None:
     manifest = Game().manifest()
-    assert manifest["protocol"] == 2
+    assert manifest["protocol"] == 3
     assert manifest["playfield"] == {"w": 240.0, "h": 320.0}
     header = manifest["header"]
     assert header["len"] == HEADER_LEN
@@ -127,7 +133,7 @@ def test_manifest_contract() -> None:
     assert not {"DRONE_N", "DRONES_DOWN"} & header["slots"].keys()
     assert header["slots"]["EVENT_N"] == 12
     assert header["slots"]["EVENT_DROPPED"] == 13
-    assert header["len"] == 48
+    assert header["len"] == 64
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
     assert header["slots"]["BEAM_W"] == 18 == H_BEAM_W
@@ -144,14 +150,14 @@ def test_manifest_contract() -> None:
     assert header["slots"]["BOMB_X"] == 27 == H_BOMB_X
     assert header["slots"]["BOMB_Y"] == 28 == H_BOMB_Y
     assert header["slots"]["BOMB_T"] == 29 == H_BOMB_T
-    assert len(header["slots"]) == 30
+    assert len(header["slots"]) == 50
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600 + EBULLET_GAME_CAP},
         "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
-        "pickups": {"stride": 4, "cap": 16},
+        "pickups": {"stride": 4, "cap": 40},
         "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
         "events": {"stride": 6, "cap": 128},
     }
@@ -175,8 +181,114 @@ def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
         "BOMB_DETONATE": 10,
         "DEATHBOMB_SAVE": 11,
         "SFX": 12,
+        "MEDAL": 13,
+        "EXTEND": 14,
+        "PART_DESTROYED": 15,
+        "BOSS_WARNING": 16,
+        "BOSS_PHASE": 17,
+        "BOSS_DEFEATED": 18,
+        "BOSS_RETREAT": 19,
+        "STAGE_START": 20,
+        "STAGE_CLEAR": 21,
+        "TALLY_LINE": 22,
+        "GAME_OVER": 23,
     }
-    assert manifest["blast"] == {"SMALL": 0, "MEDIUM": 1, "LARGE": 2}
+    assert manifest["blast"] == {"SMALL": 0, "MEDIUM": 1, "LARGE": 2, "HUGE": 3}
+
+
+def test_protocol_three_header_slots_30_to_49_carry_the_phase_three_state() -> None:
+    slots = Game().manifest()["header"]["slots"]
+    names = (
+        "SCORE",
+        "HIGH_SCORE",
+        "LIVES",
+        "FLOW",
+        "FLOW_T",
+        "STAGE",
+        "STAGE_DIST",
+        "SCROLL_RATE",
+        "BOSS_ACTIVE",
+        "BOSS_PHASE",
+        "BOSS_HP",
+        "BOSS_TIMER_S",
+        "MEDAL_VALUE",
+        "MEDAL_CHAIN",
+        "TALLY_BOSS",
+        "TALLY_MEDALS",
+        "TALLY_NO_MISS",
+        "TALLY_BOMBS",
+        "TALLY_N",
+        "NEW_RECORD",
+    )
+    assert {name: slots[name] for name in names} == {name: 30 + i for i, name in enumerate(names)}
+    assert H_NEW_RECORD == 49
+    assert HEADER_LEN == 64  # slots 50-63 are reserved for Phase 4
+
+
+def test_the_raised_caps_are_part_of_protocol_three() -> None:
+    channels = Game().manifest()["channels"]
+    assert ENEMY_CAP == 64
+    assert PICKUP_CAP == 40
+    assert EBULLET_GAME_CAP == 400
+    assert ENEMY_MAX_ALIVE == 56
+    assert channels["enemies"]["cap"] == 64
+    assert channels["pickups"]["cap"] == 40
+    assert channels["ebullets"]["cap"] == 600 + 400
+    assert Game(stress=750).manifest()["channels"]["ebullets"]["cap"] == 1150
+
+
+def test_manifest_publishes_the_flow_states_by_name() -> None:
+    assert Game().manifest()["flow_states"] == {
+        "INTRO": 0,
+        "PLAY": 1,
+        "MIDBOSS": 2,
+        "WARNING": 3,
+        "BOSS": 4,
+        "CLEAR": 5,
+        "TALLY": 6,
+        "STAGE_CLEAR": 7,
+        "GAME_OVER": 8,
+    }
+
+
+def test_manifest_stage_describes_the_stage_markers_in_stage_mode() -> None:
+    assert Game(stage=STAGE_1).manifest()["stage"] == {
+        "number": 1,
+        "length": STAGE_1.length,
+        "markers": {"midboss": 4200.0, "boss": 8640.0},
+        "loop": False,
+    }
+
+
+def test_manifest_stage_is_stage_zero_and_looping_in_the_gallery() -> None:
+    assert Game().manifest()["stage"] == {
+        "number": 0,
+        "length": STAGE_1.length,
+        "markers": {},
+        "loop": True,
+    }
+
+
+def test_the_stage_header_shows_stage_one_play_and_a_growing_distance() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    for _ in range(10):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    header = game.buffers["header"]
+    assert header[H_STAGE] == 1
+    assert header[H_FLOW] == FlowState.PLAY
+    assert header[H_STAGE_DIST] == pytest.approx(game.terrain.distance, rel=1e-6)
+    assert header[H_STAGE_DIST] == pytest.approx(8.0, rel=1e-6)
+    assert header[H_SCROLL_RATE] == pytest.approx(game.terrain.speed, rel=1e-6)
+
+
+def test_the_gallery_header_shows_stage_zero_and_no_flow() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    header = game.buffers["header"]
+    assert header[H_STAGE] == 0
+    assert header[H_FLOW] == -1
+    assert header[H_STAGE_DIST] == 0
+    assert header[H_SCROLL_RATE] == pytest.approx(0.8, rel=1e-6)
 
 
 def test_manifest_publishes_every_sfx_id_by_name() -> None:

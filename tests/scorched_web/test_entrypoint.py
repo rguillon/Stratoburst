@@ -3,6 +3,9 @@ import math
 import pytest
 
 from scorched_core.game.fault_mode import FaultMode
+from scorched_core.protocol import H_FLOW
+from scorched_core.stages.flow_state import FlowState
+from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.tuning import BOMB_START_STOCK
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_web.entrypoint import create_game
@@ -19,17 +22,17 @@ class FakeJsOptions:
 def test_dict_options() -> None:
     web = create_game({"seed": 5, "stress": 100})
     assert isinstance(web, WebGame)
-    assert web.manifest()["channels"]["ebullets"]["cap"] == 800
+    assert web.manifest()["channels"]["ebullets"]["cap"] == 1000
 
 
 def test_options_with_to_py() -> None:
     web = create_game(FakeJsOptions())
-    assert web.manifest()["channels"]["ebullets"]["cap"] == 950
+    assert web.manifest()["channels"]["ebullets"]["cap"] == 1150
 
 
 def test_none_options_use_defaults() -> None:
-    assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 800
-    assert create_game().manifest()["protocol"] == 2
+    assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 1000
+    assert create_game().manifest()["protocol"] == 3
 
 
 def test_no_crash_option_means_no_fault() -> None:
@@ -157,3 +160,22 @@ def test_the_god_option_is_a_real_boolean_true_or_nothing(god: object, expected:
 
 def test_no_god_option_means_a_mortal_ship() -> None:
     assert create_game({"seed": 1})._game.god is False
+
+
+def test_no_options_build_stage_one() -> None:
+    for web in (create_game(), create_game({}), create_game(None)):
+        manifest = web.manifest()
+        assert web._game.stage is STAGE_1
+        assert manifest["stage"]["number"] == 1
+        assert web._game.buffers["header"][H_FLOW] == FlowState.PLAY
+
+
+def test_the_gallery_option_builds_the_phase_two_gallery() -> None:
+    game = create_game({"gallery": True})._game
+    assert game.stage is None
+    assert game.director is None
+
+
+@pytest.mark.parametrize("value", [1, "yes", "true", None, False, 0, [True]])
+def test_a_gallery_value_that_is_not_a_real_true_builds_the_stage(value: object) -> None:
+    assert create_game({"gallery": value})._game.stage is STAGE_1
