@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createShipModel } from '../../src/render/ship_model.js';
 
 function meshesOf(root) {
@@ -24,19 +24,24 @@ describe('createShipModel', () => {
   });
 
   describe('jet silhouette', () => {
-    const ship = createShipModel({ hitboxRadius: 2 });
+    const ship = createShipModel({ hitboxRadius: 2, detail: 'high' });
     const fuselage = ship.getObjectByName('fuselage');
     fuselage.geometry.computeBoundingBox();
     const box = fuselage.geometry.boundingBox;
 
-    it('spans about 16 units wing to wing and is longer than it is wide only by the nose', () => {
+    it('spans about 16 units wing to wing', () => {
       expect(box.max.x - box.min.x).toBeGreaterThan(14);
       expect(box.max.x - box.min.x).toBeLessThan(18);
     });
 
-    it('is flat: thinner than 3 units', () => {
+    it('is about 20 units long', () => {
+      expect(box.max.z - box.min.z).toBeGreaterThan(18);
+      expect(box.max.z - box.min.z).toBeLessThan(23);
+    });
+
+    it('has a body thicker than a plate and lower than the wing span', () => {
       expect(box.max.y - box.min.y).toBeGreaterThan(2);
-      expect(box.max.y - box.min.y).toBeLessThan(3);
+      expect(box.max.y - box.min.y).toBeLessThan(6);
     });
 
     it('points its nose toward -Z, up the screen', () => {
@@ -54,15 +59,99 @@ describe('createShipModel', () => {
       expect(box.max.z).toBeGreaterThan(5);
     });
 
-    it('has a dark canopy and tail fins', () => {
+    it('has a dark canopy, and the tail fins are baked into the fuselage', () => {
       expect(ship.getObjectByName('canopy')).toBeDefined();
-      expect(ship.getObjectByName('tail-fin-left')).toBeDefined();
-      expect(ship.getObjectByName('tail-fin-right')).toBeDefined();
+      expect(ship.getObjectByName('tail-fin-left')).toBeUndefined();
+      // The fins rise above the wing plate: some vertex is higher than the hull alone reaches.
+      expect(box.max.y).toBeGreaterThan(2);
     });
 
-    it('keeps the fuselage albedo below 1.0 so it never blooms', () => {
+    it('is smooth, not faceted (D-24)', () => {
+      expect(fuselage.material.flatShading).toBe(false);
+      expect(ship.getObjectByName('canopy').material.flatShading).toBe(false);
+      expect(fuselage.material.vertexColors).toBe(true);
+    });
+
+    it('keeps every vertex colour below 1.0 so the hull never blooms', () => {
+      const color = fuselage.geometry.getAttribute('color');
+      let peak = 0;
+      for (let i = 0; i < color.array.length; i++) peak = Math.max(peak, color.array[i]);
+      expect(peak).toBeGreaterThan(0);
+      expect(peak).toBeLessThan(1);
       const { r, g, b } = fuselage.material.color;
-      expect(Math.max(r, g, b)).toBeLessThan(1);
+      expect(Math.max(r, g, b)).toBeLessThanOrEqual(1);
+    });
+
+    it('keeps the canopy colour below 1.0 too', () => {
+      const color = ship.getObjectByName('canopy').geometry.getAttribute('color');
+      for (let i = 0; i < color.array.length; i++) expect(color.array[i]).toBeLessThan(1);
+    });
+
+    it('is baked to exactly position, normal and color', () => {
+      expect(Object.keys(fuselage.geometry.attributes).sort()).toEqual(['color', 'normal', 'position']);
+    });
+  });
+
+  describe('detail (D-25)', () => {
+    const count = (ship) => ship.getObjectByName('fuselage').geometry.getAttribute('position').count;
+
+    it('defaults to high and strictly lowers the vertex count per level', () => {
+      const high = count(createShipModel());
+      const mid = count(createShipModel({ detail: 'mid' }));
+      const low = count(createShipModel({ detail: 'low' }));
+      expect(high).toBe(count(createShipModel({ detail: 'high' })));
+      expect(high).toBeGreaterThan(mid);
+      expect(mid).toBeGreaterThan(low);
+    });
+
+    it('treats an unknown detail as low', () => {
+      const ship = createShipModel({ detail: 'ultra' });
+      expect(ship.userData.detail).toBe('low');
+      expect(count(ship)).toBe(count(createShipModel({ detail: 'low' })));
+    });
+
+    it('setDetail swaps the fuselage and canopy geometry', () => {
+      const ship = createShipModel({ detail: 'high' });
+      const highFuselage = ship.getObjectByName('fuselage').geometry;
+      const highCanopy = ship.getObjectByName('canopy').geometry;
+      ship.userData.setDetail('low');
+      expect(ship.userData.detail).toBe('low');
+      expect(count(ship)).toBeLessThan(highFuselage.getAttribute('position').count);
+      expect(ship.getObjectByName('canopy').geometry).not.toBe(highCanopy);
+    });
+
+    it('setDetail reuses cached geometries and never disposes them (Pitfall 8)', () => {
+      const ship = createShipModel({ detail: 'high' });
+      const dispose = vi.fn();
+      const fuselage = ship.getObjectByName('fuselage');
+      const canopy = ship.getObjectByName('canopy');
+      const highFuselage = fuselage.geometry;
+      highFuselage.addEventListener('dispose', dispose);
+      ship.userData.setDetail('low');
+      const lowFuselage = fuselage.geometry;
+      const lowCanopy = canopy.geometry;
+      ship.userData.setDetail('high');
+      expect(fuselage.geometry).toBe(highFuselage);
+      ship.userData.setDetail('low');
+      expect(fuselage.geometry).toBe(lowFuselage);
+      expect(canopy.geometry).toBe(lowCanopy);
+      expect(dispose).not.toHaveBeenCalled();
+    });
+
+    it('setDetail leaves the hitbox marker untouched', () => {
+      const ship = createShipModel({ hitboxRadius: 2 });
+      const marker = ship.getObjectByName('hitbox-marker');
+      const before = marker.children.map((child) => child.geometry);
+      ship.userData.setDetail('low');
+      expect(ship.getObjectByName('hitbox-marker')).toBe(marker);
+      expect(marker.children.map((child) => child.geometry)).toEqual(before);
+      expect(marker.visible).toBe(true);
+    });
+
+    it('builds the same geometry twice: generation is deterministic', () => {
+      const a = createShipModel().getObjectByName('fuselage').geometry.getAttribute('position').array;
+      const b = createShipModel().getObjectByName('fuselage').geometry.getAttribute('position').array;
+      expect(Array.from(a)).toEqual(Array.from(b));
     });
   });
 

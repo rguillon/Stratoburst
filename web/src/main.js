@@ -79,8 +79,16 @@ async function main() {
   loading.setProgress(0.9);
   loading.setStatus('Warming up graphics…');
   const { tick, header, slots, manifest } = bridge;
-  const ship = createShipModel({ hitboxRadius: manifest.tuning.hitbox_radius });
+  const ship = createShipModel({
+    hitboxRadius: manifest.tuning.hitbox_radius,
+    detail: TIERS[tier0].modelDetail,
+  });
   rig.scene.add(ship);
+  // Everything whose model detail follows the tier. A tier change only swaps cached geometries.
+  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }];
+  const applyModelDetail = (tierName) => {
+    for (const view of detailViews) view.setDetail(TIERS[tierName].modelDetail);
+  };
   const ebullets = createBulletInstances({
     data: bridge.channels.ebullets,
     capacity: manifest.channels.ebullets.cap,
@@ -143,7 +151,15 @@ async function main() {
       tierLog.push({ atMs: performance.now(), from: currentTier, to: 'low', reason: 'bloom-unavailable' });
     }
     currentTier = 'low';
+    applyModelDetail('low');
   }
+  // Upload every detail level's geometry now, behind the loading screen, so a tier change
+  // during play never uploads or compiles anything.
+  for (const { modelDetail } of Object.values(TIERS)) {
+    for (const view of detailViews) view.setDetail(modelDetail);
+    rig.render();
+  }
+  applyModelDetail(currentTier);
   rig.render();
   loading.setProgress(1);
   loading.setStatus('Ready');
@@ -206,6 +222,7 @@ async function main() {
       const q = controller.update(dt, ts);
       if (q.changed) {
         rig.applyTier(TIERS[q.tier]);
+        applyModelDetail(q.tier);
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }
