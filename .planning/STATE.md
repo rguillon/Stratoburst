@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-16-PLAN.md
-last_updated: "2026-10-18T18:57:25.885Z"
+stopped_at: Completed 03-17-PLAN.md
+last_updated: "2026-10-18T19:05:54.031Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: c2b714562ec2fab3ae2d902afd52423860b59e99
+state_head: 09cadcd9fe3ac7f80f948c886c61b01bfd9abbce
 progress:
   total_phases: 4
   completed_phases: 2
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 17 of 28
+Plan: 18 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -116,6 +116,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P14 | 15 min | 2 tasks | 24 files |
 | Phase 03 P15 | 7 min | 2 tasks | 17 files |
 | Phase 03 P16 | 7 min | 2 tasks | 12 files |
+| Phase 03 P17 | 6 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-15: stage 1 flags the middle lot of every 6th-7th block per section, skipping feature corridors and the BOSS_QUIET window (44 targets, 30 with medals)
 - [Phase 03]: 03-16: city rubble and flicker kinds are Sets of manifest kind values (the cityKinds Set shared with the explosion fx); the hit flash holds a damaged building's glow at full instead of multiplying the neon
 - [Phase 03]: 03-16: wreck kinds come from wreckKindsFor(groundKindNames, manifest enemy_wreck, hasModel); all four city kinds share one rubble pile through the wreck ring's rubble option
+- [Phase 03]: 03-17: the mid-boss starts once when the scroll is inside MIDBOSS_TRIGGER_WINDOW (80 units) past its marker, so a ?at=boss jump never starts a fight it skipped; StageFlow owns the BossController (slot 1) and drops it on end or game over
+- [Phase 03]: 03-17: MIDBOSS_1 keeps the plan's turret offsets (dx 0, dy -22/+22); the aft turret is shadowed from bolts and missiles by the hull circle, only the laser and the bomb reach it (fore turret verified hit by a real Lv1 vulcan)
+- [Phase 03]: 03-17: boss points from settle() go through score.award at the spec's x / hold_y; header BOSS_ACTIVE carries the boss slot (1 for the mid-boss), BOSS_HP the hull fraction and BOSS_TIMER_S -1 when quiet; manifest stage.bosses lists slot, name and phase_fracs for midboss and boss data
 
 ### Pending Todos
 
@@ -265,6 +269,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T18:57:25.656Z
-Stopped at: Completed 03-16-PLAN.md
+Last session: 2026-10-18T19:05:53.795Z
+Stopped at: Completed 03-17-PLAN.md
 Resume file: None
