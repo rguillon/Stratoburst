@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createBannerOverlay } from '../../src/ui/banner_overlay.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
-const FLOW_STATES = { INTRO: 0, PLAY: 1, WARNING: 3 };
+const FLOW_STATES = { INTRO: 0, PLAY: 1, WARNING: 3, TALLY: 6, STAGE_CLEAR: 7 };
 const SLOTS = { FLOW: 0, FLOW_T: 1, STAGE: 2 };
 
 // One frame's header and the slot map, as main.js passes them: update(...frame({ t: 0.5 })).
@@ -213,5 +213,37 @@ describe('the WARNING flash in index.html (photosensitivity)', () => {
     expect(colour, 'no colour on #banner.warning').not.toBeNull();
     expect(Number(colour[1])).toBeGreaterThan(200);
     expect(Number(colour[2])).toBeLessThan(90);
+  });
+});
+
+describe('STAGE CLEAR', () => {
+  it('shows STAGE CLEAR at full opacity, without the warning class, exactly while FLOW is STAGE_CLEAR', () => {
+    const { el, make } = build();
+    const banner = make();
+    banner.update(...frame({ flow: FLOW_STATES.STAGE_CLEAR, stage: 1, t: 0 }));
+    expect(el.hidden).toBe(false);
+    expect(el.textContent).toBe('STAGE CLEAR');
+    expect(el.className).toBe('');
+    expect(el.style.opacity).toBe('1');
+    banner.update(...frame({ flow: FLOW_STATES.TALLY }));
+    expect(el.hidden).toBe(true);
+  });
+
+  it('drops the warning class when it follows a WARNING', () => {
+    const { el, make } = build();
+    const banner = make();
+    banner.update(...frame({ flow: FLOW_STATES.WARNING }));
+    banner.update(...frame({ flow: FLOW_STATES.STAGE_CLEAR }));
+    expect(el.textContent).toBe('STAGE CLEAR');
+    expect(el.className).toBe('');
+  });
+
+  it('shows the STAGE n banner again on the intro that follows it', () => {
+    const { el, make } = build();
+    const banner = make();
+    banner.update(...frame({ flow: FLOW_STATES.STAGE_CLEAR }));
+    banner.update(...frame({ flow: FLOW_STATES.INTRO, t: 0 }));
+    expect(el.textContent).toBe('STAGE 1');
+    expect(el.hidden).toBe(false);
   });
 });

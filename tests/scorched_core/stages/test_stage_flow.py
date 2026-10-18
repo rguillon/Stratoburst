@@ -13,6 +13,7 @@ from scorched_core.protocol import (
     EV_EXPLOSION,
     EV_EXTEND,
     EV_GAME_OVER,
+    EV_STAGE_CLEAR,
     EV_STAGE_START,
     EV_TALLY_LINE,
     EVENT_SOFT_CAP,
@@ -32,6 +33,7 @@ from scorched_core.tuning import (
     INTRO_TICKS,
     MIDBOSS_CRAWL_SPEED,
     SCROLL_SPEED,
+    STAGE_CLEAR_TICKS,
     TALLY_HOLD_TICKS,
     TALLY_LINE_TICKS,
     WARNING_TICKS,
@@ -808,3 +810,121 @@ def test_reset_forgets_the_tally() -> None:
     flow.reset()
     assert flow.tally.amounts == [0, 0, 0, 0]
     assert flow.tally.revealed == 0
+
+
+# --- STAGE CLEAR and the D-27 loop (plan 03-21) -------------------------------------------------
+
+
+def enter_stage_clear(flow: StageFlow) -> None:
+    """Step a CLEAR flow all the way through its tally into STAGE_CLEAR."""
+    for _ in range(CLEAR_TICKS + 3 * TALLY_LINE_TICKS + 1 + TALLY_HOLD_TICKS):
+        flow.step()
+    assert flow.state == FlowState.STAGE_CLEAR
+
+
+def kinds_in_ring(flow: StageFlow) -> list[float]:
+    return [record(flow, i)[0] for i in range(flow.events.n)]
+
+
+def test_the_stage_clear_is_announced_once_and_raises_a_save_request() -> None:
+    flow = make_clear_flow()
+    flow.stage_number = 1
+    enter_stage_clear(flow)
+    assert kinds_in_ring(flow).count(EV_STAGE_CLEAR) == 1
+    index = kinds_in_ring(flow).index(EV_STAGE_CLEAR)
+    assert record(flow, index)[3] == 1.0
+    assert flow.save_requested is True
+    assert flow.timer == 0
+    flow.events.clear()
+    for _ in range(STAGE_CLEAR_TICKS - 1):
+        flow.step()
+    assert flow.events.n == 0
+    assert flow.state == FlowState.STAGE_CLEAR
+
+
+def test_after_the_stage_clear_the_stage_restarts_through_the_intro() -> None:
+    restarts: list[int] = []
+    flow = make_clear_flow()
+    flow.on_stage_restart = lambda: restarts.append(flow.timer)
+    enter_stage_clear(flow)
+    for _ in range(STAGE_CLEAR_TICKS - 1):
+        flow.step()
+    assert restarts == []
+    flow.step()
+    assert restarts == [STAGE_CLEAR_TICKS]
+    assert (flow.state, flow.timer) == (FlowState.INTRO, 0)
+    assert (flow.boss, flow.boss_destroyed) == (None, False)
+    assert flow.tally.amounts == [0, 0, 0, 0]
+    assert flow.tally.revealed == 0
+    assert flow.spawning is True
+    flow.events.clear()
+    flow.step()
+    assert kinds_in_ring(flow) == [EV_STAGE_START]
+
+
+def test_the_loop_keeps_the_save_request_for_the_adapter_to_clear() -> None:
+    flow = make_clear_flow()
+    enter_stage_clear(flow)
+    for _ in range(STAGE_CLEAR_TICKS):
+        flow.step()
+    assert flow.state == FlowState.INTRO
+    assert flow.save_requested is True
+
+
+def test_a_flow_with_no_restart_callback_still_loops_to_the_intro() -> None:
+    flow = make_clear_flow()
+    enter_stage_clear(flow)
+    for _ in range(STAGE_CLEAR_TICKS):
+        flow.step()
+    assert flow.state == FlowState.INTRO
+
+
+def test_game_over_during_the_stage_clear_wins_and_the_stage_does_not_restart() -> None:
+    restarts: list[int] = []
+    flow = make_clear_flow()
+    flow.on_stage_restart = lambda: restarts.append(1)
+    enter_stage_clear(flow)
+    flow.life.phase = PlayerPhase.OUT
+    flow.step()
+    assert flow.state == FlowState.GAME_OVER
+    for _ in range(STAGE_CLEAR_TICKS + 5):
+        flow.step()
+    assert restarts == []
+    assert flow.state == FlowState.GAME_OVER
+
+
+def test_the_next_loops_tally_counts_only_its_own_medals_and_deaths() -> None:
+    flow = make_clear_flow(medals=5, deaths=2)
+    flow.life.deaths = 2  # two ships lost in this loop's stage (counted from 0)
+    enter_stage_clear(flow)
+    assert flow.tally.amounts[2] == 0
+    for _ in range(STAGE_CLEAR_TICKS + 1):
+        flow.step()  # the loop's first INTRO step re-bases both counters
+    assert flow.state == FlowState.INTRO
+    assert flow.chain.collected == 0
+    flow.chain.collected = 3
+    flow.state = FlowState.CLEAR
+    flow.boss_destroyed = True
+    flow.timer = 0
+    enter_tally(flow)
+    assert flow.tally.amounts == [100_000, 3_000, 50_000, 0]
+    flow.life.deaths = 3
+    flow.reset()
+    flow.step()
+    flow.life.deaths = 4
+    flow.state = FlowState.CLEAR
+    flow.timer = 0
+    enter_tally(flow)
+    assert flow.tally.amounts[2] == 0
+
+
+def test_equal_amounts_still_reveal_in_the_fixed_order() -> None:
+    flow = make_clear_flow(destroyed=False, medals=0, bombs=0)
+    flow.life.deaths = 1
+    enter_tally(flow)
+    order = []
+    for _ in range(3 * TALLY_LINE_TICKS + 1):
+        flow.step()
+        order += [index for index, _ in tally_lines(flow)]
+        flow.events.clear()
+    assert order == [0, 1, 2, 3]

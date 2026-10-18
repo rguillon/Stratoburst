@@ -48,6 +48,7 @@ from scorched_core.protocol import (
     EV_RESPAWN,
     EV_SFX,
     EV_SHOT,
+    EV_STAGE_CLEAR,
     EV_STAGE_START,
     EVENT_CAP,
     EVENT_STRIDE,
@@ -162,6 +163,7 @@ from scorched_core.tuning import (
     SHIP_SPEED,
     SHIP_START_X,
     SHIP_START_Y,
+    STAGE_CLEAR_TICKS,
     TALLY_BOMB_BONUS,
     TALLY_BOSS_BONUS,
     TALLY_LINE_TICKS,
@@ -4567,3 +4569,114 @@ def test_the_tally_slots_return_to_zero_when_the_run_restarts() -> None:
     game.restart()
     assert _tally_header(game) == [0, 0, 0, 0, 0]
     assert game.flow.tally.revealed == 0
+
+
+def _one_tick_from_the_end_of_stage_clear() -> Game:
+    """A run started at the boss marker, its state all set, one step before STAGE CLEAR ends."""
+    game = _skip_intro(Game(stage=STAGE_1, at="boss", weapon=WeaponKind.HOMING, level=3, bombs=2))
+    flow = game.flow
+    assert flow is not None
+    assert game.director is not None
+    assert game.terrain.distance > 0.0
+    game.score.score = 123_456
+    game.score.lives = 2
+    game.bomb.stock = 2
+    game.terrain.speed = game.terrain.target = BOSS_CRAWL_SPEED
+    game.director.cursor = 5
+    game.director.ground_cursor = 3
+    _populate(game)
+    flow.state = FlowState.STAGE_CLEAR
+    flow.timer = STAGE_CLEAR_TICKS - 1
+    flow.boss_destroyed = True
+    return game
+
+
+def test_when_stage_clear_ends_stage_one_restarts_and_the_ship_flies_in_again() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    header = game.buffers["header"]
+    _tick(game)
+    assert header[H_FLOW] == FlowState.INTRO
+    assert game.terrain.distance == 0.0  # the start of the stage, never the ?at marker
+    assert game.terrain.speed == game.terrain.target == SCROLL_SPEED
+    assert game.director is not None
+    assert (game.director.cursor, game.director.ground_cursor) == (0, 0)
+    assert header[H_PLAYER_PHASE] == PlayerPhase.RESPAWN
+    assert game.ship.y > SHIP_START_Y
+    assert header[H_BOSS_ACTIVE] == 0
+    assert _tally_header(game) == [0, 0, 0, 0, 0]
+    _tick(game)
+    assert _event_kinds(game).count(EV_STAGE_START) == 1
+
+
+def test_stage_clear_empties_the_enemy_bullet_missile_and_pickup_pools() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    assert game.enemies.n == 1
+    _tick(game)
+    pools = (game.enemies, game.ebullets, game.pbullets, game.missiles, game.pickups)
+    assert [pool.n for pool in pools] == [0, 0, 0, 0, 0]
+    header = game.buffers["header"]
+    assert [header[slot] for slot in (H_ENEMY_N, H_EBULLET_N, H_PBULLET_N, H_MISSILE_N)] == [0] * 4
+    assert header[H_PICKUP_N] == 0
+
+
+def test_the_loop_keeps_score_lives_weapon_level_and_bombs() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    bomb = game.bomb
+    _tick(game)
+    header = game.buffers["header"]
+    assert header[H_SCORE] == 123_456
+    assert header[H_LIVES] == 2
+    assert (header[H_WEAPON], header[H_LEVEL]) == (WeaponKind.HOMING, 3)
+    assert header[H_BOMBS] == 2
+    assert game.bomb is bomb
+
+
+def test_the_loop_starts_the_next_tally_counting_from_zero() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    game.chain.collected = 8
+    game.life.deaths = 3
+    _tick(game)
+    _tick(game)  # the first INTRO step re-bases the counters
+    assert game.chain.collected == 0
+    assert game.flow is not None
+    assert game.flow._deaths_at_start == 3
+
+
+def test_the_midboss_comes_again_in_the_next_loop() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    assert game.flow is not None
+    game.flow._midboss_done = True
+    _tick(game)
+    assert game.flow._midboss_done is False
+
+
+def test_the_stage_restart_needs_a_stage_run() -> None:
+    with pytest.raises(ValueError, match="gallery"):
+        Game()._restart_stage()
+
+
+def test_the_boss_kill_runs_through_the_tally_and_stage_clear_back_to_the_intro() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    clear_events = starts_after = 0
+    saved = False
+    at_clear: tuple[float, ...] | None = None
+    for _ in range(20_000):
+        _fire_tick(game)
+        clear_events += _event_kinds(game).count(EV_STAGE_CLEAR)
+        saved = saved or game.save_requested
+        if at_clear is not None:
+            starts_after += _event_kinds(game).count(EV_STAGE_START)
+        if at_clear is None and header[H_FLOW] == FlowState.STAGE_CLEAR:
+            at_clear = (header[H_SCORE], header[H_LIVES], header[H_WEAPON], header[H_LEVEL])
+        if at_clear is not None and header[H_FLOW] == FlowState.INTRO:
+            break
+    assert at_clear is not None
+    assert header[H_FLOW] == FlowState.INTRO
+    assert clear_events == 1
+    assert saved is True
+    assert (header[H_SCORE], header[H_LIVES], header[H_WEAPON], header[H_LEVEL]) == at_clear
+    assert header[H_STAGE_DIST] < 100.0
+    _fire_tick(game)
+    starts_after += _event_kinds(game).count(EV_STAGE_START)
+    assert starts_after == 1
