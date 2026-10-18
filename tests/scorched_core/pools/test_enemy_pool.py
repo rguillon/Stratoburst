@@ -273,3 +273,42 @@ def test_pack_with_no_enemies_writes_nothing() -> None:
     out = array("f", [7.0]) * (ENEMY_STRIDE * ENEMY_CAP)
     EnemyPool().pack_into(out)
     assert set(out) == {7.0}
+
+
+def test_overkill_in_one_step_still_yields_one_explosion_and_one_kill() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    jet(pool)
+    pool.hp[0] = 1
+    pool.apply_hit(0, 1, ring)
+    pool.apply_hit(0, 5, ring)  # an overkill: hp is now far below zero
+    pool.remove_dead(ring)
+    assert (pool.n, pool.kills, pool.kill_n) == (0, 1, 1)
+    assert ring.n == 1
+    assert ring.buf[0] == EV_EXPLOSION
+
+
+def test_a_dead_enemy_is_removed_exactly_once_however_often_remove_dead_runs() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    jet(pool)
+    pool.hp[0] = -4
+    pool.remove_dead(ring)
+    pool.remove_dead(ring)
+    assert (pool.kills, ring.n) == (1, 1)
+
+
+def test_uids_are_never_reissued_across_many_swap_removals() -> None:
+    pool = EnemyPool()
+    issued: list[int] = []
+    for round_ in range(30):
+        for _ in range(4):
+            jet(pool, x=20.0 + round_)
+            issued.append(pool.uid[pool.n - 1])
+        pool.hp[0] = 0
+        pool.hp[pool.n // 2] = 0
+        pool.hp[pool.n - 1] = 0
+        pool.remove_dead(EventRing())
+        live = [pool.uid[i] for i in range(pool.n)]
+        assert len(live) == len(set(live))
+    assert issued == sorted(set(issued))  # strictly increasing: nothing was ever reissued

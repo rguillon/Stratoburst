@@ -38,7 +38,13 @@ from scorched_core.protocol import (
     PBULLET_CAP,
     PBULLET_STRIDE,
 )
-from scorched_core.tuning import SHIP_SPEED, SHIP_START_X, SHIP_START_Y
+from scorched_core.tuning import (
+    ENEMY_MAX_ALIVE,
+    GALLERY_LOOP_TICKS,
+    SHIP_SPEED,
+    SHIP_START_X,
+    SHIP_START_Y,
+)
 
 
 def test_manifest_contract() -> None:
@@ -452,6 +458,52 @@ def test_scripted_kill_ship_tracking_the_lowest_enemy_downs_three_within_1200_ti
     _track_lowest_enemy_and_fire(game, 1200)
     assert game.buffers["header"][H_KILLS] >= 3
     assert game.enemies.kills == game.buffers["header"][H_KILLS]
+
+
+def test_live_enemies_never_exceed_the_alive_cap_over_two_thousand_steps() -> None:
+    game = Game()
+    peak = 0
+    for _ in range(2000):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        peak = max(peak, game.enemies.n)
+    assert 0 < peak <= ENEMY_MAX_ALIVE < ENEMY_CAP
+
+
+def test_a_flooded_gallery_refuses_spawns_instead_of_growing() -> None:
+    game = Game()
+    for _ in range(ENEMY_MAX_ALIVE):
+        game.enemies.spawn(EnemyKind.TURRET, 120.0, 10.0, 0.0, 0.0)
+    for _ in range(GALLERY_LOOP_TICKS):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == ENEMY_MAX_ALIVE
+    assert len(game.buffers["drones"]) == ENEMY_STRIDE * ENEMY_CAP
+
+
+def test_overkill_two_bolts_on_one_enemy_give_one_explosion_and_one_kill() -> None:
+    game = Game()
+    x, y = game.ship.x, game.ship.y - 40.0
+    game.enemies.n = 0
+    game.enemies.spawn(EnemyKind.JET, x, y, 0.0, 0.0)
+    game.enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+    game.pbullets.spawn(x + 1.0, y + 10.0, 0.0, -8.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_KILLS] == 1
+    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.buffers["events"][0] == EV_EXPLOSION
+    assert game.pbullets.n == 1  # the dead enemy absorbed only the first bolt
+
+
+def test_a_kill_publishes_its_blast_class_ground_flag_and_kind() -> None:
+    game = Game()
+    x, y = game.ship.x, game.ship.y - 40.0
+    game.enemies.n = 0
+    game.enemies.spawn(EnemyKind.TANK, x, y, 0.0, 0.0)
+    game.enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    events = game.buffers["events"]
+    assert (events[3], events[4], events[5]) == (2.0, 1.0, float(EnemyKind.TANK))
 
 
 def jittered_dts(hz: int, seconds: float = 10.0, jitter_ms: float = 0.4) -> list[float]:

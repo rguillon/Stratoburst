@@ -2,6 +2,7 @@ import pytest
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.pools.enemy_pool import EnemyPool
+from scorched_core.protocol import PLAYFIELD_W
 from scorched_core.stages.gallery_spawner import GallerySpawner, ScriptEntry
 from scorched_core.tuning import GALLERY_LOOP_TICKS, GALLERY_SCRIPT
 
@@ -74,3 +75,18 @@ def test_a_refused_spawn_is_skipped_never_queued() -> None:
 def test_the_default_gallery_has_ten_jets_per_loop() -> None:
     assert len(GALLERY_SCRIPT) == 10
     assert {entry[1] for entry in GALLERY_SCRIPT} == {EnemyKind.JET}
+
+
+def test_script_ticks_are_sorted_and_lie_inside_the_loop() -> None:
+    ticks = [entry[0] for entry in GALLERY_SCRIPT]
+    assert ticks == sorted(ticks)
+    assert all(0 <= tick < GALLERY_LOOP_TICKS for tick in ticks)
+
+
+def test_script_entries_spawn_inside_the_playfield_with_a_known_kind() -> None:
+    for _tick, kind, x, y, _vx, vy, drop in GALLERY_SCRIPT:
+        assert kind in EnemyKind
+        assert 0.0 < x < PLAYFIELD_W
+        assert y < 0.0  # enters from above the top edge
+        assert vy > 0.0
+        assert drop >= -1
