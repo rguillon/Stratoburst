@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-15-PLAN.md
-last_updated: "2026-10-18T04:57:10.616Z"
+stopped_at: Completed 02-16-PLAN.md
+last_updated: "2026-10-18T05:03:12.504Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 39dca9da50d40c60135d4e1b32438e6a33c145aa
+state_head: 11144a049c75f8f96454fdaae9e72e4cbea64c66
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 25
+  completed_plans: 26
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 16 of 33
+Plan: 17 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -81,6 +81,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P13 | 14 min | 2 tasks | 13 files |
 | Phase 02 P14 | 7 min | 2 tasks | 8 files |
 | Phase 02 P15 | 5 min | 2 tasks | 9 files |
+| Phase 02 P16 | 7 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -139,6 +140,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-14: wreck smoulder is a per-wreck accumulator trickle (smoke 0.18 s, flames 0.3 s for 6 s) scaled by particleScale, silent off screen, frame time clamped to 0.25 s
 - [Phase 02]: 02-15: the grace window is exactly DEATHBOMB_TICKS (8) step calls after the hit step and invulnerability counts down only on ALIVE steps, so the 150-step blink starts on the fly-in arrival step
 - [Phase 02]: 02-15: a hit outside ALIVE or while invulnerable returns False and changes nothing; grant_invuln takes the larger remaining value so the bomb and the respawn share one counter
+- [Phase 02]: 02-16: the ?stress storm lives in storm_pool and gameplay enemy bullets in a separate 200-bullet ebullets pool; both pack into one ebullets channel (storm first, gameplay at offset storm_pool.n) and header STORM_N (21) keeps stress counts exact
 
 ### Pending Todos
 
@@ -161,6 +163,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:57:10.537Z
-Stopped at: Completed 02-15-PLAN.md
+Last session: 2026-10-18T05:03:12.425Z
+Stopped at: Completed 02-16-PLAN.md
 Resume file: None
