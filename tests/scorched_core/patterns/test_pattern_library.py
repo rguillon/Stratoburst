@@ -71,3 +71,40 @@ def test_the_bomber_phase_one_patterns_are_slow_and_sparse() -> None:
     )
     for name in ("bomber_turret_spread", "bomber_nose_ring"):
         assert PATTERN_TABLE[pattern_index(name)] is PATTERNS[name]
+
+
+def test_the_bomber_phase_two_and_three_patterns_are_registered() -> None:
+    assert PATTERNS["bomber_core_ring"] == PatternSpec(
+        FirePattern.RING, count=12, speed=1.4, interval=80, phase_step_deg=7.5
+    )
+    assert PATTERNS["bomber_core_stream"] == PatternSpec(
+        FirePattern.STREAM, speed=1.8, interval=120, burst=3, burst_gap=8
+    )
+    assert PATTERNS["bomber_desperation_ring"] == PatternSpec(
+        FirePattern.RING, count=16, speed=1.6, interval=50, phase_step_deg=11.25
+    )
+    assert PATTERNS["bomber_desperation_spread"] == PatternSpec(
+        FirePattern.SPREAD, count=5, speed=1.6, interval=70, arc_deg=50.0
+    )
+
+
+def test_every_bomber_pattern_is_slow_and_sparse_so_the_fight_is_not_bullet_hell() -> None:
+    bomber = {name: spec for name, spec in PATTERNS.items() if name.startswith("bomber_")}
+    assert set(bomber) == {
+        "bomber_turret_spread",
+        "bomber_nose_ring",
+        "bomber_core_ring",
+        "bomber_core_stream",
+        "bomber_desperation_ring",
+        "bomber_desperation_spread",
+    }
+    for spec in bomber.values():
+        assert spec.speed <= 2.0
+        assert spec.interval >= 45
+
+
+def test_the_desperation_ring_is_faster_and_denser_than_the_core_ring() -> None:
+    core, desperation = PATTERNS["bomber_core_ring"], PATTERNS["bomber_desperation_ring"]
+    assert desperation.speed > core.speed
+    assert desperation.count > core.count
+    assert desperation.interval < core.interval

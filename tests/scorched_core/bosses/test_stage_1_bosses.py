@@ -2,6 +2,7 @@ import math
 
 from scorched_core.bosses.stage_1_bosses import BOMBER_1, MIDBOSS_1
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.patterns.pattern_library import PATTERN_TABLE
 from scorched_core.tuning import BOSS_MAX_RADIUS, MISSILE_RADIUS, PBULLET_RADIUS
 
 
@@ -102,3 +103,43 @@ def test_every_bomber_part_has_a_lip_a_bolt_can_reach_without_touching_the_hull(
     for part in turrets:  # the wing turrets stand clear of the hull altogether
         gap = math.hypot(part.dx, part.dy) - part.effective_radius
         assert gap > BOMBER_1.hull_radius + shot
+
+
+def test_the_bomber_has_three_phases_at_sixty_and_twenty_five_percent_of_the_hull() -> None:
+    assert [phase.hp_frac for phase in BOMBER_1.phases] == [1.0, 0.6, 0.25]
+
+
+def test_phase_two_opens_the_core_and_adds_a_rotating_ring_and_a_stream() -> None:
+    second = BOMBER_1.phases[1]
+    assert second.hull_kind == EnemyKind.BOMBER_OPEN
+    assert [(e.pattern, e.part, e.dx, e.dy) for e in second.emitters] == [
+        ("bomber_turret_spread", 0, 0.0, 0.0),  # the turrets keep firing while they live
+        ("bomber_turret_spread", 1, 0.0, 0.0),
+        ("bomber_core_ring", -1, 0.0, 0.0),
+        ("bomber_core_stream", -1, 0.0, 0.0),
+    ]
+    assert second.sway_x == 36.0
+    assert PATTERN_TABLE[second.emitters[2].pattern_id].phase_step_deg > 0.0  # it rotates
+
+
+def test_phase_three_is_desperation_fire_from_the_core_with_a_wider_sway() -> None:
+    third = BOMBER_1.phases[2]
+    assert third.hull_kind is None  # the core stays open
+    assert [(e.pattern, e.part, e.dx, e.dy) for e in third.emitters] == [
+        ("bomber_desperation_ring", -1, 0.0, 0.0),
+        ("bomber_desperation_spread", -1, 0.0, 0.0),
+    ]
+    assert (third.sway_x, third.sway_y) == (44.0, 8.0)
+
+
+def test_total_bomber_hit_points_sit_in_the_research_range_for_a_long_fight() -> None:
+    total = BOMBER_1.hull_hp + sum(part.hp for part in BOMBER_1.parts)
+    assert 2000 <= total <= 2500
+
+
+def test_no_bomber_gun_in_any_phase_is_faster_than_two_or_closer_than_forty_five_steps() -> None:
+    for phase in BOMBER_1.phases:
+        for emitter in phase.emitters:
+            pattern = PATTERN_TABLE[emitter.pattern_id]
+            assert pattern.speed <= 2.0
+            assert pattern.interval >= 45

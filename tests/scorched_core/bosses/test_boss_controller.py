@@ -9,6 +9,7 @@ from scorched_core.bosses.boss_state import BossState
 from scorched_core.bosses.emitter_spec import EmitterSpec
 from scorched_core.bosses.part_spec import PartSpec
 from scorched_core.bosses.phase_spec import PhaseSpec
+from scorched_core.bosses.stage_1_bosses import BOMBER_1
 from scorched_core.clock.hitstop import Hitstop
 from scorched_core.collision.circle_hits import resolve_shots_vs_enemies
 from scorched_core.collision.uniform_grid import UniformGrid
@@ -952,3 +953,72 @@ def test_a_gone_controller_ignores_further_steps_and_can_start_a_fresh_fight() -
     rig.enter()
     rig.kill_part(0)  # the part counts again after a restart
     assert rig.step() == PART_POINTS
+
+
+# --- the giant bomber's phases (plan 03-19, D-10, D-11) ---
+
+
+def bomber_rig() -> Rig:
+    rig = Rig(BOMBER_1, slot=2)
+    rig.enter()
+    return rig
+
+
+def test_destroying_all_four_bomber_parts_at_full_hull_health_opens_the_core() -> None:
+    rig = bomber_rig()
+    for k in range(3):
+        rig.enemies.hp[rig.part(k)] = 0
+    rig.step()
+    assert rig.controller.phase_number == 1  # one engine is still alive
+    assert rig.enemies.kind[rig.hull()] == EnemyKind.BOMBER
+    rig.enemies.hp[rig.part(3)] = 0
+    rig.step()
+    assert rig.controller.phase_number == 2
+    assert rig.controller.hp_fraction == 1.0
+    assert rig.enemies.kind[rig.hull()] == EnemyKind.BOMBER_OPEN
+    (event,) = rig.events_of(EV_BOSS_PHASE)
+    assert (event[2], event[3]) == (2.0, 2.0)  # phase 2 of the boss slot
+    assert [int(rig.enemies.kind[rig.part(k)]) for k in range(4)] == [EnemyKind.BOMBER_STUMP] * 4
+
+
+def test_the_bomber_hull_at_exactly_sixty_percent_enters_phase_two_and_opens() -> None:
+    rig = bomber_rig()
+    hit_hull_to(rig, 841)  # 0.6 of 1400 is 840
+    rig.step()
+    assert rig.controller.phase_number == 1
+    hit_hull_to(rig, 840)
+    rig.step()
+    assert rig.controller.phase_number == 2
+    assert rig.enemies.kind[rig.hull()] == EnemyKind.BOMBER_OPEN
+    assert rig.enemies.radius[rig.hull()] == 28.0  # the open core is the same collider
+
+
+def test_one_hit_from_seventy_to_twenty_percent_jumps_to_phase_three_with_one_event() -> None:
+    rig = bomber_rig()
+    hit_hull_to(rig, 980)  # 0.7
+    rig.step()
+    assert rig.controller.phase_number == 1
+    hit_hull_to(rig, 280)  # 0.2
+    rig.step()
+    assert rig.controller.phase_number == 3
+    (event,) = rig.events_of(EV_BOSS_PHASE)
+    assert (event[2], event[3]) == (3.0, 2.0)
+    assert rig.enemies.kind[rig.hull()] == EnemyKind.BOMBER_OPEN  # the core opens on the way past
+
+
+def test_the_live_wing_turrets_keep_firing_in_phase_two_and_a_stump_goes_quiet() -> None:
+    rig = bomber_rig()
+    hit_hull_to(rig, 800)
+    rig.step()
+    assert rig.controller.phase_number == 2
+    rig.enemies.hp[rig.part(0)] = 0  # the left turret is shot off in phase two
+    rig.step()
+    from_left = from_right = 0
+    for _ in range(200):
+        rig.step()
+        left, right = rig.part(0), rig.part(1)
+        for x, y, *_ in rig.events_of(EV_ENEMY_FIRE):
+            from_left += math.hypot(x - rig.enemies.x[left], y - rig.enemies.y[left]) < 1.0
+            from_right += math.hypot(x - rig.enemies.x[right], y - rig.enemies.y[right]) < 1.0
+    assert from_right >= 1  # the live turret still fires its spread
+    assert from_left == 0  # the stump never does

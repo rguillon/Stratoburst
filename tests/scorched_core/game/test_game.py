@@ -331,7 +331,7 @@ def test_manifest_stage_describes_the_stage_markers_in_stage_mode() -> None:
         "block_size": 64.0,
         "bosses": [
             {"slot": 1, "name": "midboss", "phase_fracs": [0.5]},
-            {"slot": 2, "name": "boss", "phase_fracs": []},
+            {"slot": 2, "name": "boss", "phase_fracs": [0.6, 0.25]},
         ],
     }
 
@@ -4436,3 +4436,57 @@ def test_a_level_one_vulcan_reaches_a_wing_turret_and_an_engine_pod(
         _fire_tick(game)
     assert game.enemies.kind[turret_row] == EnemyKind.BOMBER_STUMP  # shot off
     assert game.enemies.hp[engine_row] < BOMBER_1.parts[engine].hp  # and the pod is dented
+
+
+def test_an_unshot_bomber_counts_down_its_last_twenty_seconds_then_retreats_unpaid() -> None:
+    game = _quiet_boss_game(god=True)
+    header = game.buffers["header"]
+    countdown: list[int] = []
+    retreats = 0
+    hull_ys: list[float] = []
+    boss = None
+    for _ in range(8000):
+        _tick(game)
+        boss = game.flow.boss if game.flow.boss is not None else boss
+        timer = int(header[H_BOSS_TIMER_S])
+        if timer >= 0:
+            if not countdown:
+                assert boss.fight_ticks == BOMBER_1.timeout_ticks - 20 * 60  # 20 s left, no sooner
+            if not countdown or countdown[-1] != timer:
+                countdown.append(timer)
+        retreating = len(_event_records(game, EV_BOSS_RETREAT))
+        retreats += retreating
+        if retreats and boss.active:
+            hull_ys.append(float(game.enemies.y[_hull_index(game)]))
+        if retreating:
+            assert boss.fight_ticks == BOMBER_1.timeout_ticks == 6000
+        if header[H_FLOW] == FlowState.CLEAR:
+            break
+    assert countdown == list(range(20, 0, -1))
+    assert retreats == 1
+    assert hull_ys == sorted(hull_ys, reverse=True)  # the bomber leaves upward
+    assert hull_ys[0] - hull_ys[-1] > 50.0
+    assert header[H_FLOW] == FlowState.CLEAR
+    assert game.flow.boss_destroyed is False  # the tally's boss line will be 0
+    assert header[H_BOSS_ACTIVE] == 0
+    assert header[H_SCORE] == 0  # nobody was paid for a bomber that got away
+    assert game.enemies.n == 0
+
+
+def test_shooting_the_bomber_down_pays_only_its_parts_not_the_kill() -> None:
+    game = _quiet_boss_game(god=True, weapon=WeaponKind.LASER, level=5)
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=1500)
+    boss = game.flow.boss
+    assert boss is not None
+    for k in range(len(BOMBER_1.parts)):  # shoot all four parts off at once
+        game.enemies.hp[game.enemies.index_of_uid(boss.part_uid(k))] = 0
+    _tick(game)
+    assert header[H_SCORE] == 28000
+    assert header[H_BOSS_PHASE] == 2  # all four parts gone: the core opens (D-11)
+    for _ in range(4000):
+        _fire_tick(game)
+        if header[H_FLOW] == FlowState.CLEAR:
+            break
+    assert game.flow.boss_destroyed is True
+    assert header[H_SCORE] == 28000  # the hull kill itself pays nothing (D-18)
