@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-17-PLAN.md
-last_updated: "2026-10-18T05:12:18.714Z"
+stopped_at: Completed 02-18-PLAN.md
+last_updated: "2026-10-18T05:22:53.581Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: faa230f4112d866a5a608b335815e7c8ec07498e
+state_head: 9adae34ca01d743f9644c19426428b5381d58561
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 27
+  completed_plans: 28
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 18 of 33
+Plan: 19 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -83,6 +83,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P15 | 5 min | 2 tasks | 9 files |
 | Phase 02 P16 | 7 min | 2 tasks | 7 files |
 | Phase 02 P17 | 7 min | 2 tasks | 11 files |
+| Phase 02 P18 | 9 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-17: Orb bullets are LDR (every channel at most 0.98) and drawn in a separate bulletScene after bloom: the composer gets a second RenderPass (clear false, clearDepth true) before OutputPass and the low tier clears depth and renders the scene directly
 - [Phase 02]: 02-17: Pink is reserved by PALETTE: a test fails when a saturated effect, weapon or pickup colour is within 35 degrees of the enemy-bullet hue, and every explosion and hit recipe colour is a palette entry
 - [Phase 02]: 02-17: Player bolts use the bolt style (quad stretched 2.5x along aData.z, HDR elliptical streak) in the palette VULCAN_TRACER colour instead of the old cyan override
+- [Phase 02]: 02-18: Enemy fire timer counts fire() calls from ENEMY_FIRE_DELAY (45); shots held outside the screen band (top edge to 70% height) fire as soon as the enemy enters it
+- [Phase 02]: 02-18: Helicopter rings alternate phase by pi/ENEMY_RING_COUNT via (age // interval) % 2 so consecutive rings interleave; ENEMY_FIRE events are pushed only for volleys that spawned a bullet
 
 ### Pending Todos
 
@@ -167,6 +170,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:12:18.625Z
-Stopped at: Completed 02-17-PLAN.md
+Last session: 2026-10-18T05:22:53.495Z
+Stopped at: Completed 02-18-PLAN.md
 Resume file: None
