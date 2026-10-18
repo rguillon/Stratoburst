@@ -16,6 +16,7 @@ describe('TIERS', () => {
       bloom: 'full',
       particleScale: 1,
       modelDetail: 'high',
+      maxDecals: 48,
     });
     expect(TIERS.mid).toEqual({
       name: 'mid',
@@ -24,6 +25,7 @@ describe('TIERS', () => {
       bloom: 'half',
       particleScale: 0.6,
       modelDetail: 'mid',
+      maxDecals: 32,
     });
     expect(TIERS.low).toEqual({
       name: 'low',
@@ -32,6 +34,7 @@ describe('TIERS', () => {
       bloom: 'off',
       particleScale: 0.35,
       modelDetail: 'low',
+      maxDecals: 16,
     });
     expect(Object.isFrozen(TIERS)).toBe(true);
     expect(TIER_ORDER).toEqual(['low', 'mid', 'high']);

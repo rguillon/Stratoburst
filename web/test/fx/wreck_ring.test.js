@@ -189,3 +189,180 @@ describe('createWreckRing', () => {
     expect(byName['wreck-tank'].instanceMatrix.count).toBe(12);
   });
 });
+
+// The smouldering trickle: emit(x, y, z, vx, vy, vz, life, size0, size1, r, g, b, gravity).
+function smouldering(options = {}) {
+  const emitted = { additive: [], normal: [] };
+  const layer = (name) => ({ emit: (...args) => emitted[name].push(args) });
+  const scale = { value: 1 };
+  const built = build({
+    layers: { additive: layer('additive'), normal: layer('normal') },
+    getScale: () => scale.value,
+    // Distinct from the gameplay plane so a test can see the ground layer was used.
+    toWorld: (x, y, out) => out.set(x - 120, -40, y - 160),
+    ...options,
+  });
+  return { ...built, emitted, scale };
+}
+
+// Advance the effect clock by `seconds` in 1/60 s frames, from `from`.
+function run(ring, from, seconds, scroll = 100) {
+  const frames = Math.round(seconds * 60);
+  for (let f = 1; f <= frames; f++) ring.update(scroll, from + f / 60);
+  return from + frames / 60;
+}
+
+function hueOf([r, g, b]) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === min) return 0;
+  const d = max - min;
+  let h;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+describe('the smouldering trickle', () => {
+  it('puffs dark smoke on the normal layer about every 0.18 s at particleScale 1', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    run(ring, 0, 3.6);
+    expect(emitted.normal.length).toBeGreaterThanOrEqual(19);
+    expect(emitted.normal.length).toBeLessThanOrEqual(21);
+    for (const p of emitted.normal) {
+      expect(Math.max(p[9], p[10], p[11])).toBeLessThan(0.3); // dark
+      expect(p[12]).toBeLessThan(0); // negative gravity: it rises
+      expect(p[4]).toBeGreaterThan(0); // and starts upward
+    }
+  });
+
+  it('flickers small orange flames on the additive layer every 0.3 s during the first 6 s only', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    const t = run(ring, 0, 6);
+    expect(emitted.additive.length).toBeGreaterThanOrEqual(19);
+    expect(emitted.additive.length).toBeLessThanOrEqual(21);
+    const before = emitted.additive.length;
+    run(ring, t, 4);
+    expect(emitted.additive.length).toBe(before); // no flames after 6 s
+  });
+
+  it('keeps smoking after the flames die', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    const t = run(ring, 0, 8);
+    const before = emitted.normal.length;
+    run(ring, t, 1.8);
+    expect(emitted.normal.length - before).toBeGreaterThanOrEqual(9);
+  });
+
+  it('paints the flames orange and never pink', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    run(ring, 0, 3);
+    expect(emitted.additive.length).toBeGreaterThan(0);
+    for (const p of emitted.additive) {
+      const rgb = [p[9], p[10], p[11]];
+      const hue = hueOf(rgb);
+      expect(hue).toBeGreaterThanOrEqual(15);
+      expect(hue).toBeLessThanOrEqual(45);
+      expect(p[7]).toBeLessThan(6); // small
+    }
+  });
+
+  it('scales the rate by getScale()', () => {
+    const full = smouldering();
+    full.ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    run(full.ring, 0, 3.6);
+    const low = smouldering();
+    low.scale.value = 0.35;
+    low.ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    run(low.ring, 0, 3.6);
+    const ratio = low.emitted.normal.length / full.emitted.normal.length;
+    expect(ratio).toBeGreaterThan(0.25);
+    expect(ratio).toBeLessThan(0.45);
+    const flameRatio = low.emitted.additive.length / full.emitted.additive.length;
+    expect(flameRatio).toBeGreaterThan(0.2);
+    expect(flameRatio).toBeLessThan(0.5);
+  });
+
+  it('places the puffs at the wreck position in the ground layer', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    run(ring, 0, 1);
+    const [first] = emitted.normal;
+    expect(first[0]).toBeCloseTo(-20, 5);
+    expect(first[1]).toBeCloseTo(-40, 5);
+    expect(first[2]).toBeCloseTo(-110, 5);
+  });
+
+  it('follows the wreck down the screen with the ground scroll', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    run(ring, 0, 1, 100 + 50);
+    const [first] = emitted.normal;
+    expect(first[2]).toBeCloseTo(50 + RATIO * 50 - 160, 3);
+  });
+
+  it('emits nothing for a wreck that is off screen', () => {
+    const below = smouldering();
+    below.ring.handle(EVENTS.EXPLOSION, 100, 300, 2, 1, KINDS.TANK);
+    run(below.ring, 0, 2, 100 + 40); // y = 300 + 0.94 * 40 = 337.6, past the bottom
+    expect(below.emitted.normal).toHaveLength(0);
+    expect(below.emitted.additive).toHaveLength(0);
+    const above = smouldering();
+    above.state.scroll = 100;
+    above.ring.handle(EVENTS.EXPLOSION, 100, 20, 2, 1, KINDS.TANK);
+    run(above.ring, 0, 2, 100 - 40); // y = 20 - 37.6 < 0
+    expect(above.emitted.normal).toHaveLength(0);
+    expect(above.emitted.additive).toHaveLength(0);
+  });
+
+  it('emits nothing without a particle layer', () => {
+    const { ring } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    expect(() => run(ring, 0, 1)).not.toThrow();
+    expect(ring.live).toBe(1);
+  });
+
+  it('counts a long frame as at most a quarter second', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.update(100, 60); // a minute-long gap, such as a tab returning from the background
+    expect(emitted.normal.length).toBeLessThanOrEqual(2);
+    expect(emitted.additive.length).toBeLessThanOrEqual(1);
+  });
+
+  it('ignores a clock that runs backwards', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.update(100, 5);
+    const before = emitted.normal.length;
+    ring.update(100, 4);
+    expect(emitted.normal.length).toBe(before);
+  });
+
+  it('starts a new wreck fresh when it overwrites a slot: flames again, no carried accumulator', () => {
+    const { ring, emitted } = smouldering({ capacity: 1 });
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    const t = run(ring, 0, 8);
+    const before = emitted.additive.length;
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TURRET);
+    run(ring, t, 3);
+    expect(emitted.additive.length - before).toBeGreaterThanOrEqual(9);
+  });
+
+  it('is deterministic with the default seeded rng', () => {
+    const a = smouldering();
+    const b = smouldering();
+    for (const { ring } of [a, b]) {
+      ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+      run(ring, 0, 2);
+    }
+    expect(a.emitted.normal).toEqual(b.emitted.normal);
+    expect(a.emitted.additive).toEqual(b.emitted.additive);
+  });
+});
+

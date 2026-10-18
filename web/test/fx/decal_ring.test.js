@@ -185,3 +185,58 @@ describe('createDecalRing', () => {
     expect(attribute.array).toBe(array);
   });
 });
+
+describe('setLimit', () => {
+  function filled(n = 48) {
+    const built = build();
+    for (let i = 0; i < n; i++) built.ring.add(i, 100, 16);
+    return built;
+  }
+
+  it('draws only the newest marks and keeps the older ones stored', () => {
+    const { ring } = filled();
+    ring.setLimit(16);
+    ring.update(100);
+    expect(ring.live).toBe(16);
+    const xs = drawn(ring).map((mark) => mark[0]);
+    expect(xs[0]).toBe(47);
+    expect(xs[15]).toBe(32);
+    expect(xs).not.toContain(31);
+  });
+
+  it('shows the hidden marks again when the limit is raised', () => {
+    const { ring } = filled();
+    ring.setLimit(16);
+    ring.update(100);
+    ring.setLimit(48);
+    ring.update(100);
+    expect(ring.live).toBe(48);
+    expect(drawn(ring).map((mark) => mark[0])).toContain(0);
+  });
+
+  it('keeps counting stored marks while hidden: a mark added under a limit is the newest', () => {
+    const { ring } = filled();
+    ring.setLimit(2);
+    ring.add(500, 100, 16);
+    ring.update(100);
+    expect(drawn(ring).map((mark) => mark[0])).toEqual([500, 47]);
+  });
+
+  it('clamps the limit to the capacity and to zero', () => {
+    const { ring } = filled(10);
+    ring.setLimit(1000);
+    ring.update(100);
+    expect(ring.live).toBe(10);
+    ring.setLimit(-5);
+    ring.update(100);
+    expect(ring.live).toBe(0);
+    expect(ring.mesh.geometry.instanceCount).toBe(0);
+  });
+
+  it('applies a 32 limit to a partly filled ring without drawing empty slots', () => {
+    const { ring } = filled(5);
+    ring.setLimit(32);
+    ring.update(100);
+    expect(ring.live).toBe(5);
+  });
+});
