@@ -1,10 +1,17 @@
-"""Hits against the ship's body: pickups now, enemy bullets and bodies in plan 02-15."""
+"""Hits against the ship: pickups on its body, enemy bullets and bodies on its hitbox core."""
 
 from collections.abc import Callable
 
 from scorched_core.collision.circle_hits import circles_touch
+from scorched_core.pools.bullet_pool import BulletPool
+from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.pools.pickup_pool import PickupPool
-from scorched_core.tuning import PICKUP_GRAB_RADIUS, PICKUP_RADIUS
+from scorched_core.tuning import (
+    ENEMY_BULLET_RADIUS,
+    ENEMY_GROUND,
+    PICKUP_GRAB_RADIUS,
+    PICKUP_RADIUS,
+)
 
 type PickupCollector = Callable[[int, int, float, float], None]
 
@@ -28,3 +35,34 @@ def resolve_pickups_vs_ship(
             pickups.remove_at(i)
             caught += 1
     return caught
+
+
+def resolve_bullets_vs_ship(bullets: BulletPool, x: float, y: float, radius: float) -> bool:
+    """Remove the first enemy bullet touching the hitbox core at ``(x, y)``; True when one did.
+
+    ``radius`` is the core radius and the bullet circle is ``ENEMY_BULLET_RADIUS``; edge contact
+    counts. Only one bullet is consumed per call because one hit is all the ship can take.
+    """
+    bx, by = bullets.x, bullets.y
+    for i in range(bullets.n):
+        if circles_touch(bx[i], by[i], ENEMY_BULLET_RADIUS, x, y, radius):
+            bullets.remove_at(i)
+            return True
+    return False
+
+
+def resolve_bodies_vs_ship(enemies: EnemyPool, x: float, y: float, radius: float) -> bool:
+    """Return whether a live air enemy's body touches the hitbox core at ``(x, y)``.
+
+    Ground units never count (they are terrain, not rammers) and neither does a dead enemy that
+    is still waiting to be removed from the pool.
+    """
+    ex, ey, er, kind, hp = enemies.x, enemies.y, enemies.radius, enemies.kind, enemies.hp
+    for i in range(enemies.n):
+        if (
+            hp[i] > 0
+            and not ENEMY_GROUND[kind[i]]
+            and circles_touch(ex[i], ey[i], er[i], x, y, radius)
+        ):
+            return True
+    return False
