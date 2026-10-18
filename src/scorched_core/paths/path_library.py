@@ -104,9 +104,10 @@ PATHS: Final[dict[str, PathSpec]] = {
     ),
     # A tank drives straight down its road, a crawl on top of the terrain scroll.
     "road_down": PathSpec(_line(0.0, 600.0), 0.25),
-    # Down a road, then a rounded turn onto the crossing road and off to the right.
+    # Down a road, then a rounded turn onto the crossing road and off to the right. The tank
+    # drives faster than a crawl so the turn happens on screen while the terrain scrolls by.
     "road_bend": PathSpec(
-        _join(_line(0.0, 70.0), arc_points(14.0, 0.0, 90.0, 5), _line(260.0, 0.0)), 0.25
+        _join(_line(0.0, 40.0), arc_points(14.0, 0.0, 90.0, 5), _line(260.0, 0.0)), 0.8
     ),
 }
 PATH_NAMES: Final = tuple(PATHS)

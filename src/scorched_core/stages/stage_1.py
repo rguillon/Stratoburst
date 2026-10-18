@@ -1,10 +1,15 @@
-"""Stage 1 as data (D-03): the slums opening, then the mid-boss and boss markers.
+"""Stage 1 as data (D-03): slums, downtown and the airbase, then the boss marker (D-35).
 
-Distances are scroll units (48 per second at the cruise speed of 0.8 per step). The opening is
-sparse on purpose (D-07, Raiden pacing): a few jets, a helicopter or two, tanks crawling down the
-two roads (x 80 and 160) and a carrier about every 30 to 40 seconds (D-08). The opening waves
-name their bullet patterns (a jet spread, a helicopter ring, a tank aimed shot, a turret stream),
-all slow and spaced out so they stay approachable.
+Distances are scroll units (48 per second at the cruise speed of 0.8 per step); the boss marker
+sits at 8640, about three minutes in (D-01). The slums opening is sparse on purpose (D-07, Raiden
+pacing): a few jets, a helicopter or two, tanks crawling down the two roads (x 80 and 160) and a
+carrier about every 30 to 40 seconds (D-08). Downtown is denser, with jets in curved formations on
+authored paths, helicopter pairs, tank columns driving down their roads and rooftop turrets, and
+breaks for the mid-boss at 4200: nothing spawns in the ``MIDBOSS_LULL`` after its marker. The
+airbase strafes, brings heavier turret groups and the last carrier, then goes quiet for
+``BOSS_QUIET`` units before the bomber arrives. Every wave names slow, spaced-out bullet patterns.
+Each section is a tuple of rows (formation helpers expand into plain rows) and the stage merges
+them with a stable sort on ``at``, so rows that share a distance keep their authored order.
 """
 
 from typing import Final
@@ -12,6 +17,12 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.stages.formations import (
+    column_formation,
+    line_formation,
+    mirrored,
+    v_formation,
+)
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.wave_entry import WaveEntry
 
@@ -24,55 +35,307 @@ _DIVE: Final = MotionKind.DIVE
 _HOVER: Final = MotionKind.HOVER
 _SWAY: Final = MotionKind.SWAY
 _GROUND: Final = MotionKind.GROUND
+_PATH: Final = MotionKind.PATH
 
 _MIDBOSS_AT: Final = 4200.0
 _BOSS_AT: Final = 8640.0  # about three minutes in (D-01)
 
+DOWNTOWN_AT: Final = 2600.0  # the slums end and the neon downtown begins (D-35)
+AIRBASE_AT: Final = 6500.0  # the rooftop airbase begins
+MIDBOSS_LULL: Final = 420.0  # nothing spawns this far past the mid-boss marker
+BOSS_QUIET: Final = 240.0  # nothing spawns this close before the boss marker
+_RESUME_AT: Final = _MIDBOSS_AT + MIDBOSS_LULL  # the first wave after the mid-boss
+_LAST_WAVE_AT: Final = _BOSS_AT - BOSS_QUIET
+
+_SLUMS: Final = (
+    # A V of jets diving from the top, each fanning a slow spread of three.
+    WaveEntry(80.0, _JET, 60.0, y=-12.0, vx=0.5, vy=2.2, pattern="spread3"),
+    WaveEntry(90.0, _JET, 120.0, y=-12.0, vy=2.4, pattern="spread3"),
+    WaveEntry(100.0, _JET, 180.0, y=-12.0, vx=-0.5, vy=2.2, pattern="spread3"),
+    # Two helicopters hover over the first avenue, each throwing a slow ring of ten.
+    WaveEntry(380.0, _HELI, 80.0, y=-14.0, motion=_HOVER, vy=1.2, pattern="ring10_slow"),
+    WaveEntry(420.0, _HELI, 160.0, y=-14.0, motion=_HOVER, vy=1.2, pattern="ring10_slow"),
+    # The first carrier: kill it for a crystal.
+    WaveEntry(600.0, _CARRIER, 120.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
+    # A tank column crawls down the left road, then another down the right.
+    WaveEntry(820.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
+    WaveEntry(850.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
+    WaveEntry(880.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
+    WaveEntry(1000.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
+    WaveEntry(1030.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
+    # An AA turret guards a bomb.
+    WaveEntry(
+        1200.0, _TURRET, 80.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB, pattern="stream3"
+    ),
+    # Jets sweep in from the left.
+    WaveEntry(1400.0, _JET, -12.0, y=60.0, vx=2.4, vy=0.9),
+    WaveEntry(1415.0, _JET, -12.0, y=60.0, vx=2.4, vy=0.9),
+    WaveEntry(1430.0, _JET, -12.0, y=60.0, vx=2.4, vy=0.9),
+    WaveEntry(1560.0, _HELI, 120.0, y=-14.0, motion=_HOVER, vy=1.2),
+    # And from the right.
+    WaveEntry(1700.0, _JET, 252.0, y=80.0, vx=-2.4, vy=0.9),
+    WaveEntry(1715.0, _JET, 252.0, y=80.0, vx=-2.4, vy=0.9),
+    WaveEntry(1730.0, _JET, 252.0, y=80.0, vx=-2.4, vy=0.9),
+    # A pair of swaying jets, then both roads at once.
+    WaveEntry(1850.0, _JET, 50.0, y=-12.0, motion=_SWAY, vy=1.1),
+    WaveEntry(1850.0, _JET, 190.0, y=-12.0, motion=_SWAY, vy=1.1),
+    WaveEntry(1950.0, _TANK, 80.0, motion=_GROUND, vy=0.0),
+    WaveEntry(1950.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
+    WaveEntry(2050.0, _TURRET, 160.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB),
+    # The second carrier, 1560 units (32 s) after the first.
+    WaveEntry(2160.0, _CARRIER, 70.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
+    # A closing V, a helicopter and a last tank before the downtown section.
+    WaveEntry(2300.0, _JET, 100.0, y=-12.0, vx=0.3, vy=2.3),
+    WaveEntry(2312.0, _JET, 140.0, y=-12.0, vx=-0.3, vy=2.3),
+    WaveEntry(2450.0, _HELI, 120.0, y=-14.0, motion=_HOVER, vy=1.2),
+    WaveEntry(2550.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
+)
+
+_DOWNTOWN: Final = (
+    # Two Vs of jets swoop in from opposite corners and cross over the avenues.
+    *mirrored(
+        v_formation(
+            2640.0, _JET, 50.0, 3, 24.0, 12.0, motion=_PATH, path="swoop", pattern="aimed_slow"
+        )
+    ),
+    # A tank column drives down the left road, a rooftop turret covers the right.
+    *column_formation(
+        2880.0, _TANK, 80.0, 3, 36.0, motion=_PATH, path="road_down", pattern="aimed_slow"
+    ),
+    WaveEntry(2900.0, _TURRET, 200.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    # Four jets weave down the screen abreast.
+    *line_formation(
+        3060.0, _JET, 120.0, 4, 44.0, motion=_PATH, path="s_dive", pattern="aimed_slow"
+    ),
+    # A helicopter pair arcs across from both sides, ringing as it goes.
+    *mirrored(
+        (
+            WaveEntry(
+                3260.0, _HELI, 30.0, y=-14.0, motion=_PATH, path="hover_arc", pattern="ring10_slow"
+            ),
+        )
+    ),
+    # Rooftop turrets; the right one guards a bomb.
+    WaveEntry(3420.0, _TURRET, 40.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    WaveEntry(3440.0, _TURRET, 200.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB),
+    # Jets dive, loop the loop and U-turn away, from both sides.
+    *mirrored(
+        column_formation(
+            3560.0, _JET, 60.0, 3, 14.0, motion=_PATH, path="loop_back", pattern="aimed_slow"
+        )
+    ),
+    # The third carrier, 1560 units (32 s) after the second.
+    WaveEntry(3720.0, _CARRIER, 120.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
+    # A tank column turns onto the crossing road, then a second column the other way.
+    *column_formation(
+        3800.0, _TANK, 80.0, 3, 40.0, motion=_PATH, path="road_bend", pattern="aimed_slow"
+    ),
+    *column_formation(
+        3920.0,
+        _TANK,
+        160.0,
+        3,
+        40.0,
+        motion=_PATH,
+        path="road_bend",
+        pattern="aimed_slow",
+        mirror=True,
+    ),
+    # Strafing runs from both edges close the section before the mid-boss.
+    *column_formation(3960.0, _JET, -12.0, 3, 14.0, motion=_PATH, path="strafe", y=50.0),
+    *column_formation(
+        3990.0, _JET, 252.0, 3, 14.0, motion=_PATH, path="strafe", y=100.0, mirror=True
+    ),
+    # The mid-boss lull: nothing spawns from the marker for MIDBOSS_LULL units.
+    # A deep S of five jets, the screen fills again.
+    *v_formation(
+        _RESUME_AT + 40.0,
+        _JET,
+        120.0,
+        5,
+        30.0,
+        12.0,
+        motion=_PATH,
+        path="s_dive",
+        pattern="aimed_slow",
+    ),
+    # Helicopters arc in from both sides, a turret on the roof between them.
+    *mirrored(
+        (
+            WaveEntry(
+                _RESUME_AT + 240.0,
+                _HELI,
+                30.0,
+                y=-14.0,
+                motion=_PATH,
+                path="hover_arc",
+                pattern="heli_ring",
+            ),
+        )
+    ),
+    WaveEntry(_RESUME_AT + 260.0, _TURRET, 120.0, motion=_GROUND, vy=0.0),
+    # Tanks down the right road, another column bending off the left one.
+    *column_formation(
+        _RESUME_AT + 420.0,
+        _TANK,
+        160.0,
+        4,
+        36.0,
+        motion=_PATH,
+        path="road_down",
+        pattern="aimed_slow",
+    ),
+    *column_formation(
+        _RESUME_AT + 480.0,
+        _TANK,
+        80.0,
+        3,
+        40.0,
+        motion=_PATH,
+        path="road_bend",
+        pattern="aimed_slow",
+    ),
+    *mirrored(
+        column_formation(
+            _RESUME_AT + 580.0,
+            _JET,
+            60.0,
+            3,
+            14.0,
+            motion=_PATH,
+            path="loop_back",
+            pattern="aimed_slow",
+        )
+    ),
+    # The fourth carrier, 1620 units (34 s) after the third.
+    WaveEntry(5340.0, _CARRIER, 170.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
+    *column_formation(5480.0, _JET, -12.0, 3, 14.0, motion=_PATH, path="strafe", y=70.0),
+    # A rooftop turret group; the middle one guards a bomb.
+    WaveEntry(5640.0, _TURRET, 40.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    WaveEntry(5660.0, _TURRET, 120.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB),
+    WaveEntry(5680.0, _TURRET, 200.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    *mirrored(
+        v_formation(
+            5800.0, _JET, 50.0, 3, 24.0, 12.0, motion=_PATH, path="swoop", pattern="aimed_slow"
+        )
+    ),
+    *line_formation(
+        6000.0, _HELI, 90.0, 3, 50.0, y=-14.0, motion=_PATH, path="hover_arc", pattern="aimed_slow"
+    ),
+    *column_formation(
+        6200.0, _TANK, 80.0, 4, 36.0, motion=_PATH, path="road_down", pattern="aimed_slow"
+    ),
+    *column_formation(
+        6320.0,
+        _TANK,
+        160.0,
+        3,
+        40.0,
+        motion=_PATH,
+        path="road_bend",
+        pattern="aimed_slow",
+        mirror=True,
+    ),
+    *mirrored(
+        column_formation(
+            6420.0, _JET, 60.0, 2, 14.0, motion=_PATH, path="loop_back", pattern="aimed_slow"
+        )
+    ),
+)
+
+_AIRBASE: Final = (
+    # Strafing runs low across the apron from both edges.
+    *column_formation(
+        6560.0, _JET, -12.0, 4, 12.0, motion=_PATH, path="strafe", y=40.0, pattern="aimed_slow"
+    ),
+    *column_formation(
+        6600.0,
+        _JET,
+        252.0,
+        4,
+        12.0,
+        motion=_PATH,
+        path="strafe",
+        y=90.0,
+        pattern="aimed_slow",
+        mirror=True,
+    ),
+    # A heavy turret group guards the hangars.
+    *line_formation(6700.0, _TURRET, 120.0, 4, 50.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    WaveEntry(6780.0, _TURRET, 120.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB),
+    *mirrored(
+        (
+            WaveEntry(
+                6840.0, _HELI, 30.0, y=-14.0, motion=_PATH, path="hover_arc", pattern="ring10_slow"
+            ),
+        )
+    ),
+    # The fifth and last carrier, 1620 units (34 s) after the fourth.
+    WaveEntry(6960.0, _CARRIER, 120.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
+    *mirrored(
+        v_formation(
+            7060.0, _JET, 50.0, 3, 24.0, 12.0, motion=_PATH, path="swoop", pattern="aimed_slow"
+        )
+    ),
+    *column_formation(
+        7240.0, _TANK, 80.0, 3, 40.0, motion=_PATH, path="road_bend", pattern="aimed_slow"
+    ),
+    *column_formation(
+        7380.0,
+        _TANK,
+        160.0,
+        3,
+        40.0,
+        motion=_PATH,
+        path="road_bend",
+        pattern="aimed_slow",
+        mirror=True,
+    ),
+    *mirrored(
+        column_formation(
+            7420.0, _JET, 60.0, 3, 14.0, motion=_PATH, path="loop_back", pattern="aimed_slow"
+        )
+    ),
+    *line_formation(
+        7560.0, _HELI, 90.0, 3, 50.0, y=-14.0, motion=_PATH, path="hover_arc", pattern="aimed_slow"
+    ),
+    *line_formation(7700.0, _TURRET, 120.0, 3, 80.0, motion=_GROUND, vy=0.0, pattern="stream3"),
+    *column_formation(7800.0, _JET, -12.0, 4, 12.0, motion=_PATH, path="strafe", y=60.0),
+    *column_formation(
+        7860.0, _JET, 252.0, 4, 12.0, motion=_PATH, path="strafe", y=110.0, mirror=True
+    ),
+    *column_formation(
+        8080.0, _TANK, 80.0, 4, 36.0, motion=_PATH, path="road_down", pattern="aimed_slow"
+    ),
+    *line_formation(
+        7980.0, _JET, 120.0, 5, 36.0, motion=_PATH, path="s_dive", pattern="aimed_slow"
+    ),
+    *mirrored(
+        (
+            WaveEntry(
+                8120.0, _HELI, 30.0, y=-14.0, motion=_PATH, path="hover_arc", pattern="heli_ring"
+            ),
+        )
+    ),
+    # The last jets swoop in; then the apron goes quiet for the bomber.
+    *mirrored(
+        v_formation(
+            _LAST_WAVE_AT - 100.0,
+            _JET,
+            50.0,
+            3,
+            24.0,
+            12.0,
+            motion=_PATH,
+            path="swoop",
+            pattern="aimed_slow",
+        )
+    ),
+)
+
 STAGE_1: Final = StageData(
     number=1,
     length=_BOSS_AT + 660.0,
-    waves=(
-        # A V of jets diving from the top, each fanning a slow spread of three.
-        WaveEntry(80.0, _JET, 60.0, y=-12.0, vx=0.5, vy=2.2, pattern="spread3"),
-        WaveEntry(90.0, _JET, 120.0, y=-12.0, vy=2.4, pattern="spread3"),
-        WaveEntry(100.0, _JET, 180.0, y=-12.0, vx=-0.5, vy=2.2, pattern="spread3"),
-        # Two helicopters hover over the first avenue, each throwing a slow ring of ten.
-        WaveEntry(380.0, _HELI, 80.0, y=-14.0, motion=_HOVER, vy=1.2, pattern="ring10_slow"),
-        WaveEntry(420.0, _HELI, 160.0, y=-14.0, motion=_HOVER, vy=1.2, pattern="ring10_slow"),
-        # The first carrier: kill it for a crystal.
-        WaveEntry(600.0, _CARRIER, 120.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
-        # A tank column crawls down the left road, then another down the right.
-        WaveEntry(820.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
-        WaveEntry(850.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
-        WaveEntry(880.0, _TANK, 80.0, motion=_GROUND, vy=0.0, pattern="aimed_slow"),
-        WaveEntry(1000.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
-        WaveEntry(1030.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
-        # An AA turret guards a bomb.
-        WaveEntry(
-            1200.0, _TURRET, 80.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB, pattern="stream3"
-        ),
-        # Jets sweep in from the left.
-        WaveEntry(1400.0, _JET, -12.0, y=60.0, vx=2.4, vy=0.9),
-        WaveEntry(1415.0, _JET, -12.0, y=60.0, vx=2.4, vy=0.9),
-        WaveEntry(1430.0, _JET, -12.0, y=60.0, vx=2.4, vy=0.9),
-        WaveEntry(1560.0, _HELI, 120.0, y=-14.0, motion=_HOVER, vy=1.2),
-        # And from the right.
-        WaveEntry(1700.0, _JET, 252.0, y=80.0, vx=-2.4, vy=0.9),
-        WaveEntry(1715.0, _JET, 252.0, y=80.0, vx=-2.4, vy=0.9),
-        WaveEntry(1730.0, _JET, 252.0, y=80.0, vx=-2.4, vy=0.9),
-        # A pair of swaying jets, then both roads at once.
-        WaveEntry(1850.0, _JET, 50.0, y=-12.0, motion=_SWAY, vy=1.1),
-        WaveEntry(1850.0, _JET, 190.0, y=-12.0, motion=_SWAY, vy=1.1),
-        WaveEntry(1950.0, _TANK, 80.0, motion=_GROUND, vy=0.0),
-        WaveEntry(1950.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
-        WaveEntry(2050.0, _TURRET, 160.0, motion=_GROUND, vy=0.0, drop=PickupKind.BOMB),
-        # The second carrier, 1560 units (32 s) after the first.
-        WaveEntry(2160.0, _CARRIER, 70.0, y=-18.0, motion=_SWAY, vy=0.5, drop=PickupKind.CRYSTAL),
-        # A closing V, a helicopter and a last tank before the downtown section.
-        WaveEntry(2300.0, _JET, 100.0, y=-12.0, vx=0.3, vy=2.3),
-        WaveEntry(2312.0, _JET, 140.0, y=-12.0, vx=-0.3, vy=2.3),
-        WaveEntry(2450.0, _HELI, 120.0, y=-14.0, motion=_HOVER, vy=1.2),
-        WaveEntry(2550.0, _TANK, 160.0, motion=_GROUND, vy=0.0),
-    ),
+    waves=tuple(sorted(_SLUMS + _DOWNTOWN + _AIRBASE, key=lambda wave: wave.at)),
     markers=(("midboss", _MIDBOSS_AT), ("boss", _BOSS_AT)),
 )

@@ -111,9 +111,9 @@ def test_an_unknown_path_name_raises_value_error() -> None:
         path_index("nowhere")
 
 
-def test_the_road_paths_are_slow_enough_to_stay_on_the_terrain() -> None:
-    assert PATHS["road_down"].speed <= 0.5
-    assert PATHS["road_bend"].speed <= 0.5
+def test_the_road_paths_are_tank_speeds_relative_to_the_terrain() -> None:
+    assert PATHS["road_down"].speed <= 0.5  # a crawl on top of the scroll
+    assert PATHS["road_bend"].speed <= 1.0  # quick enough to turn on screen, still slower than jets
 
 
 def test_the_swoop_leaves_toward_the_right_and_the_strafe_crosses_the_field() -> None:
