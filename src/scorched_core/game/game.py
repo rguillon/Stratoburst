@@ -32,6 +32,7 @@ from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.pools.missile_pool import MissilePool
 from scorched_core.pools.pickup_pool import PickupPool
 from scorched_core.protocol import (
+    BLAST_HUGE,
     BLAST_LARGE,
     BLAST_MEDIUM,
     BLAST_SMALL,
@@ -43,16 +44,27 @@ from scorched_core.protocol import (
     ENEMY_STRIDE,
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
+    EV_BOSS_DEFEATED,
+    EV_BOSS_PHASE,
+    EV_BOSS_RETREAT,
+    EV_BOSS_WARNING,
     EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
+    EV_EXTEND,
+    EV_GAME_OVER,
     EV_HIT,
+    EV_MEDAL,
+    EV_PART_DESTROYED,
     EV_PICKUP,
     EV_PLAYER_DEATH,
     EV_PLAYER_HIT,
     EV_RESPAWN,
     EV_SFX,
     EV_SHOT,
+    EV_STAGE_CLEAR,
+    EV_STAGE_START,
+    EV_TALLY_LINE,
     EVENT_CAP,
     EVENT_STRIDE,
     FLAG_FIRING,
@@ -64,27 +76,47 @@ from scorched_core.protocol import (
     H_BOMB_X,
     H_BOMB_Y,
     H_BOMBS,
+    H_BOSS_ACTIVE,
+    H_BOSS_HP,
+    H_BOSS_PHASE,
+    H_BOSS_TIMER_S,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_FLOW,
+    H_FLOW_T,
+    H_HIGH_SCORE,
     H_HITSTOP,
     H_INVULN,
     H_KILLS,
     H_LEVEL,
+    H_LIVES,
     H_MAX_BONUS,
+    H_MEDAL_CHAIN,
+    H_MEDAL_VALUE,
     H_MISSILE_N,
+    H_NEW_RECORD,
     H_PBULLET_N,
     H_PICKUP_N,
     H_PLAYER_PHASE,
+    H_SCORE,
+    H_SCROLL_RATE,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
+    H_STAGE,
+    H_STAGE_DIST,
     H_STEPS,
     H_STORM_HITS,
     H_STORM_N,
+    H_TALLY_BOMBS,
+    H_TALLY_BOSS,
+    H_TALLY_MEDALS,
+    H_TALLY_N,
+    H_TALLY_NO_MISS,
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
@@ -98,7 +130,9 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
     PROTOCOL_VERSION,
 )
+from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
+from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.terrain_scroll import TerrainScroll
@@ -173,6 +207,26 @@ _HEADER_SLOTS: dict[str, int] = {
     "BOMB_X": H_BOMB_X,
     "BOMB_Y": H_BOMB_Y,
     "BOMB_T": H_BOMB_T,
+    "SCORE": H_SCORE,
+    "HIGH_SCORE": H_HIGH_SCORE,
+    "LIVES": H_LIVES,
+    "FLOW": H_FLOW,
+    "FLOW_T": H_FLOW_T,
+    "STAGE": H_STAGE,
+    "STAGE_DIST": H_STAGE_DIST,
+    "SCROLL_RATE": H_SCROLL_RATE,
+    "BOSS_ACTIVE": H_BOSS_ACTIVE,
+    "BOSS_PHASE": H_BOSS_PHASE,
+    "BOSS_HP": H_BOSS_HP,
+    "BOSS_TIMER_S": H_BOSS_TIMER_S,
+    "MEDAL_VALUE": H_MEDAL_VALUE,
+    "MEDAL_CHAIN": H_MEDAL_CHAIN,
+    "TALLY_BOSS": H_TALLY_BOSS,
+    "TALLY_MEDALS": H_TALLY_MEDALS,
+    "TALLY_NO_MISS": H_TALLY_NO_MISS,
+    "TALLY_BOMBS": H_TALLY_BOMBS,
+    "TALLY_N": H_TALLY_N,
+    "NEW_RECORD": H_NEW_RECORD,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -188,6 +242,17 @@ _EVENT_KINDS: dict[str, int] = {
     "BOMB_DETONATE": EV_BOMB_DETONATE,
     "DEATHBOMB_SAVE": EV_DEATHBOMB_SAVE,
     "SFX": EV_SFX,
+    "MEDAL": EV_MEDAL,
+    "EXTEND": EV_EXTEND,
+    "PART_DESTROYED": EV_PART_DESTROYED,
+    "BOSS_WARNING": EV_BOSS_WARNING,
+    "BOSS_PHASE": EV_BOSS_PHASE,
+    "BOSS_DEFEATED": EV_BOSS_DEFEATED,
+    "BOSS_RETREAT": EV_BOSS_RETREAT,
+    "STAGE_START": EV_STAGE_START,
+    "STAGE_CLEAR": EV_STAGE_CLEAR,
+    "TALLY_LINE": EV_TALLY_LINE,
+    "GAME_OVER": EV_GAME_OVER,
 }
 
 _FIRE_PATTERNS: dict[str, int] = {pattern.name: pattern.value for pattern in FirePattern}
@@ -196,6 +261,7 @@ _BLAST_CLASSES: dict[str, int] = {
     "SMALL": BLAST_SMALL,
     "MEDIUM": BLAST_MEDIUM,
     "LARGE": BLAST_LARGE,
+    "HUGE": BLAST_HUGE,
 }
 
 
@@ -358,6 +424,8 @@ class Game:
             "outcomes": {outcome.name: outcome.value for outcome in PickupOutcome},
             "phases": {phase.name: phase.value for phase in PlayerPhase},
             "bomb_phases": {phase.name: phase.value for phase in BombPhase},
+            "flow_states": {state.name: state.value for state in FlowState},
+            "stage": self._stage_manifest(),
             "tuning": {
                 "scroll_speed": SCROLL_SPEED,
                 "hitbox_radius": HITBOX_RADIUS,
@@ -369,6 +437,21 @@ class Game:
                 "bomb_grow_ticks": BOMB_GROW_TICKS,
                 "bomb_blast_ticks": BOMB_BLAST_TICKS,
             },
+        }
+
+    def _stage_manifest(self) -> dict[str, object]:
+        """The stage the renderer plays: number, length, named markers and whether it loops.
+
+        The shooting gallery is stage 0: it loops and has no markers (its length borrows stage 1's).
+        """
+        stage = self.stage
+        if stage is None:
+            return {"number": 0, "length": STAGE_1.length, "markers": {}, "loop": True}
+        return {
+            "number": stage.number,
+            "length": stage.length,
+            "markers": dict(stage.markers),
+            "loop": False,
         }
 
     def set_paused(self, paused: bool) -> None:
@@ -436,6 +519,11 @@ class Game:
         header[H_STEPS] = steps
         header[H_ALPHA] = self._runner.alpha
         header[H_SCROLL_Y] = self.terrain.distance
+        header[H_SCROLL_RATE] = self.terrain.speed
+        stage = self.stage
+        header[H_STAGE] = 0 if stage is None else stage.number
+        header[H_FLOW] = -1 if stage is None else int(FlowState.PLAY)
+        header[H_STAGE_DIST] = 0 if stage is None else self.terrain.distance
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
         header[H_FLAGS] = self._flags()

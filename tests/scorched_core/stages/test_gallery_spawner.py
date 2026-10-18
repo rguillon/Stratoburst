@@ -87,7 +87,7 @@ def test_a_refused_spawn_is_skipped_never_queued() -> None:
     spawner, enemies = GallerySpawner(script=script, loop_ticks=2), EnemyPool()
     for _ in range(200):
         spawner.step(enemies)
-    assert enemies.n == 40
+    assert enemies.n == ENEMY_MAX_ALIVE
     enemies.n = 0
     spawner.step(enemies)  # tick 0 of a fresh loop spawns again
     assert enemies.n == 1

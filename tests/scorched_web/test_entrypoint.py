@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.game.fault_mode import FaultMode
 from scorched_core.protocol import H_FLOW
 from scorched_core.stages.flow_state import FlowState
@@ -167,6 +168,7 @@ def test_no_options_build_stage_one() -> None:
         manifest = web.manifest()
         assert web._game.stage is STAGE_1
         assert manifest["stage"]["number"] == 1
+        web._game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
         assert web._game.buffers["header"][H_FLOW] == FlowState.PLAY
 
 

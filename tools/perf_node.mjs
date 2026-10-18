@@ -93,7 +93,14 @@ const round = (v) => Math.round(v * 10000) / 10000;
 
 // One measured run on a fresh game, so one weapon's state never skews another's numbers.
 function measure(weapon) {
-  const gameOptions = { seed: 1, stress: options.stress, god: true, bombs: BOMB_STOCK };
+  // The gallery keeps these runs on the Phase 2 workload; plan 03-27 adds the stage run.
+  const gameOptions = {
+    seed: 1,
+    stress: options.stress,
+    god: true,
+    bombs: BOMB_STOCK,
+    gallery: true,
+  };
   if (weapon !== null) gameOptions.weapon = weapon;
   if (options.level !== null) gameOptions.level = options.level;
   const game = entry.create_game(pyodide.toPy(gameOptions));

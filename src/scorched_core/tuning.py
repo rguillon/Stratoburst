@@ -116,7 +116,7 @@ HITSTOP_DEATH_TICKS: Final = 6
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames
-ENEMY_MAX_ALIVE: Final = 40  # spawns beyond this are refused; the columns hold ENEMY_CAP
+ENEMY_MAX_ALIVE: Final = 56  # spawns beyond this are refused; a boss and its parts share the pool
 ENEMY_EXIT_MARGIN: Final = 24.0  # an enemy this far outside the playfield is gone
 ENEMY_SWAY: Final = 30.0  # sinusoidal sway amplitude in units
 ENEMY_SWAY_PERIOD: Final = 120  # steps per full sway cycle

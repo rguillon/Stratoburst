@@ -1,6 +1,7 @@
 // URL flag grammar (D-15). Only these parameters are read; everything else is ignored:
 //   debug, stress, tier, crash (Phase 1), the weapon test flags weapon and level, god
 // (presence only; the ship ignores hits so automated runs are never disturbed) and bombs.
+// gallery (presence only) brings back the Phase 2 shooting gallery: stage 1 is the default game.
 // weapon is an allow-listed lowercase name (else null, the default); level is truncated and
 // clamped to 1..5 and bombs (the starting stock) to 0..7, both null when absent or not a number.
 // Python validates all three again.
@@ -54,5 +55,6 @@ export function parseUrlFlags(search) {
     level: parseLevel(params),
     god: params.has('god'),
     bombs: parseBombs(params),
+    gallery: params.has('gallery'),
   });
 }
