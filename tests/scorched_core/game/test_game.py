@@ -1619,3 +1619,65 @@ def test_a_vulcan_game_never_shows_a_beam() -> None:
     game = _beam_game()
     _hold(game, 5)
     assert game.buffers["header"][H_BEAM_W] == 0.0
+
+
+def test_the_laser_pierces_every_enemy_in_its_column_through_the_game_step() -> None:
+    game = _beam_game(weapon=WeaponKind.LASER, level=2)
+    slots = [
+        _place(game, EnemyKind.JET, game.ship.x, game.ship.y - 60.0),
+        _place(game, EnemyKind.HELI, game.ship.x + 2.0, game.ship.y - 130.0),
+        _place(game, EnemyKind.CARRIER, game.ship.x - 3.0, game.ship.y - 200.0),
+    ]
+    beside = _place(game, EnemyKind.JET, game.ship.x + 60.0, game.ship.y - 100.0)
+    _hold(game, 1)
+    assert [game.enemies.hp[s] for s in slots] == [10_000 - 2] * 3
+    assert game.enemies.hp[beside] == 10_000
+
+
+def test_the_laser_damages_a_ground_unit_in_its_column() -> None:
+    game = _beam_game(weapon=WeaponKind.LASER, level=1)
+    tank = _place(game, EnemyKind.TANK, game.ship.x, game.ship.y - 100.0)
+    _hold(game, 1)
+    assert game.enemies.hp[tank] == 10_000 - 1
+
+
+def test_the_laser_does_not_reach_an_enemy_below_the_nose() -> None:
+    game = _beam_game(weapon=WeaponKind.LASER, level=5)
+    below = _place(game, EnemyKind.JET, game.ship.x, game.ship.y + 40.0)
+    _hold(game, 1)
+    assert game.enemies.hp[below] == 10_000
+
+
+def test_switching_from_the_laser_to_the_vulcan_drops_the_beam_on_the_next_step() -> None:
+    game = _beam_game(weapon=WeaponKind.LASER, level=4)
+    _hold(game, 2)
+    assert game.buffers["header"][H_BEAM_W] == 5.5
+    game.loadout.kind = WeaponKind.VULCAN
+    _hold(game, 1)
+    assert game.buffers["header"][H_BEAM_W] == 0.0
+    assert game.pbullets.n > 0
+
+
+def test_a_level_five_laser_out_damages_a_level_five_vulcan_on_one_target_over_sixty_steps() -> (
+    None
+):
+    damage = {}
+    for weapon in (WeaponKind.LASER, WeaponKind.VULCAN):
+        game = _beam_game(weapon=weapon, level=5)
+        slot = _place(game, EnemyKind.CARRIER, game.ship.x, game.ship.y - 80.0)
+        _hold(game, 60)
+        damage[weapon] = 10_000 - game.enemies.hp[slot]
+    assert damage[WeaponKind.LASER] == 5 * 20  # a hit on steps 0, 3, ... 57
+    assert damage[WeaponKind.LASER] > damage[WeaponKind.VULCAN] > 0
+
+
+def test_the_laser_stays_deterministic_for_one_seed_and_inputs() -> None:
+    def run() -> bytes:
+        game = Game(seed=5, weapon=WeaponKind.LASER, level=4, god=True)
+        snapshots = bytearray()
+        for step in range(300):
+            game.tick(STEP_MS, Button.FIRE if step % 7 else 0, math.sin(step / 30), 0.0, 0.0, 0.0)
+            snapshots += bytes(game.buffers["header"]) + bytes(game.buffers["enemies"])
+        return bytes(snapshots)
+
+    assert run() == run()
