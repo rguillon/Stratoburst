@@ -72,6 +72,19 @@ describe('createWreckRing', () => {
     expect(positionOf(byName['wreck-tank'], 0).toArray()).toEqual([-20, 0, -110]);
   });
 
+  it('draws a wreck with a finite matrix and a non-zero scale diagonal (CR-01)', () => {
+    const { ring, byName } = build({
+      layers: { additive: { emit() {} }, normal: { emit() {} } },
+      getScale: () => 0.6,
+      toWorld: (x, y, out) => out.set(x, 0, y),
+    });
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.update(100, 0.016);
+    const m = byName['wreck-tank'].instanceMatrix.array.slice(0, 16);
+    expect(Array.from(m).every(Number.isFinite)).toBe(true);
+    expect([m[0], m[5], m[10]].every((v) => Math.abs(v) > 0)).toBe(true);
+  });
+
   it('adds nothing for an air EXPLOSION, another event, or an unknown kind', () => {
     const { ring } = build();
     ring.handle(EVENTS.EXPLOSION, 100, 50, 1, 0, KINDS.TANK);
