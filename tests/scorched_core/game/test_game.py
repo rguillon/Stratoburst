@@ -33,6 +33,7 @@ from scorched_core.protocol import (
     EV_EXTEND,
     EV_GAME_OVER,
     EV_HIT,
+    EV_MEDAL,
     EV_PICKUP,
     EV_PLAYER_DEATH,
     EV_PLAYER_HIT,
@@ -66,6 +67,8 @@ from scorched_core.protocol import (
     H_LEVEL,
     H_LIVES,
     H_MAX_BONUS,
+    H_MEDAL_CHAIN,
+    H_MEDAL_VALUE,
     H_MISSILE_N,
     H_NEW_RECORD,
     H_PBULLET_N,
@@ -179,7 +182,14 @@ def test_manifest_contract() -> None:
         "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
         "events": {"stride": 6, "cap": 128},
     }
-    assert manifest["pickup_kinds"] == {"RED": 0, "BLUE": 1, "PURPLE": 2, "CRYSTAL": 3, "BOMB": 4}
+    assert manifest["pickup_kinds"] == {
+        "RED": 0,
+        "BLUE": 1,
+        "PURPLE": 2,
+        "CRYSTAL": 3,
+        "BOMB": 4,
+        "MEDAL": 5,
+    }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
     assert manifest["enemy_kinds"] == {"JET": 0, "HELI": 1, "CARRIER": 2, "TANK": 3, "TURRET": 4}
 
@@ -3512,3 +3522,93 @@ def test_a_restart_opens_with_the_intro_and_the_fly_in_again() -> None:
     assert _header(game, H_FLOW) == FlowState.PLAY
     assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
     assert _header(game, H_INVULN) == 0
+
+
+# --- medals (plan 03-11) -----------------------------------------------------------------------
+
+
+def _kill_tank_carrying(game: Game, drop: int, x: float = 80.0, y: float = 120.0) -> None:
+    """Park a one-hp tank carrying ``drop`` just above a bolt that reaches it next step."""
+    enemies = game.enemies
+    enemies.n = 0
+    enemies.spawn(EnemyKind.TANK, x, y, MotionKind.GROUND, 0.0, 0.0, drop)
+    enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def _drop_a_medal(game: Game) -> None:
+    _kill_tank_carrying(game, PickupKind.MEDAL)
+    _tick(game)
+
+
+def _stand_on_the_medal(game: Game) -> None:
+    game.ship.x = game.pickups.x[0]
+    game.ship.y = game.pickups.y[0]
+
+
+def test_a_killed_medal_tank_leaves_a_medal_at_its_kill_position() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    pickups = game.pickups
+    assert pickups.n == 1
+    assert pickups.kind[0] == PickupKind.MEDAL
+    assert pickups.x[0] == pytest.approx(80.0, abs=0.5)
+    assert pickups.y[0] == pytest.approx(120.0, abs=2.0)
+    assert (pickups.vx[0], pickups.vy[0]) == (0.0, 0.0)
+
+
+def test_a_medal_drifts_down_with_the_scroll_at_the_ground_speed() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    y = game.pickups.y[0]
+    _tick(game)
+    assert game.pickups.y[0] - y == pytest.approx(0.8 * 0.94, abs=1e-4)
+    assert game.pickups.x[0] == pytest.approx(80.0, abs=0.5)
+
+
+def test_catching_a_medal_pays_the_chain_value_and_pushes_one_medal_event() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    _stand_on_the_medal(game)
+    _tick(game)
+    header = game.buffers["header"]
+    assert header[H_SCORE] == 100
+    assert (header[H_MEDAL_VALUE], header[H_MEDAL_CHAIN]) == (200.0, 1.0)
+    kinds = _event_kinds(game)
+    assert kinds.count(EV_MEDAL) == 1
+    assert EV_PICKUP not in kinds
+    events = game.buffers["events"]
+    slots = [i * EVENT_STRIDE for i in range(game.events.n)]
+    at = next(slot for slot in slots if events[slot] == EV_MEDAL)
+    assert (events[at + 3], events[at + 4]) == (100.0, 1.0)
+    assert events[at + 1] == pytest.approx(game.ship.x, abs=1.0)
+    assert game.pickups.n == 0
+
+
+def test_a_fresh_game_offers_the_base_medal_value_and_no_chain() -> None:
+    game = Game()
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_MEDAL_VALUE], header[H_MEDAL_CHAIN]) == (100.0, 0.0)
+
+
+def test_the_medal_chain_climbs_with_each_catch() -> None:
+    game = Game(god=True)
+    for expected in (100, 200, 500):
+        _drop_a_medal(game)
+        _stand_on_the_medal(game)
+        before = game.score.score
+        _tick(game)
+        assert game.score.score - before == expected
+    assert game.buffers["header"][H_MEDAL_CHAIN] == 3.0
+
+
+def test_the_medal_tier_packed_for_the_renderer_is_the_chain_tier() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    out = game.buffers["pickups"]
+    assert (out[2], out[3]) == (0.0, float(PickupKind.MEDAL))
+    _stand_on_the_medal(game)
+    _tick(game)
+    _drop_a_medal(game)
+    assert game.buffers["pickups"][2] == 1.0

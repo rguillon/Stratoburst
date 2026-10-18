@@ -256,3 +256,76 @@ def test_clear_empties_the_pool() -> None:
     assert pool.n == 0
     assert pool.spawn(PickupKind.BOMB, 1.0, 2.0, 0.0, 0.0)
     assert pool.n == 1
+
+
+# --- medals (plan 03-11) ---------------------------------------------------------------------
+
+
+def test_spawn_medal_adds_a_still_medal_that_the_scroll_carries() -> None:
+    pool = PickupPool()
+    assert pool.spawn_medal(80.0, 120.0)
+    assert (pool.kind[0], pool.x[0], pool.y[0]) == (PickupKind.MEDAL, 80.0, 120.0)
+    assert (pool.vx[0], pool.vy[0], pool.age[0]) == (0.0, 0.0, 0)
+
+
+def test_a_medal_drifts_down_by_exactly_the_ground_speed_each_step() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    for _ in range(10):
+        pool.step(0.752)
+    assert pool.y[0] == pytest.approx(100.0 + 10 * 0.752, abs=1e-3)
+    assert pool.x[0] == 80.0
+
+
+def test_the_medal_ground_speed_has_a_default_of_the_ground_scroll() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    pool.step()
+    assert pool.y[0] == pytest.approx(100.0 + 0.8 * 0.94, abs=1e-4)
+
+
+def test_a_medal_never_bounces_and_never_times_out() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(PICKUP_RADIUS - 5.0, PICKUP_RADIUS - 5.0)
+    for _ in range(PICKUP_LIFE_TICKS - 1):
+        pool.step(0.0)
+    assert (pool.x[0], pool.y[0]) == (PICKUP_RADIUS - 5.0, PICKUP_RADIUS - 5.0)
+    pool.step(0.0)
+    pool.step(0.0)
+    assert pool.n == 1
+    assert pool.y[0] == PICKUP_RADIUS - 5.0  # the exit speed of a drifting crystal never applies
+
+
+def test_a_medal_below_the_playfield_is_removed() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, PLAYFIELD_H + 15.5)
+    pool.step(0.4)
+    assert pool.n == 1
+    pool.step(0.4)
+    assert pool.n == 0
+
+
+def test_crystals_and_bombs_move_as_before_when_a_ground_speed_is_given() -> None:
+    pool = PickupPool()
+    pool.spawn(PickupKind.BOMB, 100.0, 100.0, 0.0, 0.5)
+    pool.spawn(PickupKind.CRYSTAL, 50.0, 50.0, 0.64, -0.48)
+    pool.step(5.0)
+    assert pool.y[0] == pytest.approx(100.5)
+    assert (pool.x[1], pool.y[1]) == (pytest.approx(50.64), pytest.approx(49.52))
+
+
+def test_a_medal_reports_the_chain_tier_as_its_colour() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    assert pool.color_at(0) == 0
+    pool.medal_tier = 4
+    assert pool.color_at(0) == 4
+
+
+def test_pack_into_writes_the_medal_tier_as_the_colour_and_the_kind() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    pool.medal_tier = 3
+    out = array("f", [0.0] * (PICKUP_STRIDE * PICKUP_CAP))
+    pool.pack_into(out)
+    assert list(out[:PICKUP_STRIDE]) == [80.0, 100.0, 3.0, float(PickupKind.MEDAL)]

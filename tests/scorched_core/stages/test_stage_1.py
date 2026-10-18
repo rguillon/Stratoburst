@@ -223,3 +223,36 @@ def test_the_whole_timeline_never_fills_the_enemy_pool() -> None:
         peak = max(peak, pool.n)
     assert spawned == len(STAGE_1.waves)  # no spawn was refused by the alive cap
     assert peak <= ENEMY_MAX_ALIVE // 2  # approachable (D-07): half the pool at the very most
+
+
+def _medal_waves(start: float, end: float) -> list[WaveEntry]:
+    return [w for w in _section(start, end) if w.drop == PickupKind.MEDAL]
+
+
+def test_an_opening_tank_column_on_the_left_road_drops_medals() -> None:
+    column = [
+        w
+        for w in _section(0.0, 1500.0)
+        if w.kind == EnemyKind.TANK and w.x == ROAD_CENTRES[0] and w.drop == PickupKind.MEDAL
+    ]
+    assert len(column) >= 3
+    assert all(w.at < 1000.0 for w in column)
+
+
+def test_only_tanks_and_turrets_drop_medals() -> None:
+    medals = [w for w in STAGE_1.waves if w.drop == PickupKind.MEDAL]
+    assert medals
+    assert all(w.kind in (EnemyKind.TANK, EnemyKind.TURRET) for w in medals)
+
+
+def test_every_section_has_medal_drops_on_ground_targets() -> None:
+    boss = STAGE_1.marker("boss")
+    assert len(_medal_waves(0.0, DOWNTOWN_AT)) >= 3
+    assert len(_medal_waves(DOWNTOWN_AT, AIRBASE_AT)) >= 3
+    assert len(_medal_waves(AIRBASE_AT, boss)) >= 3
+
+
+def test_medals_are_some_of_the_ground_targets_not_all() -> None:
+    ground = [w for w in STAGE_1.waves if w.kind in (EnemyKind.TANK, EnemyKind.TURRET)]
+    medals = [w for w in ground if w.drop == PickupKind.MEDAL]
+    assert len(medals) < len(ground) / 2 + 3
