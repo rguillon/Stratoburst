@@ -11,18 +11,21 @@ class EventRing:
     """Up to ``EVENT_CAP`` events per tick, stored flat as ``kind, x, y, a, b, c`` records.
 
     The ring is cleared at the start of every tick, so JS sees each event exactly once.
-    A refused event bumps the cumulative ``dropped`` counter instead of growing the buffer.
+    A refused event bumps the cumulative ``dropped`` counter instead of growing the buffer, and
+    ``dropped_high`` as well when it was not low priority: a lost kill or boss event, which a
+    full-stage run must never see.
     """
 
     buf: array = field(init=False)
     n: int = field(default=0, init=False)
     dropped: int = field(default=0, init=False)
+    dropped_high: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
         self.buf = array("f", bytes(4 * EVENT_STRIDE * EVENT_CAP))
 
     def clear(self) -> None:
-        """Forget this tick's events; ``dropped`` stays cumulative."""
+        """Forget this tick's events; ``dropped`` and ``dropped_high`` stay cumulative."""
         self.n = 0
 
     def push(  # noqa: PLR0913, PLR0917 - an event record is six numbers
@@ -43,6 +46,8 @@ class EventRing:
         i = self.n
         if i >= EVENT_CAP or (low and i >= EVENT_SOFT_CAP):
             self.dropped += 1
+            if not low:
+                self.dropped_high += 1
             return False
         buf = self.buf
         base = i * EVENT_STRIDE

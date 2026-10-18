@@ -98,6 +98,7 @@ class EnemyPool:
     Removal swaps the last live enemy into the freed slot, so slot order carries no meaning;
     the ``uid`` column is the stable identity (strictly increasing, never reused). Enemies
     destroyed by ``remove_dead`` are also written to the kill buffer for this step's drops.
+    ``refused`` counts the spawns turned away at the cap, cumulative like ``kills``.
     """
 
     x: array = field(init=False)
@@ -135,6 +136,7 @@ class EnemyPool:
     n: int = field(default=0, init=False)
     kill_n: int = field(default=0, init=False)
     kills: int = field(default=0, init=False)
+    refused: int = field(default=0, init=False)
     _next_uid: int = field(default=1, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -204,6 +206,7 @@ class EnemyPool:
         """
         i = self.n
         if i >= ENEMY_MAX_ALIVE:
+            self.refused += 1
             return False
         if hp is not None and hp < 1:
             msg = f"hp must be at least 1, got {hp}"
