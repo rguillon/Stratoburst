@@ -1,4 +1,4 @@
-// Turns EXPLOSION (and HIT) events into particle bursts. The recipes are data keyed by the
+// Turns EXPLOSION, HIT, PICKUP and MEDAL events into particle bursts. The recipes are data keyed by the
 // manifest blast classes; `emitters` of a recipe list how many particles of which look go on
 // which layer. Every colour comes from PALETTE, whose test keeps saturated colours out of the
 // orange-yellow band around 40 degrees that belongs to enemy bullets (D-39).
@@ -145,6 +145,8 @@ export function createExplosionFx({
       burst(HIT_RECIPE, x, y, groundKinds.has(a) ? 1 : 0);
     } else if (type === events.PICKUP) {
       burst(PICKUP_RECIPE, x, y, 0, pickupColor(a, c));
+    } else if (type === events.MEDAL) {
+      burst(PICKUP_RECIPE, x, y, 0, PALETTE.MEDAL.rgb);
     } else if (type === events.PLAYER_HIT) {
       burst(PLAYER_HIT_RECIPE, x, y, 0);
     } else if (type === events.PLAYER_DEATH) {

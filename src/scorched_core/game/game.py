@@ -728,6 +728,20 @@ class Game:
         y = min(max(self.ship.y, edge), PLAYFIELD_H - RECOVERY_BOTTOM_MARGIN)
         self.pickups.spawn_guaranteed(PickupKind(int(loadout.kind)), x, y, 0.0, RECOVERY_VY)
 
+    def _step_pickups(self) -> None:
+        """Move the pickups, collect what the ship touches, then charge the medals that got away.
+
+        The misses are drained after the catches, so a medal caught on the very step another one
+        scrolls off pays its climbing value and the next one restarts at the base (D-15).
+        """
+        pickups = self.pickups
+        pickups.step(self.terrain.speed * GROUND_SCROLL_RATIO)
+        if self.life.can_control:
+            resolve_pickups_vs_ship(pickups, self.ship.x, self.ship.y, self._on_pickup)
+        if pickups.medals_missed:
+            pickups.medals_missed = 0
+            self.chain.miss()
+
     def _lethal_contact(self) -> bool:
         """Return whether a gameplay enemy bullet or an air enemy body touches the hitbox core.
 
@@ -766,6 +780,7 @@ class Game:
         life.final = self.score.lives == 0
         if life.step(self.ship, self.events):
             self._on_death()
+            self.chain.miss()  # D-16: dying restarts the medal chain
             self.hitstop.trigger(HITSTOP_DEATH_TICKS)  # only a confirmed death, never the grace
             if self.flow is not None:
                 self.score.lose_life()
@@ -841,9 +856,7 @@ class Game:
             radius=MISSILE_RADIUS,
         )
         self._settle_kills()
-        self.pickups.step(self.terrain.speed * GROUND_SCROLL_RATIO)
-        if life.can_control:
-            resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)
+        self._step_pickups()
         if life.vulnerable and not self.god and self._lethal_contact():
             life.hit(self.ship.x, self.ship.y, self.events)
         if flow is not None:

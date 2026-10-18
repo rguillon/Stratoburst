@@ -41,6 +41,8 @@ export const PALETTE = Object.freeze({
   CRYSTAL_PURPLE: entry('pickup', 2.0, 0.6, 4.0),
   BOMB_PICKUP: entry('pickup', 0.8, 3.6, 0.5),
   MEDAL: entry('pickup', 2.6, 3.6, 3.8),
+  // Where a medal's colour ends up at the top of the chain: brighter, with no hue at all.
+  MEDAL_WHITE: entry('pickup', 4.6, 4.6, 4.6),
 
   // Neon city and faction trim.
   NEON_CYAN: entry('scene', 0.4, 3.2, 3.8),

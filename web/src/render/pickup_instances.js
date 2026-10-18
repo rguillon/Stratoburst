@@ -35,6 +35,12 @@ const CHIP_SEGMENTS = Object.freeze({ high: 6, mid: 6, low: 6 });
 // Colour index (0 red, 1 blue, 2 purple) -> palette entry, in the order Python's cycle uses.
 const CYCLE = Object.freeze([PALETTE.CRYSTAL_RED, PALETTE.CRYSTAL_BLUE, PALETTE.CRYSTAL_PURPLE]);
 
+// A medal's colour index is the chain tier (0 at the base value up to MEDAL_TIER_MAX at the cap): the
+// chip brightens from PALETTE.MEDAL toward white as the chain climbs, never taking on a hue.
+export const MEDAL_TIER_MAX = 6;
+const MEDAL_FROM = PALETTE.MEDAL.rgb;
+const MEDAL_TO = PALETTE.MEDAL_WHITE.rgb;
+
 // Lifted off the gameplay plane so the gem reads as floating, then bobbing around that height.
 export const LIFT = 2;
 export const BOB_AMPLITUDE = 0.9;
@@ -49,6 +55,15 @@ const quaternion = new THREE.Quaternion();
 const scale = new THREE.Vector3(1, 1, 1);
 const color = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
+const medalColor = [0, 0, 0];
+
+// The chip colour of a chain tier, as a mix of the two palette ends; an index that is not a number
+// or is out of range counts as the nearest valid tier.
+export function medalRgb(tier, out) {
+  const t = Number.isFinite(tier) ? Math.min(Math.max(tier, 0), MEDAL_TIER_MAX) / MEDAL_TIER_MAX : 0;
+  for (let k = 0; k < 3; k++) out[k] = MEDAL_FROM[k] + (MEDAL_TO[k] - MEDAL_FROM[k]) * t;
+  return out;
+}
 
 function buildGemGeometry() {
   return bake([tint(lathe(PROFILE, 'mid', GEM_SEGMENTS), [1, 1, 1])], 'crystal');
@@ -106,7 +121,7 @@ export function createPickupInstances({ data, capacity, kinds, playfieldW, playf
       const phase = timeS + i * PHASE_STEP;
       if (data[base + KIND] === medalKind) {
         compose(medalMesh, medals, base, phase);
-        const rgb = PALETTE.MEDAL.rgb;
+        const rgb = medalRgb(data[base + COLOR], medalColor);
         medalMesh.setColorAt(medals, color.setRGB(rgb[0], rgb[1], rgb[2]));
         medals += 1;
       } else {

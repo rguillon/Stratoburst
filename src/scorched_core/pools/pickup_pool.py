@@ -38,7 +38,8 @@ class PickupPool:
 
     Removal swaps the last live pickup into the freed slot, so slot order carries no meaning.
     A CRYSTAL's colour is a function of its age; a MEDAL's colour is ``medal_tier``, the chain tier
-    its owner sets; every other kind has a fixed colour equal to its kind value.
+    its owner sets; every other kind has a fixed colour equal to its kind value. ``medals_missed``
+    counts the medals that drifted out of the playfield since its owner last reset it.
     """
 
     x: array = field(init=False)
@@ -49,6 +50,7 @@ class PickupPool:
     age: array = field(init=False)
     n: int = field(default=0, init=False)
     medal_tier: int = field(default=0, init=False)
+    medals_missed: int = field(default=0, init=False)
     _side: float = field(default=1.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -77,13 +79,16 @@ class PickupPool:
     def spawn_guaranteed(self, kind: int, x: float, y: float, vx: float, vy: float) -> None:
         """Add a pickup that must exist: when the pool is full the oldest one makes room (D-05).
 
-        The pool never grows past ``PICKUP_CAP``; the evicted pickup is the one with the largest
-        age, the lowest slot on a tie.
+        The pool never grows past ``PICKUP_CAP``. A MEDAL is evicted before anything else, so a
+        recovery pickup never costs a crystal or a bomb while medals are live (RESEARCH Pitfall
+        14); within the chosen set the victim is the one with the largest age, the lowest slot on
+        a tie. An eviction is not a miss.
         """
         if self.n >= PICKUP_CAP:
             age = self.age
-            oldest = max(range(self.n), key=age.__getitem__)
-            self.remove_at(oldest)
+            slots = range(self.n)
+            medals = [i for i in slots if self.kind[i] == PickupKind.MEDAL]
+            self.remove_at(max(medals or slots, key=age.__getitem__))
         self.spawn(kind, x, y, vx, vy)
 
     def spawn_crystal(self, x: float, y: float) -> bool:
@@ -116,6 +121,7 @@ class PickupPool:
                 y[i] += ground_speed
                 if y[i] > _EXIT_BOTTOM:
                     self.remove_at(i)
+                    self.medals_missed += 1  # the owner drains this into the chain each step
                     continue
             elif age[i] < PICKUP_LIFE_TICKS:
                 x[i] += vx[i]
@@ -161,8 +167,9 @@ class PickupPool:
         self.n = last
 
     def clear(self) -> None:
-        """Remove every pickup at once."""
+        """Remove every pickup at once; the misses it owed are forgotten with them."""
         self.n = 0
+        self.medals_missed = 0
 
     def pack_into(self, out: array) -> None:
         """Write ``x, y, colour index, kind`` at stride 4 for the live pickups.

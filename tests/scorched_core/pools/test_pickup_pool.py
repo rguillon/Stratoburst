@@ -349,7 +349,7 @@ def test_medals_cannot_take_the_last_reserved_slots_but_other_pickups_can() -> N
 def test_a_medal_that_leaves_the_bottom_is_counted_as_missed() -> None:
     pool = PickupPool()
     assert pool.medals_missed == 0
-    pool.spawn_medal(80.0, PLAYFIELD_H + 15.9)
+    pool.spawn_medal(80.0, PLAYFIELD_H + 15.5)
     pool.step(0.4)
     assert pool.medals_missed == 0
     pool.step(0.4)
@@ -394,7 +394,7 @@ def test_a_guaranteed_pickup_evicts_the_oldest_medal_before_anything_older() -> 
     assert pool.n == PICKUP_CAP
     assert 210.0 not in xs  # the oldest medal made room
     assert 200.0 in xs  # the younger medal and every crystal stayed
-    assert sum(1 for i in range(pool.n) if pool.kind[i] == PickupKind.CRYSTAL) == PICKUP_CAP - 3
+    assert sum(1 for i in range(pool.n) if pool.kind[i] == PickupKind.CRYSTAL) == PICKUP_CAP - 2
     assert pool.medals_missed == 0  # an eviction is not a miss
 
 

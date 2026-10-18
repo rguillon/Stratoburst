@@ -17,8 +17,8 @@ import {
   mulberry32,
 } from '../../src/fx/explosion_fx.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, PLAYER_HIT: 6, PLAYER_DEATH: 7 };
-const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, PLAYER_HIT: 6, PLAYER_DEATH: 7, MEDAL: 13 };
+const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4, MEDAL: 5 };
 const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
 
 function build(options = {}) {
@@ -398,5 +398,34 @@ describe('the player ship recipes (PLYR-06)', () => {
     const { fx, emitted } = build();
     fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.SMALL, 0, 0);
     expect(emitted.additive).toHaveLength(27);
+  });
+});
+
+describe('the MEDAL sparkle', () => {
+  function catchMedal({ scale = 1, value = 100, chain = 1 } = {}) {
+    const built = build({ getScale: () => scale });
+    built.fx.handle(EVENTS.MEDAL, 130, 170, value, chain, 0);
+    return built.emitted;
+  }
+
+  it('throws the pickup sparkle at the catch position in the medal palette colour', () => {
+    const { additive, normal } = catchMedal();
+    expect(additive).toHaveLength(10);
+    expect(normal).toHaveLength(0);
+    for (const p of additive) {
+      expect(p.slice(0, 3)).toEqual([10, 0, 10]); // toWorld(130, 170), on the plane
+      expect(p.slice(9, 12)).toEqual(PALETTE.MEDAL.rgb);
+    }
+  });
+
+  it('scales the count with the tier, never below one', () => {
+    expect(catchMedal({ scale: 0.6 }).additive).toHaveLength(6);
+    expect(catchMedal({ scale: 0.01 }).additive).toHaveLength(1);
+  });
+
+  it('does not sparkle for the other events', () => {
+    const built = build();
+    built.fx.handle(14, 130, 170, 4, 0, 0);
+    expect(built.emitted.additive).toHaveLength(0);
   });
 });

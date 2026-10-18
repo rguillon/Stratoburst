@@ -1,12 +1,21 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE } from '../../src/fx/palette.js';
+import {
+  BULLET_EXCLUSION_DEGREES,
+  BULLET_MIN_SATURATION,
+  PALETTE,
+  hueDistance,
+  hueOf,
+  saturationOf,
+} from '../../src/fx/palette.js';
 import {
   BOB_AMPLITUDE,
   BOB_RATE,
   LIFT,
+  MEDAL_TIER_MAX,
   SPIN_RATE,
   createPickupInstances,
+  medalRgb,
 } from '../../src/render/pickup_instances.js';
 
 const STRIDE = 4;
@@ -252,5 +261,54 @@ describe('createPickupInstances', () => {
     pickups.update(1, 0);
     expect(pickups.mesh.count).toBe(0);
     expect(pickups.mesh.instanceMatrix.version).toBe(before);
+  });
+});
+
+describe('medal tier colours', () => {
+  const rgbOf = (tier) => medalRgb(tier, [0, 0, 0]);
+  const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  it('starts at the medal palette colour and ends at the palette white', () => {
+    expect(MEDAL_TIER_MAX).toBe(6);
+    expect(rgbOf(0)).toEqual(PALETTE.MEDAL.rgb);
+    expect(rgbOf(MEDAL_TIER_MAX)).toEqual(PALETTE.MEDAL_WHITE.rgb);
+    const white = rgbOf(MEDAL_TIER_MAX);
+    expect(saturationOf(white)).toBe(0);
+  });
+
+  it('brightens with every tier', () => {
+    for (let tier = 1; tier <= MEDAL_TIER_MAX; tier++) {
+      expect(luma(rgbOf(tier))).toBeGreaterThan(luma(rgbOf(tier - 1)));
+    }
+  });
+
+  it('never leaves the allowed band: no tier is near the reserved enemy bullet hue', () => {
+    const halo = PALETTE.ENEMY_BULLET_HALO.rgb;
+    for (let tier = 0; tier <= MEDAL_TIER_MAX; tier++) {
+      const rgb = rgbOf(tier);
+      const offender =
+        saturationOf(rgb) >= BULLET_MIN_SATURATION &&
+        hueDistance(hueOf(rgb), hueOf(halo)) < BULLET_EXCLUSION_DEGREES;
+      expect(offender, `tier ${tier}`).toBe(false);
+      // Never gold: the red channel never leads the blue one.
+      expect(rgb[0]).toBeLessThanOrEqual(rgb[2] + 1e-9);
+    }
+  });
+
+  it('clamps an out-of-range or non-numeric tier to the nearest valid one', () => {
+    expect(rgbOf(-3)).toEqual(rgbOf(0));
+    expect(rgbOf(99)).toEqual(rgbOf(MEDAL_TIER_MAX));
+    expect(rgbOf(Number.NaN)).toEqual(rgbOf(0));
+  });
+
+  it('draws each chip in the colour of the tier Python packed for it', () => {
+    const { data, pickups } = build();
+    setPickup(data, 0, 60, 80, 0, KINDS.MEDAL);
+    setPickup(data, 1, 100, 80, 3, KINDS.MEDAL);
+    setPickup(data, 2, 140, 80, 6, KINDS.MEDAL);
+    pickups.update(3, 0);
+    for (const [i, tier] of [[0, 0], [1, 3], [2, 6]]) {
+      expect(colorOf(pickups.medalMesh, i)).toEqual(rgbOf(tier).map((v) => expect.closeTo(v, 5)));
+    }
   });
 });
