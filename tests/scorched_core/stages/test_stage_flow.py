@@ -1,13 +1,24 @@
 import pytest
+from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 
+from scorched_core.bosses.boss_state import BossState
+from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.player_life import PlayerLife
 from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.events.event_ring import EventRing
+from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import EV_GAME_OVER, EV_STAGE_START, EVENT_STRIDE
 from scorched_core.scoring.score_keeper import ScoreKeeper
 from scorched_core.stages.flow_state import FlowState
+from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_flow import StageFlow
-from scorched_core.tuning import INTRO_TICKS
+from scorched_core.stages.terrain_scroll import TerrainScroll
+from scorched_core.tuning import (
+    ENEMY_MAX_ALIVE,
+    INTRO_TICKS,
+    MIDBOSS_CRAWL_SPEED,
+    SCROLL_SPEED,
+)
 
 
 def make(state: FlowState = FlowState.PLAY, stage_number: int = 1) -> StageFlow:
@@ -143,3 +154,145 @@ def test_an_unhandled_state_fails_loudly() -> None:
     flow.state = 99  # type: ignore[assignment]
     with pytest.raises(ValueError, match="unknown flow state 99"):
         flow.step()
+
+
+MARKER = 100.0
+_BOSS_STAGE = StageData(
+    number=1, length=1000.0, waves=(), markers=(("midboss", MARKER),), midboss=MIDBOSS_1
+)
+
+
+def make_boss_flow(stage: StageData | None = _BOSS_STAGE, distance: float = 0.0) -> StageFlow:
+    """A PLAY flow wired to its terrain and enemy pool, the terrain at ``distance``."""
+    return StageFlow(
+        life=PlayerLife(),
+        score=ScoreKeeper(),
+        events=EventRing(),
+        state=FlowState.PLAY,
+        terrain=TerrainScroll(distance=distance),
+        enemies=EnemyPool(),
+        stage=stage,
+    )
+
+
+def test_a_flow_without_a_stage_never_starts_a_midboss() -> None:
+    flow = make_boss_flow(stage=None, distance=MARKER)
+    flow.step()
+    assert (flow.state, flow.boss) == (FlowState.PLAY, None)
+    assert flow.enemies.n == 0
+
+
+def test_a_stage_without_midboss_data_never_starts_one() -> None:
+    stage = StageData(number=1, length=1000.0, waves=(), markers=(("midboss", MARKER),))
+    flow = make_boss_flow(stage, distance=MARKER)
+    flow.step()
+    assert (flow.state, flow.boss) == (FlowState.PLAY, None)
+
+
+def test_play_before_the_midboss_marker_leaves_the_flow_alone() -> None:
+    flow = make_boss_flow(distance=MARKER - 0.5)
+    flow.step()
+    assert (flow.state, flow.boss) == (FlowState.PLAY, None)
+    assert flow.terrain.target == SCROLL_SPEED
+
+
+def test_reaching_the_midboss_marker_brings_in_the_train_and_slows_the_terrain() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    assert flow.state == FlowState.MIDBOSS
+    assert flow.boss is not None
+    assert flow.boss.slot == 1
+    assert flow.boss.spec is MIDBOSS_1
+    assert flow.boss.active
+    assert flow.terrain.target == MIDBOSS_CRAWL_SPEED
+    assert flow.enemies.n == 3  # the hull and its two turrets
+    assert int(flow.enemies.kind[0]) == EnemyKind.TRAIN
+    assert flow.spawning is True
+
+
+def test_the_midboss_waits_in_the_flow_while_the_fight_runs() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    boss = flow.boss
+    for _ in range(50):
+        flow.step()
+    assert (flow.state, flow.boss) == (FlowState.MIDBOSS, boss)
+    assert flow.terrain.target == MIDBOSS_CRAWL_SPEED
+
+
+def test_a_gone_midboss_returns_to_play_at_full_scroll_speed_and_never_starts_twice() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    assert flow.boss is not None
+    flow.boss.state = BossState.GONE
+    flow.step()
+    assert flow.state == FlowState.PLAY
+    assert flow.boss is None
+    assert flow.terrain.target == SCROLL_SPEED
+    for _ in range(5):  # still inside the trigger window: it must not start again
+        flow.step()
+    assert (flow.state, flow.boss) == (FlowState.PLAY, None)
+
+
+def test_a_marker_the_run_already_jumped_past_does_not_start_the_midboss() -> None:
+    flow = make_boss_flow(distance=MARKER + 1000.0)
+    flow.step()
+    assert (flow.state, flow.boss) == (FlowState.PLAY, None)
+
+
+def test_a_full_enemy_pool_delays_the_midboss_until_it_has_room() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    for _ in range(ENEMY_MAX_ALIVE):
+        flow.enemies.spawn(EnemyKind.JET, 10.0, 10.0, 0, 0.0, 0.0)
+    flow.step()
+    assert (flow.state, flow.boss) == (FlowState.PLAY, None)
+    assert flow.terrain.target == SCROLL_SPEED
+    flow.enemies.clear()
+    flow.step()
+    assert flow.state == FlowState.MIDBOSS
+
+
+def test_reset_drops_the_midboss_so_a_new_run_triggers_it_again() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    flow.boss.state = BossState.GONE
+    flow.step()
+    flow.reset()
+    assert flow.boss is None
+    flow.state = FlowState.PLAY
+    flow.enemies.clear()
+    flow.step()
+    assert flow.state == FlowState.MIDBOSS
+
+
+def test_reset_during_the_fight_clears_the_controller() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    flow.reset()
+    assert flow.boss is None
+    assert flow.state == FlowState.INTRO
+
+
+def test_game_over_during_the_midboss_wins_over_every_boss_transition() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    assert flow.boss is not None
+    flow.boss.state = BossState.GONE  # the fight ends on the very step the last ship is lost
+    flow.life.phase = PlayerPhase.OUT
+    flow.step()
+    assert flow.state == FlowState.GAME_OVER
+    assert flow.boss is None
+    assert flow.save_requested is True
+    assert flow.spawning is False
+    for _ in range(5):
+        flow.step()
+    assert flow.state == FlowState.GAME_OVER
+
+
+def test_a_dying_ship_does_not_stop_the_midboss() -> None:
+    flow = make_boss_flow(distance=MARKER)
+    flow.step()
+    for phase in (PlayerPhase.GRACE, PlayerPhase.DYING, PlayerPhase.RESPAWN):
+        flow.life.phase = phase
+        flow.step()
+        assert flow.state == FlowState.MIDBOSS

@@ -1,6 +1,8 @@
 import itertools
 import math
 
+from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
+
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
@@ -438,3 +440,14 @@ def test_every_target_spawns_and_an_undamaged_one_scrolls_off_and_is_gone() -> N
     assert 0 < most <= 20
     assert not [i for i in range(enemies.n) if enemies.kind[i] in TARGET_KINDS]
     assert enemies.kills == 0
+
+
+def test_the_stage_runs_the_armored_train_as_its_midboss_and_has_no_boss_data_yet() -> None:
+    assert STAGE_1.midboss is MIDBOSS_1
+    assert STAGE_1.boss is None  # the bomber arrives with plan 03-19
+
+
+def test_the_train_rides_the_maglev_line() -> None:
+    maglev = next(f for f in STAGE_1.features if f.kind == SceneryKind.MAGLEV)
+    assert maglev.x == MIDBOSS_1.x
+    assert maglev.d0 < STAGE_1.marker("midboss") < maglev.d1

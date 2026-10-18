@@ -7,8 +7,10 @@ from array import array
 from collections.abc import Callable
 
 import pytest
+from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 
 from scorched_core.audio.sfx_id import SfxId
+from scorched_core.bosses.boss_state import BossState
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -28,6 +30,7 @@ from scorched_core.protocol import (
     ENEMY_STRIDE,
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
+    EV_BOSS_DEFEATED,
     EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
@@ -35,6 +38,7 @@ from scorched_core.protocol import (
     EV_GAME_OVER,
     EV_HIT,
     EV_MEDAL,
+    EV_PART_DESTROYED,
     EV_PICKUP,
     EV_PLAYER_DEATH,
     EV_PLAYER_HIT,
@@ -53,6 +57,10 @@ from scorched_core.protocol import (
     H_BOMB_X,
     H_BOMB_Y,
     H_BOMBS,
+    H_BOSS_ACTIVE,
+    H_BOSS_HP,
+    H_BOSS_PHASE,
+    H_BOSS_TIMER_S,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
@@ -124,13 +132,16 @@ from scorched_core.tuning import (
     GROUND_SCROLL_RATIO,
     GROUND_Y0,
     HITSTOP_BOMB_TICKS,
+    HITSTOP_BOSS_TICKS,
     HITSTOP_DEATH_TICKS,
+    HITSTOP_PART_TICKS,
     INTRO_TICKS,
     INVULN_RESPAWN_TICKS,
     LIVES_CAP,
     LIVES_START,
     MAX_BONUS_POINTS,
     MEDAL_RESERVE,
+    MIDBOSS_CRAWL_SPEED,
     PICKUP_RADIUS,
     RESPAWN_START_Y,
     SCORE_CAP,
@@ -308,6 +319,7 @@ def test_manifest_stage_describes_the_stage_markers_in_stage_mode() -> None:
         "city_stride": 6,
         "block_pitch": 80.0,
         "block_size": 64.0,
+        "bosses": [{"slot": 1, "name": "midboss", "phase_fracs": [0.5]}],
     }
 
 
@@ -330,6 +342,7 @@ def test_manifest_stage_is_stage_zero_and_looping_in_the_gallery() -> None:
         "city_stride": 6,
         "block_pitch": 80.0,
         "block_size": 64.0,
+        "bosses": [],
     }
 
 
@@ -3871,3 +3884,130 @@ def test_destroying_a_house_pays_500_leaves_a_medal_and_explodes_as_a_ground_kil
 
 def test_the_manifest_lists_which_kinds_leave_a_wreck() -> None:
     assert Game().manifest()["tuning"]["enemy_wreck"] == [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1]
+
+
+# --- the mid-boss (plan 03-17) ---------------------------------------------------------------
+
+
+def _midboss_game(**kwargs: object) -> Game:
+    """Stage 1 one screen before the train, a god-mode level-5 laser that pierces every part."""
+    options: dict[str, object] = {
+        "stage": STAGE_1,
+        "at": "midboss",
+        "god": True,
+        "weapon": WeaponKind.LASER,
+        "level": 5,
+    }
+    return Game(**(options | kwargs))
+
+
+def _fire_tick(game: Game) -> None:
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+
+
+def _event_records(game: Game, kind: int) -> list[list[float]]:
+    buf = game.buffers["events"]
+    return [
+        [float(buf[i * EVENT_STRIDE + k]) for k in range(EVENT_STRIDE)]
+        for i in range(game.events.n)
+        if buf[i * EVENT_STRIDE] == kind
+    ]
+
+
+def _fight_started(game: Game) -> bool:
+    return (
+        game.flow is not None
+        and game.flow.boss is not None
+        and (game.flow.boss.state is BossState.FIGHT)
+    )
+
+
+def test_the_midboss_arrives_is_taken_apart_and_play_resumes() -> None:
+    game = _midboss_game()
+    header = game.buffers["header"]
+    assert header[H_BOSS_ACTIVE] == 0
+    parts: list[list[float]] = []
+    defeated = 0
+    up = False
+    for _ in range(4000):
+        _fire_tick(game)
+        if header[H_BOSS_ACTIVE] == 1:
+            assert header[H_FLOW] == FlowState.MIDBOSS
+            up = True
+        new_parts = _event_records(game, EV_PART_DESTROYED)
+        if new_parts:
+            assert header[H_HITSTOP] == HITSTOP_PART_TICKS
+        parts += new_parts
+        if _event_records(game, EV_BOSS_DEFEATED):
+            defeated += 1
+            assert header[H_HITSTOP] == HITSTOP_BOSS_TICKS
+        if defeated and header[H_BOSS_ACTIVE] == 0:
+            break
+    assert up
+    assert [record[3] for record in parts] == [5000.0, 5000.0]
+    assert sorted(record[4] for record in parts) == [0.0, 1.0]  # each turret once
+    assert all(record[5] == 1.0 for record in parts)  # from the mid-boss slot
+    assert defeated == 1
+    assert header[H_BOSS_HP] == 0
+    assert header[H_SCORE] >= 30000  # 2 x 5000 for the turrets, 20000 for the hull
+    assert header[H_FLOW] == FlowState.PLAY
+    assert game.flow is not None
+    assert game.flow.boss is None
+    for _ in range(80):
+        _tick(game)
+    assert header[H_SCROLL_RATE] == pytest.approx(SCROLL_SPEED, rel=1e-6)
+    assert header[H_FLOW] == FlowState.PLAY
+
+
+def test_the_train_comes_in_while_the_terrain_crawls_beneath_it() -> None:
+    game = _midboss_game()
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=2000)
+    assert header[H_FLOW] == FlowState.MIDBOSS
+    for _ in range(80):
+        _tick(game)
+    assert header[H_SCROLL_RATE] == pytest.approx(MIDBOSS_CRAWL_SPEED, rel=1e-6)
+    assert game.terrain.target == MIDBOSS_CRAWL_SPEED
+
+
+def test_the_boss_header_slots_follow_the_hull_while_the_midboss_is_up() -> None:
+    game = _midboss_game()
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    hull = game.enemies.index_of_uid(game.flow.boss.hull_uid)
+    game.enemies.hp[hull] = 300
+    _tick(game)
+    assert header[H_BOSS_ACTIVE] == 1
+    assert header[H_BOSS_PHASE] == 1
+    assert header[H_BOSS_HP] == pytest.approx(300 / 500)
+    assert header[H_BOSS_HP] == pytest.approx(game.enemies.hp[hull] / game.enemies.hp_max[hull])
+    assert header[H_BOSS_TIMER_S] == -1
+
+
+def test_the_boss_slots_read_quiet_when_no_boss_is_up() -> None:
+    for game in (Game(stage=STAGE_1, god=True), Game()):
+        _tick(game)
+        header = game.buffers["header"]
+        assert (
+            header[H_BOSS_ACTIVE],
+            header[H_BOSS_PHASE],
+            header[H_BOSS_HP],
+            header[H_BOSS_TIMER_S],
+        ) == (0, 0, 0, -1)
+
+
+def test_the_manifest_lists_the_boss_bar_thresholds_of_every_boss_the_stage_has() -> None:
+    stage = StageData(
+        number=2,
+        length=100.0,
+        waves=(),
+        markers=(("midboss", 10.0), ("boss", 90.0)),
+        midboss=MIDBOSS_1,
+        boss=MIDBOSS_1,
+    )
+    assert Game(stage=stage).manifest()["stage"]["bosses"] == [
+        {"slot": 1, "name": "midboss", "phase_fracs": [0.5]},
+        {"slot": 2, "name": "boss", "phase_fracs": [0.5]},
+    ]

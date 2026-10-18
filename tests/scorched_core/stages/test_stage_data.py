@@ -1,5 +1,5 @@
 import pytest
-from scorched_core.stages.ground_entry import GroundEntry
+from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -7,6 +7,7 @@ from scorched_core.stages.city_block import CityBlock
 from scorched_core.stages.city_builder import scenery_placements
 from scorched_core.stages.city_feature import CityFeature
 from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.ground_entry import GroundEntry
 from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.wave_entry import WaveEntry
@@ -165,3 +166,30 @@ def test_a_ground_entry_before_the_stage_is_rejected() -> None:
 def test_a_ground_entry_past_the_stage_length_is_rejected() -> None:
     with pytest.raises(ValueError, match=r"ground entry 1 .*outside"):
         StageData(number=1, length=100.0, waves=(), markers=(), ground=(ground(5.0), ground(100.5)))
+
+
+def test_a_stage_has_no_bosses_unless_it_names_them() -> None:
+    stage = StageData(number=1, length=10.0, waves=(), markers=())
+    assert (stage.midboss, stage.boss) == (None, None)
+
+
+def test_a_midboss_spec_with_a_midboss_marker_is_valid() -> None:
+    stage = StageData(
+        number=1, length=100.0, waves=(), markers=(("midboss", 50.0),), midboss=MIDBOSS_1
+    )
+    assert stage.midboss is MIDBOSS_1
+
+
+def test_a_midboss_spec_without_a_midboss_marker_is_rejected() -> None:
+    with pytest.raises(ValueError, match=r"midboss .*marker"):
+        StageData(number=1, length=100.0, waves=(), markers=(("boss", 50.0),), midboss=MIDBOSS_1)
+
+
+def test_a_boss_spec_with_a_boss_marker_is_valid() -> None:
+    stage = StageData(number=1, length=100.0, waves=(), markers=(("boss", 50.0),), boss=MIDBOSS_1)
+    assert stage.boss is MIDBOSS_1
+
+
+def test_a_boss_spec_without_a_boss_marker_is_rejected() -> None:
+    with pytest.raises(ValueError, match=r"boss .*marker"):
+        StageData(number=1, length=100.0, waves=(), markers=(), boss=MIDBOSS_1)
