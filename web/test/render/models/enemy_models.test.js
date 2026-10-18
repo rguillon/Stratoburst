@@ -66,7 +66,8 @@ describe('TANK', () => {
 });
 
 const CITY_KINDS = ['HOUSE', 'FUEL_TANK', 'DEPOT', 'BILLBOARD'];
-const MANIFEST_KINDS = ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET', ...CITY_KINDS];
+const TRAIN_KINDS = ['TRAIN', 'TRAIN_TURRET', 'TRAIN_STUMP'];
+const MANIFEST_KINDS = ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET', ...TRAIN_KINDS, ...CITY_KINDS];
 
 describe('the manifest roster', () => {
   it('has a builder for every manifest kind, so no primitive shape is drawn', () => {
@@ -82,6 +83,28 @@ describe('the manifest roster', () => {
     for (const name of ['TANK', 'TURRET']) {
       for (const detail of ['high', 'mid', 'low']) expect(enemyModel(name, detail).top).not.toBeNull();
     }
+  });
+});
+
+describe('the mid-boss train', () => {
+  it('registers TRAIN, TRAIN_TURRET and TRAIN_STUMP', () => {
+    for (const name of TRAIN_KINDS) expect(hasModel(name)).toBe(true);
+  });
+
+  it('gives the gun car a top that follows the aim angle at every detail, and the hull and stump none', () => {
+    for (const detail of ['high', 'mid', 'low']) {
+      expect(enemyModel('TRAIN_TURRET', detail).top).not.toBeNull();
+      expect(enemyModel('TRAIN', detail).top).toBeNull();
+      expect(enemyModel('TRAIN_STUMP', detail).top).toBeNull();
+    }
+  });
+
+  it('caches each kind per detail', () => {
+    for (const name of TRAIN_KINDS) expect(enemyModel(name, 'mid')).toBe(enemyModel(name, 'mid'));
+  });
+
+  it('warms the three names', () => {
+    expect(warmModels(TRAIN_KINDS)).toEqual(TRAIN_KINDS);
   });
 });
 
