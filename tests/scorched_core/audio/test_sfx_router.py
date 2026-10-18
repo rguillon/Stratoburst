@@ -183,6 +183,17 @@ def test_the_stage_sounds_are_normal_priority_past_the_ring_soft_cap() -> None:
     assert ring.dropped == 0
 
 
+def test_past_the_soft_cap_the_noise_is_refused_before_a_stage_sound_is() -> None:
+    ring = EventRing()
+    for _ in range(EVENT_SOFT_CAP):
+        ring.push(EV_EXPLOSION, 0.0, 0.0, BLAST_SMALL)
+    ring.push(EV_ENEMY_FIRE, 0.0, 0.0)
+    ring.push(EV_BOSS_WARNING, 0.0, 0.0)
+    assert route_sfx(ring, EVENT_SOFT_CAP, ring.n) == 1
+    assert _records(ring)[-1][3] == SfxId.WARNING
+    assert ring.dropped == 1
+
+
 def test_an_unknown_weapon_or_pickup_outcome_adds_nothing() -> None:
     ring = EventRing()
     ring.push(EV_SHOT, 0.0, 0.0, 7.0)

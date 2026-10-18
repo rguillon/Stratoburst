@@ -183,6 +183,39 @@ describe('the stage sounds', () => {
   });
 });
 
+// The least time between two voices of a sound; TALLY_LINE_TICKS is 60 steps, one second, per line.
+const TALLY_LINE_MS = 1000;
+
+describe('the stage sounds keep their place in the mix', () => {
+  const BIG_MOMENTS = ['WARNING', 'EXTEND', 'BOSS_DEFEAT', 'STAGE_CLEAR', 'GAME_OVER'];
+
+  it.each(BIG_MOMENTS)('%s has a priority strictly above every gameplay sound', (name) => {
+    const loudestGameplay = Math.max(...GAMEPLAY_NAMES.map((n) => SFX_TABLE[n].priority));
+
+    expect(SFX_TABLE[name].priority).toBeGreaterThan(loudestGameplay);
+  });
+
+  it('EXPLODE_HUGE has at least the priority of the large explosion', () => {
+    expect(SFX_TABLE.EXPLODE_HUGE.priority).toBeGreaterThanOrEqual(SFX_TABLE.EXPLODE_LARGE.priority);
+  });
+
+  it('every stage sound outranks the shots, hits and enemy fire in priority', () => {
+    const noise = Math.max(...['VULCAN', 'MISSILE', 'HIT', 'ENEMY_FIRE'].map((n) => SFX_TABLE[n].priority));
+
+    for (const name of SFX_ID_NAMES.slice(18)) {
+      expect(SFX_TABLE[name].priority).toBeGreaterThan(noise);
+    }
+  });
+
+  it('the TALLY_TICK cooldown is below one tally line so every line ticks', () => {
+    expect(SFX_TABLE.TALLY_TICK.cooldownMs).toBeLessThan(TALLY_LINE_MS);
+  });
+
+  it('two medal catches 100 ms apart both play', () => {
+    expect(SFX_TABLE.MEDAL.cooldownMs).toBeLessThanOrEqual(100);
+  });
+});
+
 describe('every SFX_TABLE sound renders', () => {
   it.each(SFX_ID_NAMES)('%s synthesizes finite, audible samples', (name) => {
     const samples = buildSamples(...SFX_TABLE[name].params, { random: () => 0.5 });
