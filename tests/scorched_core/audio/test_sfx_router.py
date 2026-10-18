@@ -4,21 +4,33 @@ from scorched_core.audio.sfx_id import SfxId
 from scorched_core.audio.sfx_router import route_sfx
 from scorched_core.events.event_ring import EventRing
 from scorched_core.protocol import (
+    BLAST_HUGE,
     BLAST_LARGE,
     BLAST_MEDIUM,
     BLAST_SMALL,
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
+    EV_BOSS_DEFEATED,
+    EV_BOSS_PHASE,
+    EV_BOSS_RETREAT,
+    EV_BOSS_WARNING,
     EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
+    EV_EXTEND,
+    EV_GAME_OVER,
     EV_HIT,
+    EV_MEDAL,
+    EV_PART_DESTROYED,
     EV_PICKUP,
     EV_PLAYER_DEATH,
     EV_PLAYER_HIT,
     EV_RESPAWN,
     EV_SFX,
     EV_SHOT,
+    EV_STAGE_CLEAR,
+    EV_STAGE_START,
+    EV_TALLY_LINE,
     EVENT_CAP,
     EVENT_SOFT_CAP,
     EVENT_STRIDE,
@@ -37,6 +49,7 @@ def _records(ring: EventRing) -> list[tuple[float, ...]]:
         (BLAST_SMALL, SfxId.EXPLODE_SMALL),
         (BLAST_MEDIUM, SfxId.EXPLODE_MEDIUM),
         (BLAST_LARGE, SfxId.EXPLODE_LARGE),
+        (BLAST_HUGE, SfxId.EXPLODE_HUGE),
     ],
 )
 def test_an_explosion_is_followed_by_an_sfx_event_for_its_blast_class(
@@ -56,7 +69,7 @@ def test_an_out_of_range_blast_class_is_clamped_to_the_nearest_explosion_sound()
     ring.push(EV_EXPLOSION, 0.0, 0.0, 9.0)
     ring.push(EV_EXPLOSION, 0.0, 0.0, -4.0)
     assert route_sfx(ring, 0, 2) == 2
-    assert [rec[3] for rec in _records(ring)[2:]] == [SfxId.EXPLODE_LARGE, SfxId.EXPLODE_SMALL]
+    assert [rec[3] for rec in _records(ring)[2:]] == [SfxId.EXPLODE_HUGE, SfxId.EXPLODE_SMALL]
 
 
 def test_an_unknown_event_kind_adds_nothing() -> None:
@@ -106,6 +119,15 @@ _ROUTES = [
     pytest.param(EV_BOMB_LAUNCH, 0, 0, SfxId.BOMB_LAUNCH, id="bomb-launch"),
     pytest.param(EV_BOMB_DETONATE, 0, 0, SfxId.BOMB_BLAST, id="bomb-detonate"),
     pytest.param(EV_DEATHBOMB_SAVE, 0, 0, SfxId.DEATHBOMB, id="deathbomb-save"),
+    pytest.param(EV_BOSS_WARNING, 0, 0, SfxId.WARNING, id="boss-warning"),
+    pytest.param(EV_EXTEND, 3, 0, SfxId.EXTEND, id="extend"),
+    pytest.param(EV_MEDAL, 500, 2, SfxId.MEDAL, id="medal"),
+    pytest.param(EV_PART_DESTROYED, 800, 1, SfxId.PART_DESTROY, id="part-destroyed"),
+    pytest.param(EV_BOSS_PHASE, 2, 0, SfxId.BOSS_PHASE, id="boss-phase"),
+    pytest.param(EV_BOSS_DEFEATED, 2, 0, SfxId.BOSS_DEFEAT, id="boss-defeated"),
+    pytest.param(EV_TALLY_LINE, 1, 1000, SfxId.TALLY_TICK, id="tally-line"),
+    pytest.param(EV_STAGE_CLEAR, 1, 0, SfxId.STAGE_CLEAR, id="stage-clear"),
+    pytest.param(EV_GAME_OVER, 12000, 1, SfxId.GAME_OVER, id="game-over"),
 ]
 
 _NOISY = {SfxId.VULCAN, SfxId.MISSILE, SfxId.HIT, SfxId.ENEMY_FIRE}
@@ -139,6 +161,26 @@ def test_a_laser_shot_is_silent_because_the_hum_is_state_driven() -> None:
     ring.push(EV_SHOT, 0.0, 0.0, WeaponKind.LASER)
     assert route_sfx(ring, 0, 1) == 0
     assert ring.n == 1
+
+
+@pytest.mark.parametrize("kind", [EV_BOSS_RETREAT, EV_STAGE_START])
+def test_a_boss_retreat_and_a_stage_start_stay_silent(kind: int) -> None:
+    ring = EventRing()
+    ring.push(kind, 0.0, 0.0, 1.0)
+    assert route_sfx(ring, 0, 1) == 0
+    assert ring.n == 1
+
+
+def test_the_stage_sounds_are_normal_priority_past_the_ring_soft_cap() -> None:
+    kinds = [EV_BOSS_WARNING, EV_EXTEND, EV_MEDAL, EV_PART_DESTROYED, EV_BOSS_PHASE]
+    kinds += [EV_BOSS_DEFEATED, EV_TALLY_LINE, EV_STAGE_CLEAR, EV_GAME_OVER]
+    ring = EventRing()
+    for _ in range(EVENT_SOFT_CAP):
+        ring.push(EV_EXPLOSION, 0.0, 0.0, BLAST_SMALL)
+    for kind in kinds:
+        ring.push(kind, 0.0, 0.0, 1.0)
+    assert route_sfx(ring, EVENT_SOFT_CAP, ring.n) == len(kinds)
+    assert ring.dropped == 0
 
 
 def test_an_unknown_weapon_or_pickup_outcome_adds_nothing() -> None:
