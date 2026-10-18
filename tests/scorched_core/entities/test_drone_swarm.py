@@ -5,7 +5,16 @@ from array import array
 import pytest
 
 from scorched_core.entities.drone_swarm import DroneSwarm
-from scorched_core.protocol import DRONE_CAP, DRONE_STRIDE, PLAYFIELD_H, PLAYFIELD_W
+from scorched_core.events.event_ring import EventRing
+from scorched_core.protocol import (
+    BLAST_SMALL,
+    DRONE_CAP,
+    DRONE_STRIDE,
+    EV_EXPLOSION,
+    EVENT_STRIDE,
+    PLAYFIELD_H,
+    PLAYFIELD_W,
+)
 from scorched_core.tuning import (
     DRONE_FLASH_TICKS,
     DRONE_HP,
@@ -222,3 +231,47 @@ def test_pack_with_no_drones_writes_nothing() -> None:
     out = array("f", [7.0]) * (DRONE_STRIDE * DRONE_CAP)
     make_swarm().pack_into(out)
     assert set(out) == {7.0}
+
+
+def test_a_destroyed_drone_pushes_one_small_explosion_at_its_position() -> None:
+    ring = EventRing()
+    swarm = DroneSwarm(random.Random(1), events=ring)  # noqa: S311
+    swarm.n = 1
+    swarm.x[0], swarm.y[0], swarm.hp[0] = 60.0, 90.0, 1
+    swarm.apply_hit(0)
+    swarm.remove_dead()
+    assert ring.n == 1
+    assert list(ring.buf[:EVENT_STRIDE]) == [EV_EXPLOSION, 60.0, 90.0, BLAST_SMALL, 0.0, 0.0]
+
+
+def test_two_kills_in_one_pass_push_two_explosions() -> None:
+    ring = EventRing()
+    swarm = DroneSwarm(random.Random(1), events=ring)  # noqa: S311
+    swarm.n = 2
+    swarm.x[0], swarm.y[0], swarm.hp[0] = 10.0, 20.0, 0
+    swarm.x[1], swarm.y[1], swarm.hp[1] = 30.0, 40.0, 0
+    swarm.remove_dead()
+    assert ring.n == 2
+    positions = {
+        (ring.buf[1], ring.buf[2]),
+        (ring.buf[EVENT_STRIDE + 1], ring.buf[EVENT_STRIDE + 2]),
+    }
+    assert positions == {(10.0, 20.0), (30.0, 40.0)}
+    assert ring.buf[0] == ring.buf[EVENT_STRIDE] == EV_EXPLOSION
+
+
+def test_a_drone_that_leaves_the_bottom_alive_pushes_no_event() -> None:
+    ring = EventRing()
+    swarm = DroneSwarm(random.Random(1), events=ring)  # noqa: S311
+    for _ in range(DRONE_SPAWN_INTERVAL):
+        swarm.step()
+    swarm.y[0] = PLAYFIELD_H + 16.0
+    swarm.step()
+    swarm.remove_dead()
+    assert swarm.n == 0
+    assert ring.n == 0
+
+
+def test_a_swarm_built_without_a_ring_owns_a_private_one() -> None:
+    swarm = make_swarm()
+    assert swarm.events.n == 0

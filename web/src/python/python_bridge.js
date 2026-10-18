@@ -30,8 +30,8 @@ export async function startGame(pyodide, options) {
     create_pyproxies: false,
   });
   manifestProxy.destroy();
-  if (manifest.protocol !== 1) {
-    throw new Error(`Unsupported protocol version ${manifest.protocol} (expected 1)`);
+  if (manifest.protocol !== 2) {
+    throw new Error(`Unsupported protocol version ${manifest.protocol} (expected 2)`);
   }
 
   const header = new Float32Array(manifest.header.len);

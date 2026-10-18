@@ -25,7 +25,7 @@ def test_options_with_to_py() -> None:
 
 def test_none_options_use_defaults() -> None:
     assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 600
-    assert create_game().manifest()["protocol"] == 1
+    assert create_game().manifest()["protocol"] == 2
 
 
 def test_no_crash_option_means_no_fault() -> None:

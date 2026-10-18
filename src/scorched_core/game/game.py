@@ -11,22 +11,42 @@ from scorched_core.collision.circle_hits import resolve_shots_vs_drones
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.drone_swarm import DroneSwarm
 from scorched_core.entities.player_ship import PlayerShip
+from scorched_core.events.event_ring import EventRing
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.input.button import Button
 from scorched_core.input.input_frame import InputFrame
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
+    BLAST_LARGE,
+    BLAST_MEDIUM,
+    BLAST_SMALL,
     DRONE_CAP,
     DRONE_STRIDE,
     EBULLET_MAX_CAP,
     EBULLET_MIN_CAP,
     EBULLET_STRIDE,
+    EV_BOMB_DETONATE,
+    EV_BOMB_LAUNCH,
+    EV_DEATHBOMB_SAVE,
+    EV_ENEMY_FIRE,
+    EV_EXPLOSION,
+    EV_HIT,
+    EV_PICKUP,
+    EV_PLAYER_DEATH,
+    EV_PLAYER_HIT,
+    EV_RESPAWN,
+    EV_SFX,
+    EV_SHOT,
+    EVENT_CAP,
+    EVENT_STRIDE,
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
     H_DRONE_N,
     H_DRONES_DOWN,
     H_EBULLET_N,
+    H_EVENT_DROPPED,
+    H_EVENT_N,
     H_FLAGS,
     H_PBULLET_N,
     H_SCROLL_Y,
@@ -63,6 +83,29 @@ _HEADER_SLOTS: dict[str, int] = {
     "TICK_COUNT": H_TICK_COUNT,
     "STORM_HITS": H_STORM_HITS,
     "DRONES_DOWN": H_DRONES_DOWN,
+    "EVENT_N": H_EVENT_N,
+    "EVENT_DROPPED": H_EVENT_DROPPED,
+}
+
+_EVENT_KINDS: dict[str, int] = {
+    "EXPLOSION": EV_EXPLOSION,
+    "HIT": EV_HIT,
+    "SHOT": EV_SHOT,
+    "PICKUP": EV_PICKUP,
+    "ENEMY_FIRE": EV_ENEMY_FIRE,
+    "PLAYER_HIT": EV_PLAYER_HIT,
+    "PLAYER_DEATH": EV_PLAYER_DEATH,
+    "RESPAWN": EV_RESPAWN,
+    "BOMB_LAUNCH": EV_BOMB_LAUNCH,
+    "BOMB_DETONATE": EV_BOMB_DETONATE,
+    "DEATHBOMB_SAVE": EV_DEATHBOMB_SAVE,
+    "SFX": EV_SFX,
+}
+
+_BLAST_CLASSES: dict[str, int] = {
+    "SMALL": BLAST_SMALL,
+    "MEDIUM": BLAST_MEDIUM,
+    "LARGE": BLAST_LARGE,
 }
 
 
@@ -78,6 +121,7 @@ class Game:
         "buffers",
         "ebullet_cap",
         "ebullets",
+        "events",
         "fault",
         "grid",
         "input",
@@ -106,7 +150,8 @@ class Game:
         self.ebullets = BulletPool(self.ebullet_cap)
         self.pbullets = BulletPool(PBULLET_CAP)
         self.twin = TwinShot()
-        self.swarm = DroneSwarm(self.rng)
+        self.events = EventRing()
+        self.swarm = DroneSwarm(self.rng, events=self.events)
         self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, DRONE_CAP)
         self._scratch = array("i", bytes(4 * DRONE_CAP))
         self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
@@ -125,6 +170,7 @@ class Game:
             "pbullets": array("f", bytes(4 * PBULLET_STRIDE * PBULLET_CAP)),
             "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self.ebullet_cap)),
             "drones": array("f", bytes(4 * DRONE_STRIDE * DRONE_CAP)),
+            "events": self.events.buf,
         }
 
     def manifest(self) -> dict[str, object]:
@@ -137,9 +183,12 @@ class Game:
                 "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
                 "ebullets": {"stride": EBULLET_STRIDE, "cap": self.ebullet_cap},
                 "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
+                "events": {"stride": EVENT_STRIDE, "cap": EVENT_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
             "buttons": {b.name: b.value for b in Button},
+            "events": dict(_EVENT_KINDS),
+            "blast": dict(_BLAST_CLASSES),
             "tuning": {"scroll_speed": SCROLL_SPEED, "hitbox_radius": HITBOX_RADIUS},
         }
 
@@ -166,6 +215,7 @@ class Game:
         drag_y: float,
     ) -> int:
         """Advance the simulation by ``dt_ms`` and pack the header; return steps run."""
+        self.events.clear()  # events live for one call only: never replayed (Pitfall 2)
         self.input.update(buttons)
         if self.input.pressed(Button.PAUSE):
             self.set_paused(not self.paused)
@@ -208,6 +258,8 @@ class Game:
         header[H_DRONES_DOWN] = self.swarm.destroyed
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
+        header[H_EVENT_N] = self.events.n
+        header[H_EVENT_DROPPED] = self.events.dropped
 
     def _step(self) -> None:
         self.terrain.step()

@@ -162,9 +162,13 @@ describe('installSources', () => {
 
 describe('startGame', () => {
   const GAME_MANIFEST = {
-    protocol: 1,
-    header: { len: 12, slots: { STEPS: 0, ALPHA: 2 } },
-    channels: { pbullets: { stride: 4, cap: 64 }, ebullets: { stride: 4, cap: 600 } },
+    protocol: 2,
+    header: { len: 48, slots: { STEPS: 0, ALPHA: 2, EVENT_N: 12 } },
+    channels: {
+      pbullets: { stride: 4, cap: 64 },
+      ebullets: { stride: 4, cap: 600 },
+      events: { stride: 6, cap: 128 },
+    },
   };
 
   function fakeGamePyodide(manifest = GAME_MANIFEST) {
@@ -191,9 +195,10 @@ describe('startGame', () => {
 
     expect(calls.writes).toBe(Object.keys(PY_SOURCES).length);
     expect(started.header).toBeInstanceOf(Float32Array);
-    expect(started.header.length).toBe(12);
+    expect(started.header.length).toBe(48);
     expect(started.channels.pbullets.length).toBe(4 * 64);
     expect(started.channels.ebullets.length).toBe(4 * 600);
+    expect(started.channels.events.length).toBe(6 * 128);
   });
 
   it('attaches the header first, then each channel in manifest order, with the same arrays', async () => {
@@ -201,10 +206,16 @@ describe('startGame', () => {
 
     const started = await startGame(pyodide, { seed: 1 });
 
-    expect(calls.attached.map(([name]) => name)).toEqual(['header', 'pbullets', 'ebullets']);
+    expect(calls.attached.map(([name]) => name)).toEqual([
+      'header',
+      'pbullets',
+      'ebullets',
+      'events',
+    ]);
     expect(calls.attached[0][1]).toBe(started.header);
     expect(calls.attached[1][1]).toBe(started.channels.pbullets);
     expect(calls.attached[2][1]).toBe(started.channels.ebullets);
+    expect(calls.attached[3][1]).toBe(started.channels.events);
   });
 
   it('returns the manifest, its header slots, the game and the held tick function', async () => {
@@ -226,12 +237,15 @@ describe('startGame', () => {
     expect(calls.destroyed).toEqual(['manifest']);
   });
 
-  it('rejects a protocol version it does not speak before allocating or attaching anything', async () => {
-    const { pyodide, calls } = fakeGamePyodide({ ...GAME_MANIFEST, protocol: 2 });
+  it.each([1, 3])(
+    'rejects protocol version %i before allocating or attaching anything',
+    async (protocol) => {
+      const { pyodide, calls } = fakeGamePyodide({ ...GAME_MANIFEST, protocol });
 
-    await expect(startGame(pyodide, { seed: 1 })).rejects.toThrow(
-      'Unsupported protocol version 2 (expected 1)',
-    );
-    expect(calls.attached).toEqual([]);
-  });
+      await expect(startGame(pyodide, { seed: 1 })).rejects.toThrow(
+        `Unsupported protocol version ${protocol} (expected 2)`,
+      );
+      expect(calls.attached).toEqual([]);
+    },
+  );
 });

@@ -6,7 +6,15 @@ from array import array
 from dataclasses import dataclass, field
 from typing import Final
 
-from scorched_core.protocol import DRONE_CAP, DRONE_STRIDE, PLAYFIELD_H, PLAYFIELD_W
+from scorched_core.events.event_ring import EventRing
+from scorched_core.protocol import (
+    BLAST_SMALL,
+    DRONE_CAP,
+    DRONE_STRIDE,
+    EV_EXPLOSION,
+    PLAYFIELD_H,
+    PLAYFIELD_W,
+)
 from scorched_core.tuning import (
     DRONE_FLASH_TICKS,
     DRONE_HP,
@@ -29,6 +37,7 @@ class DroneSwarm:
     """Up to ``DRONE_MAX_ALIVE`` drones: seeded spawn, sway, hit flash, swap-remove."""
 
     rng: random.Random
+    events: EventRing = field(default_factory=EventRing)
     x: array = field(init=False)
     y: array = field(init=False)
     base_x: array = field(init=False)
@@ -76,6 +85,7 @@ class DroneSwarm:
         hp = self.hp
         for i in range(self.n - 1, -1, -1):
             if hp[i] <= 0:
+                self.events.push(EV_EXPLOSION, self.x[i], self.y[i], BLAST_SMALL)
                 self._remove_at(i)
                 self.destroyed += 1
 

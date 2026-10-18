@@ -12,12 +12,17 @@ from scorched_core.protocol import (
     DRONE_CAP,
     DRONE_STRIDE,
     EBULLET_STRIDE,
+    EV_EXPLOSION,
+    EVENT_CAP,
+    EVENT_STRIDE,
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
     H_DRONE_N,
     H_DRONES_DOWN,
     H_EBULLET_N,
+    H_EVENT_DROPPED,
+    H_EVENT_N,
     H_FLAGS,
     H_PBULLET_N,
     H_SCROLL_Y,
@@ -35,20 +40,43 @@ from scorched_core.tuning import SHIP_SPEED, SHIP_START_X, SHIP_START_Y
 
 def test_manifest_contract() -> None:
     manifest = Game().manifest()
-    assert manifest["protocol"] == 1
+    assert manifest["protocol"] == 2
     assert manifest["playfield"] == {"w": 240.0, "h": 320.0}
     header = manifest["header"]
     assert header["len"] == HEADER_LEN
     assert header["slots"]["STEPS"] == 0
     assert header["slots"]["SHIP_X"] == H_SHIP_X
     assert header["slots"]["DRONES_DOWN"] == 11
-    assert len(header["slots"]) == 12
+    assert header["slots"]["EVENT_N"] == 12
+    assert header["slots"]["EVENT_DROPPED"] == 13
+    assert header["len"] == 48
+    assert len(header["slots"]) == 14
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
         "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
+        "events": {"stride": 6, "cap": 128},
     }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
+
+
+def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
+    manifest = Game().manifest()
+    assert manifest["events"] == {
+        "EXPLOSION": 1,
+        "HIT": 2,
+        "SHOT": 3,
+        "PICKUP": 4,
+        "ENEMY_FIRE": 5,
+        "PLAYER_HIT": 6,
+        "PLAYER_DEATH": 7,
+        "RESPAWN": 8,
+        "BOMB_LAUNCH": 9,
+        "BOMB_DETONATE": 10,
+        "DEATHBOMB_SAVE": 11,
+        "SFX": 12,
+    }
+    assert manifest["blast"] == {"SMALL": 0, "MEDIUM": 1, "LARGE": 2}
 
 
 def test_manifest_publishes_the_button_bits_so_js_never_hardcodes_them() -> None:
@@ -113,6 +141,7 @@ def test_buffer_lengths_and_zero_fill() -> None:
         "pbullets": PBULLET_STRIDE * PBULLET_CAP,
         "ebullets": EBULLET_STRIDE * 750,
         "drones": DRONE_STRIDE * DRONE_CAP,
+        "events": EVENT_STRIDE * EVENT_CAP,
     }
     assert all(v == 0.0 for buf in game.buffers.values() for v in buf)
 
@@ -627,3 +656,24 @@ def test_only_the_python_fault_mode_raises_in_the_simulation_fault(fault: FaultM
     game = Game(fault=fault)
     _run_ticks(game, 300)
     assert game.tick_count == 300
+
+
+def _kill_one_drone(game: Game, x: float, y: float) -> None:
+    """Park a one-hp drone just above a bolt that reaches it on the next step."""
+    swarm = game.swarm
+    swarm.x[0] = swarm.base_x[0] = x
+    swarm.y[0], swarm.hp[0], swarm.n = y, 1, 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def test_a_kill_publishes_one_explosion_through_the_events_channel() -> None:
+    game = Game()
+    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    events = game.buffers["events"]
+    assert game.buffers["header"][H_EVENT_N] == 1
+    assert events[0] == EV_EXPLOSION
+    assert events[1] == pytest.approx(game.ship.x, abs=5.0)  # the drone swayed one step
+    assert events[2] == pytest.approx(game.ship.y - 40.0, abs=2.0)
+    assert events[3] == 0.0  # BLAST_SMALL
+    assert game.buffers["header"][H_EVENT_DROPPED] == 0
