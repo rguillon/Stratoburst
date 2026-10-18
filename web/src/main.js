@@ -150,8 +150,11 @@ async function main() {
     layers: fxLayers,
     events: manifest.events,
     blast: manifest.blast,
-    toWorld: (x, y, out) => rig.toWorld(x, y, out),
+    // A ground explosion bursts on the terrain where the unit was drawn; an air one on the plane.
+    toWorld: (x, y, ground, out) =>
+      ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
     getScale: () => TIERS[currentTier].particleScale,
+    groundKinds,
   });
   // Terrain scroll this frame (steps plus the sub-step alpha); the wrecks read it at a kill.
   let scrollNow = 0;

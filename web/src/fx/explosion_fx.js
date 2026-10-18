@@ -59,15 +59,26 @@ export const HIT_RECIPE = Object.freeze([
   emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], [3, 3, 3]),
 ]);
 
-export function createExplosionFx({ layers, events, blast, toWorld, getScale = () => 1, rng = mulberry32(0x5c0c7ed) }) {
+// `toWorld(x, y, ground, out)` places a logical point in the world: on the gameplay plane for an air
+// event, or in the ground layer (on the terrain, where the unit was drawn) when `ground` is set.
+// `groundKinds` is the Set of kind values drawn in the ground layer; a HIT carries its kind.
+export function createExplosionFx({
+  layers,
+  events,
+  blast,
+  toWorld,
+  getScale = () => 1,
+  rng = mulberry32(0x5c0c7ed),
+  groundKinds = new Set(),
+}) {
   const byBlast = new Map(Object.keys(RECIPES).map((name) => [blast[name], RECIPES[name]]));
 
   function between(range) {
     return range[0] + (range[1] - range[0]) * rng();
   }
 
-  function burst(emitters, x, y) {
-    toWorld(x, y, scratch);
+  function burst(emitters, x, y, ground) {
+    toWorld(x, y, ground, scratch);
     const scale = getScale();
     for (let k = 0; k < emitters.length; k += 1) {
       const e = emitters[k];
@@ -95,12 +106,12 @@ export function createExplosionFx({ layers, events, blast, toWorld, getScale = (
     }
   }
 
-  function handle(type, x, y, a) {
+  function handle(type, x, y, a, b) {
     if (type === events.EXPLOSION) {
       const emitters = byBlast.get(a);
-      if (emitters) burst(emitters, x, y);
+      if (emitters) burst(emitters, x, y, b);
     } else if (type === events.HIT) {
-      burst(HIT_RECIPE, x, y);
+      burst(HIT_RECIPE, x, y, groundKinds.has(a) ? 1 : 0);
     }
   }
 
