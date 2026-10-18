@@ -14,7 +14,7 @@ const FULL = {
   pyodide: '314.0.7',
   three: '0.186.1',
   build: 'abc1234',
-  flags: { debug: true, stress: 500, tier: null, crash: null },
+  flags: { debug: true, stress: 500, tier: null, crash: null, weapon: null, level: null, god: false, bombs: null },
   tier: 'mid',
   lockReason: 'refresh-capped-or-cpu-bound',
   elapsedMin: 5.2,
@@ -50,6 +50,39 @@ describe('buildReport', () => {
     expect(text).toContain('build: abc1234');
     expect(text).toContain('tier=auto');
     expect(text).toContain('stress=500');
+  });
+
+  describe('flags line', () => {
+    const flagsOf = (flags) => lines(buildReport({ flags })).find((l) => l.startsWith('flags:'));
+
+    it('lists every test flag, with default for the unset weapon, level and bombs', () => {
+      expect(flagsOf({ debug: true, stress: 0, tier: null, crash: null })).toBe(
+        'flags: debug=on stress=0 tier=auto crash=none weapon=default level=default god=off bombs=default',
+      );
+    });
+
+    it('prints the values of a fully configured run', () => {
+      const flags = {
+        debug: true,
+        stress: 0,
+        tier: null,
+        crash: null,
+        weapon: 'laser',
+        level: 3,
+        god: false,
+        bombs: 5,
+      };
+      expect(flagsOf(flags)).toBe(
+        'flags: debug=on stress=0 tier=auto crash=none weapon=laser level=3 god=off bombs=5',
+      );
+    });
+
+    it('prints god on, and a stock of zero as 0 rather than default', () => {
+      const line = flagsOf({ debug: false, stress: 500, tier: 'low', crash: 'js', god: true, bombs: 0 });
+      expect(line).toBe(
+        'flags: debug=off stress=500 tier=low crash=js weapon=default level=default god=on bombs=0',
+      );
+    });
   });
 
   it('writes one "minute N:" line per aggregated minute', () => {
