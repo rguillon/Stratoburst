@@ -14,6 +14,7 @@ def test_defaults_describe_a_jet_diving_in_from_above_the_top_edge() -> None:
     assert entry.motion == MotionKind.DIVE
     assert (entry.vx, entry.vy) == (0.0, 2.0)
     assert entry.drop is None
+    assert entry.pattern is None
 
 
 def test_every_field_can_be_overridden() -> None:
@@ -26,10 +27,12 @@ def test_every_field_can_be_overridden() -> None:
         vx=0.1,
         vy=0.5,
         drop=PickupKind.CRYSTAL,
+        pattern="spread3",
     )
     assert (entry.at, entry.kind, entry.x, entry.y) == (600.0, EnemyKind.CARRIER, 120.0, -18.0)
     assert (entry.motion, entry.vx, entry.vy) == (MotionKind.SWAY, 0.1, 0.5)
     assert entry.drop == PickupKind.CRYSTAL
+    assert entry.pattern == "spread3"
 
 
 def test_an_entry_is_frozen() -> None:

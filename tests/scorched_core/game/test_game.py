@@ -17,6 +17,7 @@ from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
+from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.protocol import (
     EBULLET_GAME_CAP,
     EBULLET_STRIDE,
@@ -2761,6 +2762,22 @@ def test_the_gallery_is_byte_identical_to_the_phase_two_core_over_1200_steps() -
     # Recorded from the core before the variable scroll speed and the stage director landed.
     expected = "3cf3728aa65ef07d368e01ba7cdc355a7b12c67eb39727defb64609cc468d2b4"
     assert _gallery_digest(1200) == expected
+
+
+def test_the_first_spread_wave_fires_count_bullets_fanned_around_the_ship_direction() -> None:
+    spec = PATTERNS["spread3"]
+    game = Game(stage=STAGE_1, god=True)
+    for _ in range(600):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        if game.ebullets.n:
+            break
+    assert game.enemies.pattern[0] == pattern_index("spread3")
+    assert game.ebullets.n == spec.count == 3  # exactly the first volley, nothing else yet
+    muzzle_x, muzzle_y = game.ebullets.x[0], game.ebullets.y[0]
+    aim = math.atan2(game.ship.x - muzzle_x, -(game.ship.y - muzzle_y))
+    half = math.radians(spec.arc_deg) / 2.0
+    angles = sorted(math.remainder(game.ebullets.angle[k] - aim, math.tau) for k in range(3))
+    assert angles == pytest.approx([-half, 0.0, half], abs=1e-4)
 
 
 def _gallery_fire_digest(ticks: int) -> str:

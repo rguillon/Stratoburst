@@ -49,6 +49,19 @@ def test_a_negative_marker_is_rejected() -> None:
         StageData(number=1, length=100.0, waves=(), markers=(("midboss", -0.5),))
 
 
+def test_a_wave_naming_a_known_pattern_is_valid() -> None:
+    wave = WaveEntry(at=5.0, kind=EnemyKind.JET, x=120.0, pattern="spread3")
+    assert StageData(number=1, length=100.0, waves=(wave,), markers=()).waves == (wave,)
+
+
+def test_a_wave_naming_an_unknown_pattern_is_rejected_naming_the_entry() -> None:
+    waves = (entry(1.0), WaveEntry(at=7.0, kind=EnemyKind.HELI, x=80.0, pattern="nope"))
+    with pytest.raises(
+        ValueError, match=r"wave 1 \(at=7.0, HELI\) names an unknown pattern 'nope'"
+    ):
+        StageData(number=1, length=100.0, waves=waves, markers=())
+
+
 def test_marker_returns_the_named_distance() -> None:
     stage = StageData(number=1, length=100.0, waves=(), markers=(("midboss", 40.0), ("boss", 90.0)))
     assert stage.marker("midboss") == 40.0

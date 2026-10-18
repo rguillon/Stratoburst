@@ -3,6 +3,8 @@ import itertools
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.patterns.fire_pattern import FirePattern
+from scorched_core.patterns.pattern_library import PATTERNS
 from scorched_core.protocol import PLAYFIELD_W
 from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.stages.stage_data import StageData
@@ -82,3 +84,24 @@ def test_jets_sweep_in_from_both_sides() -> None:
     dives = [w for w in STAGE_1.waves if w.kind == EnemyKind.JET and w.motion == MotionKind.DIVE]
     assert any(w.x < 0.0 and w.vx > 0.0 for w in dives)
     assert any(w.x > PLAYFIELD_W and w.vx < 0.0 for w in dives)
+
+
+def _named_patterns() -> set[str]:
+    return {wave.pattern for wave in STAGE_1.waves if wave.pattern is not None}
+
+
+def test_the_opening_uses_a_spread_a_ring_and_a_stream() -> None:
+    shapes = {PATTERNS[name].shape for name in _named_patterns()}
+    assert {FirePattern.SPREAD, FirePattern.RING, FirePattern.STREAM} <= shapes
+
+
+def test_every_stage_pattern_keeps_raiden_pacing() -> None:
+    assert _named_patterns()
+    for name in _named_patterns():
+        assert PATTERNS[name].speed <= 2.0, name
+        assert PATTERNS[name].interval >= 90, name
+
+
+def test_the_named_patterns_sit_on_the_opening_waves() -> None:
+    assert {"spread3", "ring10_slow", "aimed_slow", "stream3"} <= _named_patterns()
+    assert all(wave.at < 1500.0 for wave in STAGE_1.waves if wave.pattern is not None)

@@ -3,6 +3,7 @@ import pytest
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.patterns.pattern_library import pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
@@ -130,3 +131,22 @@ def test_jump_before_everything_keeps_the_whole_timeline() -> None:
     director.step(100.0, EnemyPool())
     director.jump(1.0)
     assert director.cursor == 0
+
+
+def test_a_wave_pattern_name_is_resolved_to_an_index_when_the_director_is_built() -> None:
+    named = WaveEntry(at=1.0, kind=EnemyKind.JET, x=60.0, pattern="spread3")
+    director = StageDirector(stage_of(named, jet(2.0)))
+    assert director._patterns == (pattern_index("spread3"), None)
+
+
+def test_a_named_pattern_reaches_the_spawned_row() -> None:
+    named = WaveEntry(at=1.0, kind=EnemyKind.JET, x=60.0, pattern="ring10_slow")
+    director, enemies = StageDirector(stage_of(named)), EnemyPool()
+    director.step(1.0, enemies)
+    assert enemies.pattern[0] == pattern_index("ring10_slow")
+
+
+def test_a_wave_without_a_pattern_takes_the_kind_default() -> None:
+    director, enemies = StageDirector(stage_of(jet(1.0))), EnemyPool()
+    director.step(1.0, enemies)
+    assert enemies.pattern[0] == pattern_index("jet_aimed")
