@@ -46,6 +46,7 @@ import { createGameOverOverlay } from './ui/game_over_overlay.js';
 import { createScorePopups } from './ui/score_popups.js';
 import { createBannerOverlay } from './ui/banner_overlay.js';
 import { createBossBar } from './ui/boss_bar.js';
+import { createTallyPanel } from './ui/tally_panel.js';
 import { createDebugSession } from './debug/debug_session.js';
 import { buildReport } from './debug/report.js';
 import * as THREE from 'three';
@@ -430,6 +431,8 @@ async function main() {
   // The boss HP bar (D-25): state-driven from BOSS_ACTIVE, with a tick at each phase threshold of the
   // stage's bosses, which Python ships in the manifest.
   const bossBar = createBossBar({ bosses: manifest.stage.bosses });
+  // The stage-clear tally (SCOR-03): four bonus lines counting up while FLOW is TALLY, state-driven.
+  const tallyPanel = createTallyPanel({ flowStates: manifest.flow_states });
   fx.add(readout); // the MAX flash listens for the MAXED pickup events
   // A medal catch pops its value up where the medal was (D-20). The projection reuses one vector and
   // one result object, so a catch allocates nothing here.
@@ -583,6 +586,7 @@ async function main() {
       gameOver.update(header, slots, ts);
       banner.update(header, slots);
       bossBar.update(header, slots);
+      tallyPanel.update(header, slots, ts);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);

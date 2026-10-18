@@ -409,6 +409,8 @@ class Game:
                 enemies=self.enemies,
                 ebullets=self.ebullets,
                 stage=stage,
+                chain=self.chain,
+                get_bombs=lambda: self.bomb.stock,  # the Bomb object is replaced by a restart
             )
             if stage is not None
             else None
@@ -696,12 +698,29 @@ class Game:
         header[H_INVULN] = self.life.invuln
         header[H_DEATHS] = self.life.deaths
         self._pack_boss_header(header)
+        self._pack_tally_header(header)
         bomb = self.bomb
         header[H_BOMBS] = bomb.stock
         header[H_BOMB_PHASE] = int(bomb.phase)
         header[H_BOMB_X] = bomb.x
         header[H_BOMB_Y] = bomb.y
         header[H_BOMB_T] = bomb.progress
+
+    def _pack_tally_header(self, header: array) -> None:
+        """Write the four tally amounts and how many lines are revealed (all 0 outside the tally).
+
+        The tally is state, not events: the panel can be rebuilt from any frame (Pitfall 6).
+        """
+        flow = self.flow
+        if flow is None:
+            amounts, revealed = (0, 0, 0, 0), 0
+        else:
+            amounts, revealed = flow.tally.amounts, flow.tally.revealed
+        header[H_TALLY_BOSS] = amounts[0]
+        header[H_TALLY_MEDALS] = amounts[1]
+        header[H_TALLY_NO_MISS] = amounts[2]
+        header[H_TALLY_BOMBS] = amounts[3]
+        header[H_TALLY_N] = revealed
 
     def _pack_boss_header(self, header: array) -> None:
         """Write the boss slots: its slot number, phase, hull health and the last-seconds timer.

@@ -1,5 +1,6 @@
 """The stage's flow state machine: where a run is between play and game over."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Final
 
@@ -9,31 +10,59 @@ from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
-from scorched_core.protocol import EBULLET_GAME_CAP, EV_BOSS_WARNING, EV_GAME_OVER, EV_STAGE_START
+from scorched_core.protocol import (
+    EBULLET_GAME_CAP,
+    EV_BOSS_WARNING,
+    EV_GAME_OVER,
+    EV_STAGE_START,
+    EV_TALLY_LINE,
+    PLAYFIELD_H,
+    PLAYFIELD_W,
+)
+from scorched_core.scoring.medal_chain import MedalChain
 from scorched_core.scoring.score_keeper import ScoreKeeper
+from scorched_core.scoring.stage_tally import LINES, StageTally
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.tuning import (
     BOSS_CRAWL_SPEED,
     BOSS_TRIGGER_WINDOW,
+    CLEAR_TICKS,
     INTRO_TICKS,
     MIDBOSS_CRAWL_SPEED,
     MIDBOSS_TRIGGER_WINDOW,
     SCROLL_SPEED,
+    TALLY_HOLD_TICKS,
+    TALLY_LINE_TICKS,
     WARNING_TICKS,
 )
 
 _NO_SPAWN_STATES: Final = frozenset(
-    {FlowState.WARNING, FlowState.BOSS, FlowState.CLEAR, FlowState.GAME_OVER}
+    {
+        FlowState.WARNING,
+        FlowState.BOSS,
+        FlowState.CLEAR,
+        FlowState.TALLY,
+        FlowState.STAGE_CLEAR,
+        FlowState.GAME_OVER,
+    }
 )
+_LAST_LINE_AT: Final = (LINES - 1) * TALLY_LINE_TICKS  # the tally step that reveals the fourth line
+_TALLY_X: Final = PLAYFIELD_W / 2  # where an extend earned by a tally line is announced
+_TALLY_Y: Final = PLAYFIELD_H / 2
 MIDBOSS_SLOT = 1  # the boss slot the header and the boss bar know the mid-boss by
 BOSS_SLOT = 2  # and the one the bomber has
 
 
+def _no_bombs() -> int:
+    """Stand-in bomb stock for a flow that is not wired to a game."""
+    return 0
+
+
 @dataclass(slots=True)
 class StageFlow:
-    """INTRO, PLAY, the MIDBOSS fight inside it, the boss's WARNING, BOSS and CLEAR, GAME_OVER.
+    """INTRO, PLAY, the MIDBOSS fight inside it, the boss's WARNING, BOSS, CLEAR, TALLY, GAME_OVER.
 
     It reads the player's life and score by reference and never owns them. ``timer`` counts the
     steps spent in the current state (INTRO: including the first; GAME_OVER: after the first),
@@ -50,8 +79,12 @@ class StageFlow:
     the director stopping); ``timer`` counts its steps and ``progress`` rises 0 to 1. After
     ``WARNING_TICKS`` the bomber starts (BOSS, slot 2). When it is gone the flow enters CLEAR,
     records in ``boss_destroyed`` whether it was shot down or got away, blows up every enemy still
-    on the field without points and clears the enemy bullets. Game over wins over every one of
-    these states.
+    on the field without points and clears the enemy bullets. After ``CLEAR_TICKS`` the TALLY works
+    the stage's four bonus lines out from ``boss_destroyed``, the ``chain`` medals caught since the
+    INTRO, the ships lost since the INTRO and the bombs ``get_bombs`` reports (a callable, because
+    the game replaces its Bomb object on a restart), then reveals one line every
+    ``TALLY_LINE_TICKS``, pays each through the score keeper, and after ``TALLY_HOLD_TICKS`` moves
+    on to STAGE_CLEAR. Game over wins over every one of these states.
     """
 
     life: PlayerLife
@@ -65,9 +98,13 @@ class StageFlow:
     enemies: EnemyPool = field(default_factory=EnemyPool)
     ebullets: BulletPool = field(default_factory=lambda: BulletPool(EBULLET_GAME_CAP))
     stage: StageData | None = None
+    chain: MedalChain = field(default_factory=MedalChain)
+    get_bombs: Callable[[], int] = _no_bombs
+    tally: StageTally = field(default_factory=StageTally, init=False)
     boss: BossController | None = field(default=None, init=False)
     boss_destroyed: bool = field(default=False, init=False)
     _midboss_done: bool = field(default=False, init=False, repr=False)
+    _deaths_at_start: int = field(default=0, init=False, repr=False)
 
     @property
     def spawning(self) -> bool:
@@ -92,6 +129,8 @@ class StageFlow:
             case FlowState.INTRO:
                 if self.timer == 0:
                     self.events.push(EV_STAGE_START, 0.0, 0.0, self.stage_number)
+                    self._deaths_at_start = self.life.deaths  # the tally counts from here
+                    self.chain.stage_reset()
                 self.timer += 1
                 if self.timer >= INTRO_TICKS:
                     self.state = FlowState.PLAY
@@ -104,6 +143,8 @@ class StageFlow:
                 | FlowState.WARNING
                 | FlowState.BOSS
                 | FlowState.CLEAR
+                | FlowState.TALLY
+                | FlowState.STAGE_CLEAR
             ):
                 if self.life.phase is PlayerPhase.OUT:  # game over wins over every run state
                     self._game_over()
@@ -128,7 +169,11 @@ class StageFlow:
             case FlowState.BOSS:
                 if self.boss is None or self.boss.gone:
                     self._end_boss()
-            case _:  # CLEAR holds: the field is empty and nothing can hit the ship
+            case FlowState.CLEAR:  # the field is empty and nothing can hit the ship
+                self._count_the_clear()
+            case FlowState.TALLY:
+                self._step_tally()
+            case _:  # STAGE_CLEAR holds
                 self.timer += 1
 
     def reset(self) -> None:
@@ -139,6 +184,7 @@ class StageFlow:
         self.boss = None
         self.boss_destroyed = False
         self._midboss_done = False
+        self.tally.reset()
 
     def _start_midboss_at_its_marker(self) -> None:
         """Start the mid-boss once, as the scroll crosses its marker; a refused spawn retries.
@@ -216,6 +262,36 @@ class StageFlow:
         self.enemies.detonate_all(self.events)
         self.ebullets.clear()
 
+    def _count_the_clear(self) -> None:
+        """Count one CLEAR step; when the hold is over, work the tally out and begin it."""
+        self.timer += 1
+        if self.timer < CLEAR_TICKS:
+            return
+        self.tally.compute(
+            self.boss_destroyed,
+            self.chain.collected,
+            self.life.deaths - self._deaths_at_start,
+            self.get_bombs(),
+        )
+        self.state = FlowState.TALLY
+        self.timer = 0
+
+    def _step_tally(self) -> None:
+        """Reveal and pay a line on every ``TALLY_LINE_TICKS``th step, then hold after the last.
+
+        The first line comes on the first TALLY step. Each line pushes one TALLY_LINE event and goes
+        through the score keeper, so the score cap and the extra-ship rules apply to it.
+        """
+        tally = self.tally
+        if tally.revealed < LINES and self.timer == tally.revealed * TALLY_LINE_TICKS:
+            index, amount = tally.reveal_next()
+            self.events.push(EV_TALLY_LINE, 0.0, 0.0, index, amount)
+            self.score.award(amount, self.events, _TALLY_X, _TALLY_Y)
+        self.timer += 1
+        if tally.revealed == LINES and self.timer > _LAST_LINE_AT + TALLY_HOLD_TICKS:
+            self.state = FlowState.STAGE_CLEAR
+            self.timer = 0
+
     def _game_over(self) -> None:
         """Enter GAME_OVER: one event with the final score and the record flag, one save request.
 
@@ -225,5 +301,6 @@ class StageFlow:
         self.timer = 0
         self.save_requested = True
         self.boss = None
+        self.tally.reset()
         score = self.score
         self.events.push(EV_GAME_OVER, 0.0, 0.0, score.score, 1 if score.new_record else 0)

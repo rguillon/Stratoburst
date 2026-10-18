@@ -337,6 +337,50 @@
           animation: none;
         }
       }
+      /* The stage-clear tally (SCOR-03, D-18), shown while FLOW is TALLY: four bonus lines that appear one by one,
+         each amount counting up. Night palette only (cyan labels, white numbers, magenta title), never
+         orange-yellow. It lets every touch through. */
+      #tally {
+        position: absolute;
+        left: 50%;
+        top: 30%;
+        z-index: 5;
+        transform: translateX(-50%);
+        width: min(86%, 560px);
+        padding: 14px 18px;
+        box-sizing: border-box;
+        pointer-events: none;
+        border: 1px solid rgb(27, 215, 255);
+        border-radius: 3px;
+        background: rgba(7, 6, 26, 0.72);
+        box-shadow: 0 0 14px rgba(27, 215, 255, 0.45);
+        color: rgb(27, 215, 255);
+        font: 800 clamp(13px, 3.2vmin, 24px) / 1.5 ui-monospace, Menlo, Consolas, monospace;
+        letter-spacing: 0.1em;
+        text-shadow: 0 0 6px rgba(27, 215, 255, 0.6), 0 0 3px #000;
+        user-select: none;
+      }
+      #tally[hidden] {
+        display: none;
+      }
+      #tally .title {
+        margin-bottom: 6px;
+        text-align: center;
+        color: rgb(255, 30, 225);
+        text-shadow: 0 0 10px rgba(255, 30, 225, 0.8);
+      }
+      #tally .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      #tally .row[hidden] {
+        display: none;
+      }
+      #tally .amount {
+        color: #ffffff;
+        font-variant-numeric: tabular-nums;
+      }
       /* The touch bomb button (INPT-03): the bomb pickup's acid green, never orange-yellow. data-no-steer keeps
          touch_input from treating a press on it as a drag. */
       #bomb-button {
@@ -470,6 +514,13 @@
       <div id="boss-bar" hidden><div class="fill"></div><div class="ticks"></div><span class="timer" hidden></span></div>
       <div id="max-flash" hidden>MAX</div>
       <div id="banner" hidden></div>
+      <div id="tally" hidden>
+        <div class="title">STAGE BONUS</div>
+        <div class="row" id="tally-boss" hidden><span class="label">BOSS DESTROYED</span><span class="amount"></span></div>
+        <div class="row" id="tally-medals" hidden><span class="label">MEDALS</span><span class="amount"></span></div>
+        <div class="row" id="tally-no-miss" hidden><span class="label">NO MISS</span><span class="amount"></span></div>
+        <div class="row" id="tally-bombs" hidden><span class="label">BOMBS LEFT</span><span class="amount"></span></div>
+      </div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
     </div>
     <div id="game-over" role="dialog" aria-label="Game over" data-no-steer hidden>
