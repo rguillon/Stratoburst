@@ -89,3 +89,27 @@ test('holding fire with the level 5 homing weapon launches missiles that are dra
   await page.keyboard.up('Space');
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+test('a carrier shot down drops a crystal that is drawn', async ({ page }) => {
+  test.setTimeout(90_000);
+  await bootGame(page, '?debug');
+  expect(await page.evaluate(() => globalThis.__scorched.fx.pickupsDrawn)).toBe(0);
+
+  // Hold fire and sweep the ship left and right until a carrier goes down and drops a crystal.
+  await page.keyboard.down('Space');
+  const deadline = Date.now() + 70_000;
+  let key = 'ArrowLeft';
+  while (Date.now() < deadline && (await readSlot(page, 'PICKUP_N')) < 1) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(600);
+    await page.keyboard.up(key);
+    key = key === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
+  }
+  await page.keyboard.up('Space');
+  expect(await readSlot(page, 'PICKUP_N')).toBeGreaterThanOrEqual(1);
+  // The crystal is on screen: one gem instance per live pickup.
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.pickupsDrawn), { timeout: 3_000 })
+    .toBeGreaterThanOrEqual(1);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

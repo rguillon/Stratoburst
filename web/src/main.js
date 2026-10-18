@@ -15,6 +15,7 @@ import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
 import { createMissileInstances } from './render/missile_instances.js';
+import { createPickupInstances } from './render/pickup_instances.js';
 import { enemyModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
@@ -235,6 +236,17 @@ async function main() {
   });
   rig.scene.add(missiles.mesh);
   missiles.mesh.count = 1;
+  // The power-up crystals, coloured by the index Python packs. Drawn once (count 1) while the
+  // shaders compile, then hidden until a carrier drops one.
+  const pickups = createPickupInstances({
+    data: bridge.channels.pickups,
+    capacity: manifest.channels.pickups.cap,
+    kinds: manifest.pickup_kinds,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(pickups.mesh);
+  pickups.mesh.count = 1;
   const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool] });
   let fxTime = 0;
 
@@ -269,6 +281,7 @@ async function main() {
   rig.render();
   beam.update(0, 0, 0, 0); // compiled and rendered through both paths: hidden until the laser fires
   missiles.update(0, 0); // likewise hidden until a missile launches
+  pickups.update(0, 0); // and hidden until a crystal drops
   loading.setProgress(1);
   loading.setStatus('Ready');
   const timeToGateMs = performance.now() - t0;
@@ -355,6 +368,7 @@ async function main() {
       readout.update(header[slots.WEAPON], header[slots.LEVEL]);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
+      pickups.update(header[slots.PICKUP_N], fxTime);
       // Ground units extrapolate like the terrain, at the ground ratio, so they never stutter
       // against the roads.
       enemies.update(
@@ -469,6 +483,9 @@ async function main() {
         },
         get missilesDrawn() {
           return missiles.mesh.count;
+        },
+        get pickupsDrawn() {
+          return pickups.mesh.count;
         },
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).
