@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-18-PLAN.md
-last_updated: "2026-10-18T19:38:41.525Z"
+stopped_at: Completed 03-19-PLAN.md
+last_updated: "2026-10-18T19:50:48.699Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: b2cd69940d09b58621160e02c0c6476b2a53d8e7
+state_head: 1cde081570d95dd4e0f50dce5cdd95e779937e92
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 61
+  completed_plans: 62
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 19 of 28
+Plan: 20 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -118,6 +118,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P16 | 7 min | 2 tasks | 12 files |
 | Phase 03 P17 | 6 min | 2 tasks | 11 files |
 | Phase 03 P18 | 29 min | 2 tasks | 16 files |
+| Phase 03 P19 | 12 min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -251,6 +252,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-18: the boss bar is a pure function of the header (BOSS_ACTIVE shows, BOSS_HP scales the fill, BOSS_TIMER_S >= 0 shows ceil seconds), with phase ticks built once per boss from manifest stage.bosses and every DOM write guarded by a cached value
 - [Phase 03]: 03-18: stump smoulder keeps one clock per effect and a round of puffs from every live stump row (no flame window, reset while no stump exists so a new stump never bursts); SHAKE_PART is 2.0 / 0.35 s inside the 3.0 / 0.5 s ceilings
 - [Phase 03]: 03-18: the train hull now leaves a charred wreck on death (ENEMY_WRECK marks it, and it finally has a model); gun cars and stumps leave none
+- [Phase 03]: 03-19: the bomber keeps the plan's part geometry; engine pods are reachable by plain bolts only through a narrow gap (measured), laser and bomb pierce - revisit at the 03-28 gate
+- [Phase 03]: 03-19: a phase jump keeps the deepest hull_kind named so far, and CLEAR yields to GAME_OVER when the ship is OUT
 
 ### Pending Todos
 
@@ -274,6 +277,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T19:38:41.294Z
-Stopped at: Completed 03-18-PLAN.md
+Last session: 2026-10-18T19:50:48.475Z
+Stopped at: Completed 03-19-PLAN.md
 Resume file: None
