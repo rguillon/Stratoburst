@@ -21,6 +21,7 @@ import { createWreckRing } from './fx/wreck_ring.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
+import { createBeamMesh } from './fx/beam_mesh.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -213,6 +214,14 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(shadows.mesh);
+  // The blue laser beam: Python publishes only its half-width (0 when off). It is shown once while
+  // the shaders compile (hidden again below) so the first shot never pays a compile.
+  const beam = createBeamMesh({
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(beam.group);
+  beam.update(1, manifest.playfield.w / 2, manifest.playfield.h / 2, 0);
   const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool] });
   let fxTime = 0;
 
@@ -245,6 +254,7 @@ async function main() {
   }
   applyModelDetail(currentTier);
   rig.render();
+  beam.update(0, 0, 0, 0); // compiled and rendered through both paths: hidden until the laser fires
   loading.setProgress(1);
   loading.setStatus('Ready');
   const timeToGateMs = performance.now() - t0;
@@ -329,6 +339,7 @@ async function main() {
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
       readout.update(header[slots.WEAPON], header[slots.LEVEL]);
+      beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
       // Ground units extrapolate like the terrain, at the ground ratio, so they never stutter
       // against the roads.
       enemies.update(
@@ -437,6 +448,9 @@ async function main() {
         },
         get shadows() {
           return shadows.mesh.count;
+        },
+        get beamVisible() {
+          return beam.group.visible;
         },
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).

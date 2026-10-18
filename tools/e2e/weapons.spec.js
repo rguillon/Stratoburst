@@ -45,3 +45,26 @@ test('without flags the readout shows VULCAN Lv 1', async ({ page }) => {
   await expect(page.locator('#status-readout')).toContainText('VULCAN');
   await expect(page.locator('#status-readout')).toContainText('Lv 1');
 });
+
+test('holding fire with the level 3 laser opens a half-width 4 beam and releasing closes it', async ({
+  page,
+}) => {
+  await bootGame(page, '?debug&weapon=laser&level=3');
+  expect(await readSlot(page, 'BEAM_W')).toBe(0);
+  expect(await page.evaluate(() => globalThis.__scorched.fx.beamVisible)).toBe(false);
+
+  await page.keyboard.down('Space');
+  await expect.poll(() => readSlot(page, 'BEAM_W'), { timeout: 10_000 }).toBe(4);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.beamVisible), { timeout: 10_000 })
+    .toBe(true);
+  // A beam is not made of bullets.
+  expect(await readSlot(page, 'PBULLET_N')).toBe(0);
+
+  await page.keyboard.up('Space');
+  await expect.poll(() => readSlot(page, 'BEAM_W'), { timeout: 10_000 }).toBe(0);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.beamVisible), { timeout: 10_000 })
+    .toBe(false);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

@@ -55,6 +55,7 @@ from scorched_core.protocol import (
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
+    H_BEAM_W,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
@@ -103,6 +104,7 @@ from scorched_core.tuning import (
     SCROLL_SPEED,
 )
 from scorched_core.weapons.homing_launcher import HomingLauncher
+from scorched_core.weapons.laser_beam import LaserBeam
 from scorched_core.weapons.pickup_outcome import PickupOutcome
 from scorched_core.weapons.vulcan import Vulcan
 from scorched_core.weapons.weapon_kind import WeaponKind
@@ -129,6 +131,7 @@ _HEADER_SLOTS: dict[str, int] = {
     "WEAPON": H_WEAPON,
     "PICKUP_N": H_PICKUP_N,
     "LEVEL": H_LEVEL,
+    "BEAM_W": H_BEAM_W,
     "MAX_BONUS": H_MAX_BONUS,
     "MISSILE_N": H_MISSILE_N,
     "STORM_N": H_STORM_N,
@@ -183,6 +186,7 @@ class Game:
         "grid",
         "homing",
         "input",
+        "laser",
         "life",
         "loadout",
         "max_bonus",
@@ -226,6 +230,7 @@ class Game:
         self.loadout = WeaponLoadout(kind=weapon, level=min(max(level, 1), MAX_LEVEL))
         self.vulcan = Vulcan()
         self.homing = HomingLauncher()
+        self.laser = LaserBeam()
         self.missiles = MissilePool()
         self.events = EventRing()
         self.enemies = EnemyPool()
@@ -367,6 +372,7 @@ class Game:
         header[H_EVENT_DROPPED] = self.events.dropped
         header[H_WEAPON] = int(self.loadout.kind)
         header[H_LEVEL] = self.loadout.level
+        header[H_BEAM_W] = self.laser.half_width
         header[H_MAX_BONUS] = self.max_bonus
         header[H_PLAYER_PHASE] = int(self.life.phase)
         header[H_INVULN] = self.life.invuln
@@ -436,6 +442,14 @@ class Game:
         self.enemies.fire(self.ebullets, self.ship.x, self.ship.y, self.events)
         self.missiles.steer(self.enemies)
         self.grid.rebuild(self.enemies.x, self.enemies.y, self.enemies.n)
+        self.laser.step(
+            firing and self.loadout.kind is WeaponKind.LASER,
+            self.ship.x,
+            self.ship.y,
+            self.loadout.level,
+            self.enemies,
+            self.events,
+        )
         resolve_shots_vs_enemies(
             self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events
         )

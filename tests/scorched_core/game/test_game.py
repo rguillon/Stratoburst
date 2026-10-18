@@ -32,6 +32,7 @@ from scorched_core.protocol import (
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
+    H_BEAM_W,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
@@ -93,6 +94,7 @@ def test_manifest_contract() -> None:
     assert header["len"] == 48
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
+    assert header["slots"]["BEAM_W"] == 18 == H_BEAM_W
     assert header["slots"]["PICKUP_N"] == 15 == H_PICKUP_N
     assert header["slots"]["MAX_BONUS"] == 20 == H_MAX_BONUS
     assert header["slots"]["MISSILE_N"] == 19 == H_MISSILE_N
@@ -100,7 +102,7 @@ def test_manifest_contract() -> None:
     assert header["slots"]["PLAYER_PHASE"] == 22 == H_PLAYER_PHASE
     assert header["slots"]["INVULN"] == 23 == H_INVULN
     assert header["slots"]["DEATHS"] == 24 == H_DEATHS
-    assert len(header["slots"]) == 23
+    assert len(header["slots"]) == 24
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
@@ -1576,3 +1578,44 @@ def _scripted_death_run(seed: int) -> bytes:
 
 def test_the_life_cycle_is_deterministic_for_one_seed_and_inputs() -> None:
     assert _scripted_death_run(3) == _scripted_death_run(3)
+
+
+def _beam_game(**kwargs: object) -> Game:
+    """A god-mode game with no gallery, so only the enemies a test places are in the column."""
+    return _empty_game(god=True, **kwargs)
+
+
+def _place(game: Game, kind: EnemyKind, x: float, y: float, hp: int = 10_000) -> int:
+    """Park a stationary enemy and return its slot."""
+    enemies = game.enemies
+    enemies.spawn(kind, x, y, MotionKind.DIVE, 0.0, 0.0)
+    enemies.hp[enemies.n - 1] = hp
+    return enemies.n - 1
+
+
+def _hold(game: Game, ticks: int) -> None:
+    for _ in range(ticks):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_a_laser_with_fire_held_publishes_its_half_width_and_hits_the_enemy_above() -> None:
+    game = _beam_game(weapon=WeaponKind.LASER, level=3)
+    slot = _place(game, EnemyKind.JET, game.ship.x, game.ship.y - 80.0)
+    _hold(game, 1)
+    assert game.buffers["header"][H_BEAM_W] == 4.0
+    assert game.enemies.hp[slot] == 10_000 - 3  # the Lv3 laser deals 3 on its first step
+    assert game.pbullets.n == 0  # the beam is not made of bullets
+
+
+def test_releasing_fire_drops_the_beam_width_to_zero() -> None:
+    game = _beam_game(weapon=WeaponKind.LASER, level=3)
+    _hold(game, 2)
+    assert game.buffers["header"][H_BEAM_W] == 4.0
+    _tick(game)
+    assert game.buffers["header"][H_BEAM_W] == 0.0
+
+
+def test_a_vulcan_game_never_shows_a_beam() -> None:
+    game = _beam_game()
+    _hold(game, 5)
+    assert game.buffers["header"][H_BEAM_W] == 0.0

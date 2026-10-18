@@ -78,6 +78,13 @@ HOMING_FAN_DEG: Final = 22.0
 HOMING_MUZZLE_AHEAD: Final = 4.0
 MISSILE_RADIUS: Final = 2.5
 
+# Laser (PLYR-04, D-02): blue is a hitscan beam locked to the ship's x, from the nose to the top of
+# the playfield, that pierces every enemy in it. Its half-width in units and its damage per hit grow
+# with the level; it deals that damage to everything it overlaps every ``LASER_HIT_INTERVAL`` steps.
+LASER_HALF_WIDTH: Final = (2.0, 3.0, 4.0, 5.5, 7.0)
+LASER_DAMAGE: Final = (1, 2, 3, 4, 5)
+LASER_HIT_INTERVAL: Final = 3
+
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames
