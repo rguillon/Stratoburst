@@ -8,6 +8,20 @@ const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4 };
 const OUTCOME = { RAISED: 0, SWITCHED: 1, MAXED: 2, STOCKED: 3 };
 const OPTIONS = { weapons: WEAPONS, events: EVENTS, maxed: OUTCOME.MAXED };
 const FLASH_MS = 900;
+const SLOTS = { WEAPON: 0, LEVEL: 1, BOMBS: 2, SCORE: 3, HIGH_SCORE: 4, LIVES: 5 };
+
+// One frame's header and the slot map, as main.js passes them: update(...frame({ score: 300 })).
+function frame(values = {}) {
+  const v = { weapon: 0, level: 1, bombs: 3, score: 0, hiscore: 0, lives: 3, ...values };
+  const header = new Float32Array(8);
+  header[SLOTS.WEAPON] = v.weapon;
+  header[SLOTS.LEVEL] = v.level;
+  header[SLOTS.BOMBS] = v.bombs;
+  header[SLOTS.SCORE] = v.score;
+  header[SLOTS.HIGH_SCORE] = v.hiscore;
+  header[SLOTS.LIVES] = v.lives;
+  return [header, SLOTS];
+}
 
 // A document holding the same markup as index.html, with writes to textContent counted.
 function build() {
@@ -15,22 +29,34 @@ function build() {
   const el = doc.createElement('div');
   el.id = 'status-readout';
   el.hidden = true;
+  const top = doc.createElement('div');
+  top.className = 'hud-top';
+  const score = doc.createElement('span');
+  score.className = 'score';
+  const hiscore = doc.createElement('span');
+  hiscore.className = 'hiscore';
+  top.append(score, hiscore);
+  const bl = doc.createElement('div');
+  bl.className = 'hud-bl';
   const weapon = doc.createElement('span');
   weapon.className = 'weapon';
   const level = doc.createElement('span');
   level.className = 'level';
   const bombs = doc.createElement('span');
   bombs.className = 'bombs';
-  el.append(weapon, level, bombs);
+  bl.append(weapon, level, bombs);
+  el.append(top, bl);
   const flash = doc.createElement('div');
   flash.id = 'max-flash';
   flash.hidden = true;
   doc.body.append(el, flash);
-  const writes = { weapon: 0, level: 0, bombs: 0 };
+  const writes = { weapon: 0, level: 0, bombs: 0, score: 0, hiscore: 0 };
   for (const [key, node] of [
     ['weapon', weapon],
     ['level', level],
     ['bombs', bombs],
+    ['score', score],
+    ['hiscore', hiscore],
   ]) {
     let text = '';
     Object.defineProperty(node, 'textContent', {
@@ -41,14 +67,14 @@ function build() {
       },
     });
   }
-  return { doc, el, weapon, level, bombs, flash, writes };
+  return { doc, el, weapon, level, bombs, score, hiscore, flash, writes };
 }
 
 describe('createStatusReadout', () => {
   it('shows the weapon name in its colour and the level', () => {
     const { doc, weapon, level } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(1, 3);
+    readout.update(...frame({ weapon: 1, level: 3 }));
     expect(weapon.textContent).toBe('LASER');
     expect(weapon.style.color).toBe(WEAPON_CSS.LASER);
     expect(level.textContent).toBe('Lv 3');
@@ -67,30 +93,30 @@ describe('createStatusReadout', () => {
   it('writes only when a value changes', () => {
     const { doc, writes } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(0, 1, 3);
-    readout.update(0, 1, 3);
-    readout.update(0, 1, 3);
-    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1 });
-    readout.update(0, 2, 3);
-    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1 });
-    readout.update(2, 2, 3);
-    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1 });
-    readout.update(2, 2, 2);
-    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2 });
+    readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
+    readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
+    readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
+    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1, score: 1, hiscore: 1 });
+    readout.update(...frame({ weapon: 0, level: 2, bombs: 3 }));
+    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1, score: 1, hiscore: 1 });
+    readout.update(...frame({ weapon: 2, level: 2, bombs: 3 }));
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1, score: 1, hiscore: 1 });
+    readout.update(...frame({ weapon: 2, level: 2, bombs: 2 }));
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2, score: 1, hiscore: 1 });
   });
 
   it.each([0, 1, 3, 7])('shows %i bombs as that many pips', (stock) => {
     const { doc, bombs } = build();
-    createStatusReadout({ doc, ...OPTIONS }).update(0, 1, stock);
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ bombs: stock }));
     expect(bombs.textContent).toBe(BOMB_PIP.repeat(stock));
   });
 
   it('shows no pips for a stock of zero and seven for the full stock', () => {
     const { doc, bombs } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(0, 1, 0);
+    readout.update(...frame({ bombs: 0 }));
     expect(bombs.textContent).toBe('');
-    readout.update(0, 1, BOMB_PIPS_MAX);
+    readout.update(...frame({ bombs: BOMB_PIPS_MAX }));
     expect(bombs.textContent).toHaveLength(7);
   });
 
@@ -103,7 +129,7 @@ describe('createStatusReadout', () => {
     [Number.POSITIVE_INFINITY, 0],
   ])('treats a stock of %s as %i pips', (stock, pips) => {
     const { doc, bombs } = build();
-    createStatusReadout({ doc, ...OPTIONS }).update(0, 1, stock);
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ bombs: stock }));
     expect(bombs.textContent).toBe(BOMB_PIP.repeat(pips));
   });
 
@@ -115,7 +141,7 @@ describe('createStatusReadout', () => {
 
   it('shows a placeholder, uncoloured, for an unknown weapon value', () => {
     const { doc, weapon } = build();
-    createStatusReadout({ doc, ...OPTIONS }).update(9, 1);
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ weapon: 9 }));
     expect(weapon.textContent).toBe('?');
     expect(weapon.style.color).toBe('');
   });
@@ -137,8 +163,49 @@ describe('createStatusReadout', () => {
 
   it('accepts a colour override', () => {
     const { doc, weapon } = build();
-    createStatusReadout({ doc, ...OPTIONS, colors: { VULCAN: 'red' } }).update(0, 1);
+    createStatusReadout({ doc, ...OPTIONS, colors: { VULCAN: 'red' } }).update(...frame());
     expect(weapon.style.color).toBe('red');
+  });
+});
+
+describe('the score and high score', () => {
+  it('shows both as plain decimal integers', () => {
+    const { doc, score, hiscore } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 12300, hiscore: 45600 }));
+    expect(score.textContent).toBe('12300');
+    expect(hiscore.textContent).toBe('45600');
+  });
+
+  it('shows the largest score exactly (seven digits survive the float32 header)', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 9_999_999 }));
+    expect(score.textContent).toBe('9999999');
+  });
+
+  it('rounds a fractional header value instead of printing decimals', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 299.6 }));
+    expect(score.textContent).toBe('300');
+  });
+
+  it('writes the score and the high score only when they change', () => {
+    const { doc, writes } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    for (let i = 0; i < 5; i++) readout.update(...frame({ score: 300, hiscore: 300 }));
+    expect(writes.score).toBe(1);
+    expect(writes.hiscore).toBe(1);
+    readout.update(...frame({ score: 600, hiscore: 600 }));
+    expect(writes.score).toBe(2);
+    expect(writes.hiscore).toBe(2);
+    readout.update(...frame({ score: 600, hiscore: 900 }));
+    expect(writes.score).toBe(2);
+    expect(writes.hiscore).toBe(3);
+  });
+
+  it('shows 0 for a header value that is not a finite number', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: Number.NaN }));
+    expect(score.textContent).toBe('0');
   });
 });
 

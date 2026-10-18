@@ -1,12 +1,12 @@
-from scorched_core.patterns.pattern_library import PATTERNS
-
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.patterns.pattern_library import PATTERNS
 from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL
 from scorched_core.tuning import (
     ENEMY_BLAST,
     ENEMY_GROUND,
     ENEMY_HP,
     ENEMY_PATTERN,
+    ENEMY_POINTS,
     ENEMY_RADIUS,
     GRID_CELL,
     MISSILE_RADIUS,
@@ -30,7 +30,7 @@ def test_a_kind_is_usable_as_an_integer_index() -> None:
 
 
 def test_every_per_kind_table_has_one_row_per_kind() -> None:
-    for table in (ENEMY_RADIUS, ENEMY_HP, ENEMY_BLAST, ENEMY_GROUND, ENEMY_PATTERN):
+    for table in (ENEMY_RADIUS, ENEMY_HP, ENEMY_BLAST, ENEMY_GROUND, ENEMY_PATTERN, ENEMY_POINTS):
         assert len(table) == len(EnemyKind)
 
 
@@ -64,3 +64,10 @@ def test_each_kind_names_its_default_pattern_and_the_carrier_has_none() -> None:
     assert ENEMY_PATTERN == ("jet_aimed", "heli_ring", None, "tank_aimed", "turret_aimed")
     assert ENEMY_PATTERN[EnemyKind.CARRIER] is None
     assert all(name in PATTERNS for name in ENEMY_PATTERN if name is not None)
+
+
+def test_each_kind_pays_fixed_points_with_no_multiplier() -> None:
+    assert ENEMY_POINTS == (300, 800, 2000, 1000, 1200)
+    assert ENEMY_POINTS[EnemyKind.JET] == 300
+    assert ENEMY_POINTS[EnemyKind.TURRET] == 1200
+    assert all(points > 0 for points in ENEMY_POINTS)

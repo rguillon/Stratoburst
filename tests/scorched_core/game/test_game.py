@@ -7,7 +7,6 @@ from array import array
 from collections.abc import Callable
 
 import pytest
-from scorched_core.paths.path_library import PATHS
 
 from scorched_core.audio.sfx_id import SfxId
 from scorched_core.clock.fixed_step_runner import STEP_MS
@@ -18,6 +17,7 @@ from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
+from scorched_core.paths.path_library import PATHS
 from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.protocol import (
     EBULLET_GAME_CAP,
@@ -54,16 +54,19 @@ from scorched_core.protocol import (
     H_EVENT_N,
     H_FLAGS,
     H_FLOW,
+    H_HIGH_SCORE,
     H_HITSTOP,
     H_INVULN,
     H_KILLS,
     H_LEVEL,
+    H_LIVES,
     H_MAX_BONUS,
     H_MISSILE_N,
     H_NEW_RECORD,
     H_PBULLET_N,
     H_PICKUP_N,
     H_PLAYER_PHASE,
+    H_SCORE,
     H_SCROLL_RATE,
     H_SCROLL_Y,
     H_SHIP_X,
@@ -103,11 +106,14 @@ from scorched_core.tuning import (
     DYING_TICKS,
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
+    ENEMY_POINTS,
     GALLERY_LOOP_TICKS,
     GROUND_SCROLL_RATIO,
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
     INVULN_RESPAWN_TICKS,
+    LIVES_START,
+    MAX_BONUS_POINTS,
     PICKUP_RADIUS,
     SCROLL_ACCEL,
     SCROLL_SPEED,
@@ -2952,3 +2958,89 @@ def test_a_stage_tank_on_a_road_stays_put_on_the_terrain_when_the_scroll_stops()
     before = float(game.enemies.y[0])
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.enemies.y[0] - before == pytest.approx(PATHS["road_down"].speed, abs=1e-4)
+
+
+def _shoot_down(game: Game, kind: EnemyKind) -> None:
+    """Park one one-hp enemy of ``kind`` above a bolt that reaches it on the next step."""
+    x, y = game.ship.x, game.ship.y - 40.0
+    game.enemies.n = 0
+    game.enemies.spawn(kind, x, y, MotionKind.SWAY, 0.0, 0.0)
+    game.enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def test_a_new_game_starts_at_zero_with_three_lives_scoring() -> None:
+    game = Game()
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_HIGH_SCORE], header[H_NEW_RECORD]) == (0.0, 0.0, 0.0)
+    assert header[H_LIVES] == LIVES_START == 3
+
+
+def test_shooting_down_a_jet_adds_exactly_three_hundred_to_the_score_scoring() -> None:
+    game = Game()
+    _shoot_down(game, EnemyKind.JET)
+    _tick(game)
+    header = game.buffers["header"]
+    assert header[H_KILLS] == 1
+    assert header[H_SCORE] == 300.0
+    assert game.score.score == 300
+
+
+@pytest.mark.parametrize("kind", list(EnemyKind))
+def test_every_kind_pays_its_fixed_points_with_no_multiplier_scoring(kind: EnemyKind) -> None:
+    game = Game()
+    _shoot_down(game, kind)
+    _tick(game)
+    assert game.buffers["header"][H_SCORE] == float(ENEMY_POINTS[kind])
+
+
+def test_two_kills_in_a_row_just_add_up_scoring() -> None:
+    game = Game()
+    _shoot_down(game, EnemyKind.HELI)
+    _tick(game)
+    _shoot_down(game, EnemyKind.TANK)
+    _tick(game)
+    assert game.buffers["header"][H_SCORE] == 800.0 + 1000.0
+
+
+def test_a_step_without_a_kill_pays_nothing_scoring() -> None:
+    game = Game()
+    _tick_n(game, 30)
+    assert game.buffers["header"][H_SCORE] == 0.0
+
+
+def test_the_high_score_follows_the_score_scoring() -> None:
+    game = Game()
+    _shoot_down(game, EnemyKind.CARRIER)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_HIGH_SCORE]) == (2000.0, 2000.0)
+
+
+def test_a_starting_high_score_is_shown_and_is_not_a_new_record_scoring() -> None:
+    game = Game(high_score=5000)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_HIGH_SCORE], header[H_NEW_RECORD]) == (5000.0, 0.0)
+
+
+def test_passing_the_starting_high_score_raises_it_and_flags_a_new_record_scoring() -> None:
+    game = Game(high_score=5000)
+    game.score.score = 4900
+    _shoot_down(game, EnemyKind.JET)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_HIGH_SCORE], header[H_NEW_RECORD]) == (
+        5200.0,
+        5200.0,
+        1.0,
+    )
+
+
+def test_a_maxed_catch_pays_the_flat_bonus_and_still_counts_scoring() -> None:
+    game = Game(level=5)
+    _drop_and_stand_on_it(game)
+    _tick(game)
+    assert game.max_bonus == 1
+    assert game.buffers["header"][H_SCORE] == float(2000 + MAX_BONUS_POINTS)
