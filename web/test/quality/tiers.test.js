@@ -9,9 +9,27 @@ import {
 
 describe('TIERS', () => {
   it('is the frozen ladder high / mid / low', () => {
-    expect(TIERS.high).toEqual({ name: 'high', dprCap: 2, maxPixels: 2_800_000, bloom: 'full' });
-    expect(TIERS.mid).toEqual({ name: 'mid', dprCap: 1.5, maxPixels: 1_200_000, bloom: 'half' });
-    expect(TIERS.low).toEqual({ name: 'low', dprCap: 1, maxPixels: 600_000, bloom: 'off' });
+    expect(TIERS.high).toEqual({
+      name: 'high',
+      dprCap: 2,
+      maxPixels: 2_800_000,
+      bloom: 'full',
+      particleScale: 1,
+    });
+    expect(TIERS.mid).toEqual({
+      name: 'mid',
+      dprCap: 1.5,
+      maxPixels: 1_200_000,
+      bloom: 'half',
+      particleScale: 0.6,
+    });
+    expect(TIERS.low).toEqual({
+      name: 'low',
+      dprCap: 1,
+      maxPixels: 600_000,
+      bloom: 'off',
+      particleScale: 0.35,
+    });
     expect(Object.isFrozen(TIERS)).toBe(true);
     expect(TIER_ORDER).toEqual(['low', 'mid', 'high']);
   });
