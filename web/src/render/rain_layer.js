@@ -11,7 +11,7 @@ import { mulberry32 } from '../fx/explosion_fx.js';
 
 // Pale cool blue-white. Every channel is below the bloom threshold (1.0) so rain never blooms, and
 // the hue is far from the orange-yellow reserved for enemy bullets.
-export const RAIN_COLOR = Object.freeze([0.55, 0.7, 0.9]);
+export const RAIN_COLOR = Object.freeze([0.5, 0.64, 0.84]);
 
 // The volume the rain falls through, in world units around the playfield: wider than the playfield
 // so the streaks reach the edges of the terrain the camera shows, from above the gameplay plane
@@ -21,12 +21,12 @@ const TOP = 90;
 const BOTTOM = -40;
 // Streak length along its fall direction, width, and falls per second.
 const LENGTH = 14;
-const WIDTH = 0.35;
+const WIDTH = 1.1;
 const RATE = 1.6;
 // Fall direction: slanted so a streak is not foreshortened to a dot by the top-down camera.
 const SLANT = Object.freeze([0.2, -1, 0.35]);
 // How bright the head of a streak is; the fragment fades it toward the tail and the edges.
-const GAIN = 0.55;
+const GAIN = 0.7;
 
 const SEED = 0x7a1b5;
 
@@ -67,8 +67,8 @@ uniform float uGain;
 varying vec2 vUv;
 void main() {
   float edge = 1.0 - abs(vUv.x - 0.5) * 2.0;
-  // vUv.y is 0 at the tail end of the quad and 1 at the head.
-  float alpha = edge * smoothstep(0.0, 1.0, vUv.y) * uGain;
+  // vUv.y is 0 at the head of the streak and 1 at its tail: bright head, fading tail.
+  float alpha = edge * mix(1.0, 0.1, vUv.y) * uGain;
   gl_FragColor = vec4(uColor, alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -108,6 +108,9 @@ export function createRainLayer({ capacity, playfieldW, playfieldH }) {
     transparent: true,
     depthWrite: false,
     depthTest: false,
+    // The quad is built in view space, so its winding follows the streak's direction on screen: draw
+    // both faces rather than depend on which way the sideways axis happens to turn.
+    side: THREE.DoubleSide,
     fog: false,
   });
 

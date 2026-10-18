@@ -60,6 +60,10 @@ describe('createRainLayer', () => {
     expect(material.fog).toBe(false);
   });
 
+  it('draws both faces: the quad is built in view space, so its winding follows the streak on screen', () => {
+    expect(build().mesh.material.side).toBe(THREE.DoubleSide);
+  });
+
   it('draws below the particle layers (4) so a spark is never hidden by a drop', () => {
     expect(build().mesh.renderOrder).toBeLessThan(4);
   });
