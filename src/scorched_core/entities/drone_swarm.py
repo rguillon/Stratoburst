@@ -12,6 +12,7 @@ from scorched_core.protocol import (
     DRONE_CAP,
     DRONE_STRIDE,
     EV_EXPLOSION,
+    EV_HIT,
     PLAYFIELD_H,
     PLAYFIELD_W,
 )
@@ -76,8 +77,16 @@ class DroneSwarm:
                 self._spawn()
 
     def apply_hit(self, i: int) -> None:
-        """Take one hit on drone ``i`` and flash."""
+        """Take one hit on drone ``i`` and flash.
+
+        A hit on a resting drone that survives pushes one low-priority HIT event (D-28: one
+        spark burst per flash window, merged at the source). A killing blow pushes none: the
+        EXPLOSION from ``remove_dead`` already covers it.
+        """
+        resting = self.flash[i] == 0
         self.hp[i] -= 1
+        if resting and self.hp[i] > 0:
+            self.events.push(EV_HIT, self.x[i], self.y[i], 0.0, low=True)
         self.flash[i] = DRONE_FLASH_TICKS
 
     def remove_dead(self) -> None:

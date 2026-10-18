@@ -317,10 +317,20 @@ def test_a_hit_is_refused_past_the_soft_cap_while_the_explosion_still_fits() -> 
     swarm, ring = _swarm_with_ring()
     for _ in range(EVENT_SOFT_CAP + 1):
         ring.push(EV_EXPLOSION, 0.0, 0.0)
-    swarm.hp[0] = 1
     swarm.apply_hit(0)
     assert ring.dropped == 1
     assert ring.n == EVENT_SOFT_CAP + 1
+    swarm.hp[0] = 0
     swarm.remove_dead()
     assert ring.n == EVENT_SOFT_CAP + 2
     assert ring.dropped == 1
+
+
+def test_a_killing_blow_on_a_resting_drone_pushes_the_explosion_and_no_hit() -> None:
+    swarm, ring = _swarm_with_ring()
+    swarm.hp[0] = 1
+    swarm.apply_hit(0)
+    assert ring.n == 0
+    swarm.remove_dead()
+    assert ring.n == 1
+    assert ring.buf[0] == EV_EXPLOSION

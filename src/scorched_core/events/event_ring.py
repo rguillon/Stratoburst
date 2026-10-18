@@ -3,7 +3,7 @@
 from array import array
 from dataclasses import dataclass, field
 
-from scorched_core.protocol import EVENT_CAP, EVENT_STRIDE
+from scorched_core.protocol import EVENT_CAP, EVENT_SOFT_CAP, EVENT_STRIDE
 
 
 @dataclass(slots=True)
@@ -34,11 +34,14 @@ class EventRing:
         b: float = 0.0,
         c: float = 0.0,
         *,
-        low: bool = False,  # noqa: ARG002 - the priority rule arrives with the soft cap
+        low: bool = False,
     ) -> bool:
-        """Queue one event; return False (and count a drop) when it is refused."""
+        """Queue one event; return False (and count a drop) when it is refused.
+
+        A ``low`` event is refused from ``EVENT_SOFT_CAP`` on, which keeps room for the rest.
+        """
         i = self.n
-        if i >= EVENT_CAP:
+        if i >= EVENT_CAP or (low and i >= EVENT_SOFT_CAP):
             self.dropped += 1
             return False
         buf = self.buf
