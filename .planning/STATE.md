@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-10-18T16:25:27.740Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-10-18T16:31:43.790Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 93c82b62e290f51ce58db9b502daadbd966bd9d6
+state_head: c5dc948e5af931842193e26aca5d0016148cf21d
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 47
+  completed_plans: 48
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 5 of 28
+Plan: 6 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -104,6 +104,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P02 | 12 min | 2 tasks | 11 files |
 | Phase 03 P03 | 50min | 3 tasks | 33 files |
 | Phase 03 P04 | 13 min | 2 tasks | 17 files |
+| Phase 03 P05 | 8 min | 2 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -204,6 +205,8 @@ Recent decisions affecting current work:
 - [Phase 03]: Protocol 3 is fixed in protocol.py: header slots 30-49 carry the Phase 3 state and 50-63 are reserved for Phase 4; events 13-23, BLAST_HUGE 3, ENEMY_CAP 64, PICKUP_CAP 40, 400 gameplay enemy bullets, ENEMY_MAX_ALIVE 56
 - [Phase 03]: 03-04: create_game builds STAGE_1 unless gallery is a real True; ?at= is allow-listed to midboss and boss in JS and Python and ignored in the gallery
 - [Phase 03]: 03-04: bootGame appends gallery unless a spec asks for the stage, every perf run passes gallery true, and the renderer extrapolates with the live SCROLL_RATE slot
+- [Phase 03]: 03-05: enemy fire is data: PatternSpec registry, one run_pattern runner, per-row pattern/volley/burst_left columns, and a _COLUMNS-driven swap-remove checked against the dataclass fields
+- [Phase 03]: 03-05: ring phase is (volley * phase_step_deg) % (360 / count) from a per-row volley counter; AIMED without offset keeps fire_aimed for bit parity and the gallery fire digest matched the pre-change code
 
 ### Pending Todos
 
@@ -227,6 +230,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T16:25:27.535Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-10-18T16:31:38.034Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
