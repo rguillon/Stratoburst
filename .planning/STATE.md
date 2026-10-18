@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-14-PLAN.md
-last_updated: "2026-10-18T04:51:18.335Z"
+stopped_at: Completed 02-15-PLAN.md
+last_updated: "2026-10-18T04:57:10.616Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: ac7ba49e207cc561517da6417fe60adac36e7d83
+state_head: 39dca9da50d40c60135d4e1b32438e6a33c145aa
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 24
+  completed_plans: 25
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 15 of 33
+Plan: 16 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -80,6 +80,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P12 | 7 min | 2 tasks | 11 files |
 | Phase 02 P13 | 14 min | 2 tasks | 13 files |
 | Phase 02 P14 | 7 min | 2 tasks | 8 files |
+| Phase 02 P15 | 5 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-13: missile life is packed as the elapsed fraction life/90 in slot 3 of the missiles channel (stride 4, cap 48, header MISSILE_N = 19); missiles are invisible until 02-23
 - [Phase 02]: 02-14: scorch marks are a ring of 48 soft decals (ground MEDIUM 16, LARGE 24) rebuilt each frame from y_at_kill + ratio * scroll delta; the tier cap draws only the newest n and never deletes stored marks
 - [Phase 02]: 02-14: wreck smoulder is a per-wreck accumulator trickle (smoke 0.18 s, flames 0.3 s for 6 s) scaled by particleScale, silent off screen, frame time clamped to 0.25 s
+- [Phase 02]: 02-15: the grace window is exactly DEATHBOMB_TICKS (8) step calls after the hit step and invulnerability counts down only on ALIVE steps, so the 150-step blink starts on the fly-in arrival step
+- [Phase 02]: 02-15: a hit outside ALIVE or while invulnerable returns False and changes nothing; grant_invuln takes the larger remaining value so the bomb and the respawn share one counter
 
 ### Pending Todos
 
@@ -158,6 +161,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:51:18.248Z
-Stopped at: Completed 02-14-PLAN.md
+Last session: 2026-10-18T04:57:10.537Z
+Stopped at: Completed 02-15-PLAN.md
 Resume file: None
