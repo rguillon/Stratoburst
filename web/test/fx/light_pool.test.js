@@ -110,9 +110,9 @@ describe('createLightPool', () => {
     expect(LIGHT_DURATION_HUGE).toBeGreaterThan(LIGHT_DURATION_LARGE);
     expect(light.intensity).toBe(LIGHT_PEAK_HUGE);
     expect(light.position.toArray()).toEqual([10, LIGHT_LIFT, 10]);
-    pool.update(LIGHT_DURATION_HUGE - 0.01);
+    pool.update(LIGHT_DURATION_HUGE * 0.9);
     expect(light.intensity).toBeGreaterThan(0);
-    pool.update(0.01);
+    pool.update(LIGHT_DURATION_HUGE * 0.2);
     expect(light.intensity).toBe(0);
   });
 

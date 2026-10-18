@@ -30,6 +30,7 @@ import { createStumpFx, stumpKindsFor } from './fx/stump_fx.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
+import { createBossSweep } from './fx/boss_sweep.js';
 import { createBeamMesh } from './fx/beam_mesh.js';
 import { createBombFx } from './fx/bomb_fx.js';
 import { createShake, effectClockDelta, withCameraOffset } from './fx/shake.js';
@@ -291,11 +292,24 @@ async function main() {
     kinds: manifest.enemy_kinds,
     groundKinds,
     radii: manifest.tuning.enemy_radius,
+    // The giant bomber's shadow is sized to its 120-unit airframe, not to its 28-unit hit circle (D-09).
+    sizeScale: { [manifest.enemy_kinds.BOMBER]: 3, [manifest.enemy_kinds.BOMBER_OPEN]: 3 },
     sunPosition: rig.sun.position,
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(shadows.mesh);
+  // The boss WARNING (D-13): the bomber's shadow sweeps over the city from the bottom of the playfield
+  // to the top, driven by FLOW_T. Shown once here (mid-way across) while the shaders compile, then
+  // the frame loop shows it only during the WARNING.
+  const bossSweep = createBossSweep({
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+    flowStates: manifest.flow_states,
+    sunPosition: rig.sun.position,
+  });
+  rig.scene.add(bossSweep.mesh);
+  bossSweep.update(manifest.flow_states.WARNING, 0.5);
   // The blue laser beam: Python publishes only its half-width (0 when off). It is shown once while
   // the shaders compile (hidden again below) so the first shot never pays a compile.
   const beam = createBeamMesh({
@@ -347,8 +361,8 @@ async function main() {
   });
   rig.scene.add(bombFx.group);
   bombFx.showAll(true);
-  // Screen shake: only the big events (a bomb detonation, the ship's death, a boss part blowing off) move
-  // the camera, and only around the render call. The freeze itself is Python's hitstop.
+  // Screen shake: only the big events (a bomb detonation, the ship's death, a boss part blowing off and the
+  // boss's end, a chain) move the camera, and only around the render call. The freeze itself is Python's hitstop.
   const shake = createShake({ events: manifest.events });
   const fx = createFxDispatcher({
     handlers: [explosionFx, wrecks, decals, lightPool, bombFx, shake],
@@ -386,6 +400,7 @@ async function main() {
   applyModelDetail(currentTier);
   rig.render();
   beam.update(0, 0, 0, 0); // compiled and rendered through both paths: hidden until the laser fires
+  bossSweep.update(-1, 0); // and the boss shadow until the WARNING
   missiles.update(0, 0); // likewise hidden until a missile launches
   pickups.update(0, 0); // and hidden until a crystal drops
   bombFx.showAll(false); // and the missile and fireball until a bomb flies
@@ -595,6 +610,7 @@ async function main() {
       ship.visible = shipVisible;
       if (shipVisible) ship.userData.setHullVisible(hullVisibleFor(header[slots.INVULN]));
       shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);
+      bossSweep.update(header[slots.FLOW], header[slots.FLOW_T]);
       cityGround.update(scrollNow);
       city.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
@@ -736,6 +752,10 @@ async function main() {
         },
         get shadows() {
           return shadows.mesh.count;
+        },
+        // The boss shadow is up exactly while the WARNING runs (e2e).
+        get bossSweepVisible() {
+          return bossSweep.mesh.visible;
         },
         get beamVisible() {
           return beam.group.visible;

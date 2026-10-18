@@ -20,7 +20,9 @@ test('a flashing WARNING comes first, then the bomber fight, and the kill brings
         header[slots.FLOW] === manifest.flow_states.WARNING &&
         !banner.hidden &&
         banner.textContent === 'WARNING' &&
-        banner.classList.contains('warning')
+        banner.classList.contains('warning') &&
+        // The bomber's shadow sweeps the city while the WARNING runs.
+        globalThis.__scorched.fx.bossSweepVisible === true
       );
     },
     null,
@@ -65,8 +67,19 @@ test('a flashing WARNING comes first, then the bomber fight, and the kill brings
     { polling: 'raf', timeout: 60_000 },
   );
   await expect(page.locator('#banner')).toBeHidden();
+  expect(await page.evaluate(() => globalThis.__scorched.fx.bossSweepVisible)).toBe(false);
 
   await page.keyboard.down('Space');
+  // The death sequence starts when the hull is at zero; the boss's end is the last event of it.
+  await page.waitForFunction(
+    () => {
+      const { header, slots, manifest } = globalThis.__scorched;
+      return header[slots.FLOW] === manifest.flow_states.BOSS && header[slots.BOSS_HP] === 0;
+    },
+    null,
+    { polling: 'raf', timeout: 150_000 },
+  );
+  const shakesBefore = await page.evaluate(() => globalThis.__scorched.fx.shakes);
   // The kill: the boss bar goes and the stage reaches CLEAR.
   await page.waitForFunction(
     () => {
@@ -77,5 +90,11 @@ test('a flashing WARNING comes first, then the bomber fight, and the kill brings
     { polling: 'raf', timeout: 150_000 },
   );
   await page.keyboard.up('Space');
+  // D-14: the boss's end is a chain of four ceiling-strength shakes (the ceilings are unit tested).
+  await page.waitForFunction(([before]) => globalThis.__scorched.fx.shakes - before >= 4, [shakesBefore], {
+    polling: 'raf',
+    timeout: 30_000,
+  });
+  expect(await page.evaluate(() => globalThis.__scorched.fx.lightsFlashed)).toBeGreaterThanOrEqual(1);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });

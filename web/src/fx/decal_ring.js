@@ -8,8 +8,9 @@ import { mulberry32 } from './explosion_fx.js';
 // since the kill, the same rate the living unit moved at, so it stays locked to the road it
 // scorched until it leaves the bottom of the screen.
 
-// Diameter in plane units of the mark for each blast class that comes from a ground kill.
-const MARK_SIZE = Object.freeze({ MEDIUM: 16, LARGE: 24 });
+// Diameter in plane units of the mark for each blast class that comes from a ground kill (a ground boss's
+// death scorches the widest).
+const MARK_SIZE = Object.freeze({ MEDIUM: 16, LARGE: 24, HUGE: 40 });
 // Lift above the terrain plane, in layer units. Together with the polygon offset it keeps the mark
 // from z-fighting the ground.
 const LIFT = 0.1;
@@ -131,7 +132,8 @@ export function createDecalRing({
       return;
     }
     if (type !== events.EXPLOSION || b !== 1) return;
-    if (a === blast.LARGE) add(x, y, MARK_SIZE.LARGE);
+    if (a === blast.HUGE) add(x, y, MARK_SIZE.HUGE);
+    else if (a === blast.LARGE) add(x, y, MARK_SIZE.LARGE);
     else if (a === blast.MEDIUM) add(x, y, MARK_SIZE.MEDIUM);
   }
 
