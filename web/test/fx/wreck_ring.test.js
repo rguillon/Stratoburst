@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/fx/palette.js';
-import { createWreckRing } from '../../src/fx/wreck_ring.js';
-import { enemyModel } from '../../src/render/models/enemy_models.js';
+import { createWreckRing, wreckKindsFor } from '../../src/fx/wreck_ring.js';
+import { enemyModel, hasModel } from '../../src/render/models/enemy_models.js';
+import { buildRubble } from '../../src/render/models/city_targets.js';
 
 const EVENTS = { EXPLOSION: 1, HIT: 2, STAGE_START: 20 };
 const KINDS = { TANK: 3, TURRET: 4 };
@@ -422,5 +423,68 @@ describe('a stage start (D-26, RESEARCH Pattern 1)', () => {
     ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
     ring.update(100);
     expect(ring.live).toBe(1);
+  });
+});
+
+describe('rubble for destroyed city targets (D-33)', () => {
+  const CITY = { HOUSE: 8, FUEL_TANK: 9 };
+
+  function withRubble(extra = {}) {
+    const geometry = buildRubble();
+    const built = build({
+      kinds: { ...KINDS, ...CITY },
+      rubble: { kinds: new Set(Object.values(CITY)), geometry },
+      ...extra,
+    });
+    return { ...built, geometry };
+  }
+
+  it('draws a city kind with the rubble geometry, not its intact building', () => {
+    const { byName, geometry } = withRubble();
+    expect(byName['wreck-house'].geometry).toBe(geometry);
+    expect(byName['wreck-fuel_tank'].geometry).toBe(geometry);
+    expect(byName['wreck-house'].geometry).not.toBe(enemyModel('HOUSE', 'low').body);
+  });
+
+  it('keeps the low-detail body for the kinds that are not rubble kinds', () => {
+    const { byName } = withRubble();
+    expect(byName['wreck-tank'].geometry).toBe(enemyModel('TANK', 'low').body);
+  });
+
+  it('places and scrolls a rubble wreck like any other wreck', () => {
+    const { ring, byName } = withRubble();
+    ring.handle(EVENTS.EXPLOSION, 60, 40, 2, 1, CITY.HOUSE);
+    expect(ring.spawned).toBe(1);
+    ring.update(100 + 50);
+    expect(byName['wreck-house'].count).toBe(1);
+    const p = positionOf(byName['wreck-house'], 0);
+    expect(p.x).toBeCloseTo(60 - W / 2, 4);
+    expect(p.z).toBeCloseTo(40 + RATIO * 50 - H / 2, 3);
+  });
+
+  it('does nothing different when no rubble option is given', () => {
+    const { byName } = build({ kinds: { ...KINDS, ...CITY } });
+    expect(byName['wreck-house'].geometry).toBe(enemyModel('HOUSE', 'low').body);
+  });
+});
+
+describe('wreckKindsFor (data-driven wreck kinds)', () => {
+  const NAMES = { TANK: 3, TURRET: 4, TRAIN: 5, TRAIN_TURRET: 6, TRAIN_STUMP: 7, HOUSE: 8 };
+  const WRECK = [0, 0, 0, 1, 1, 1, 0, 0, 1];
+
+  it('keeps ground kinds whose wreck entry is 1 and that have a model', () => {
+    expect(wreckKindsFor(NAMES, WRECK, hasModel)).toEqual({ TANK: 3, TURRET: 4, HOUSE: 8 });
+  });
+
+  it('drops a wreck kind without a model, so the ring never builds a hull for it', () => {
+    expect(wreckKindsFor(NAMES, WRECK, hasModel)).not.toHaveProperty('TRAIN');
+  });
+
+  it('drops a model kind whose wreck entry is 0 (train turrets and stumps)', () => {
+    expect(wreckKindsFor(NAMES, WRECK, () => true)).toEqual({ TANK: 3, TURRET: 4, TRAIN: 5, HOUSE: 8 });
+  });
+
+  it('treats a missing table entry as no wreck', () => {
+    expect(wreckKindsFor({ TANK: 3 }, [], hasModel)).toEqual({});
   });
 });
