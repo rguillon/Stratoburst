@@ -65,11 +65,11 @@ Plans:
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
 
-**Plans:** 33 plans (21 waves)
+**Plans:** 1/33 plans executed (21 waves)
 
 Plans:
 **Wave 1**
-- [ ] 02-01-PLAN.md — (wave 1) Events foundation: protocol v2, preallocated event ring, drone kill and hit events, bridge accepts v2
+- [x] 02-01-PLAN.md — (wave 1) Events foundation: protocol v2, preallocated event ring, drone kill and hit events, bridge accepts v2
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 02-02-PLAN.md — (wave 2) GPU particle explosions sized by class from events, hit sparks, tier-scaled counts
@@ -188,6 +188,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
-| 2. Arcade Shooting Feel | 0/33 | Planned | - |
+| 2. Arcade Shooting Feel | 1/33 | In Progress | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |

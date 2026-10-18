@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-10-18T02:54:09.809Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-10-18T03:00:29.850Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 54def7a1ee5503de7c69eefe7478fbf8ae39eb91
+state_head: c960be1b4d15512ee202006a348d17d1267374b3
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 10
-  percent: 23
+  completed_plans: 11
+  percent: 25
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 1 of 33
-Status: Executing Phase 02
+Plan: 2 of 33
+Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
-Progress: [██░░░░░░░░] 23%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██░░░░░░░░] 23%
 | Phase 01 P08 | 22 min | 2 tasks | 17 files |
 | Phase 01 P09 | 20 min | 2 tasks | 24 files |
 | Phase 01 P10 | 30 min | 3 tasks | 2 files |
+| Phase 02 P01 | 6 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-09: __scorched.audioState is a live getter on AudioContext.state (resume() settles asynchronously)
 - [Phase 01]: 01-09: error panel Copy report appends the device report layout even without a debug session; text via textContent only; ?crash values are allow-listed on JS and Python sides
 - [Phase 01]: Plan 01-10 verdict was GO (desktop) with the phone gate deferred; phone gate (PLAT-05) then passed in Phase 1 UAT on 2026-10-17
+- [Phase 02]: 02-01: a killing blow pushes no HIT event (the EXPLOSION covers it), so a kill is exactly one event; HIT is pushed only for a surviving hit on a resting drone
+- [Phase 02]: 02-01: protocol v2 reserves header slots 14-29 for Phase 2 plans and 30-47 for Phase 3; event ids and blast classes are protocol constants exported by name through the manifest
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T19:00:38.972Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-arcade-shooting-feel/02-CONTEXT.md
+Last session: 2026-10-18T03:00:29.778Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
