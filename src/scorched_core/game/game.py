@@ -19,6 +19,7 @@ from scorched_core.input.button import Button
 from scorched_core.input.input_frame import InputFrame
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
+from scorched_core.pools.missile_pool import MissilePool
 from scorched_core.pools.pickup_pool import PickupPool
 from scorched_core.protocol import (
     BLAST_LARGE,
@@ -54,6 +55,7 @@ from scorched_core.protocol import (
     H_KILLS,
     H_LEVEL,
     H_MAX_BONUS,
+    H_MISSILE_N,
     H_PBULLET_N,
     H_PICKUP_N,
     H_SCROLL_Y,
@@ -64,6 +66,8 @@ from scorched_core.protocol import (
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
+    MISSILE_CAP,
+    MISSILE_STRIDE,
     PBULLET_CAP,
     PBULLET_STRIDE,
     PICKUP_CAP,
@@ -81,9 +85,12 @@ from scorched_core.tuning import (
     GRID_CELL,
     GROUND_SCROLL_RATIO,
     HITBOX_RADIUS,
+    HOMING_DAMAGE,
     MAX_LEVEL,
+    MISSILE_RADIUS,
     SCROLL_SPEED,
 )
+from scorched_core.weapons.homing_launcher import HomingLauncher
 from scorched_core.weapons.pickup_outcome import PickupOutcome
 from scorched_core.weapons.vulcan import Vulcan
 from scorched_core.weapons.weapon_kind import WeaponKind
@@ -111,6 +118,7 @@ _HEADER_SLOTS: dict[str, int] = {
     "PICKUP_N": H_PICKUP_N,
     "LEVEL": H_LEVEL,
     "MAX_BONUS": H_MAX_BONUS,
+    "MISSILE_N": H_MISSILE_N,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -153,9 +161,11 @@ class Game:
         "fault",
         "gallery",
         "grid",
+        "homing",
         "input",
         "loadout",
         "max_bonus",
+        "missiles",
         "paused",
         "pbullets",
         "pickups",
@@ -188,6 +198,8 @@ class Game:
         self.pbullets = BulletPool(PBULLET_CAP)
         self.loadout = WeaponLoadout(kind=weapon, level=min(max(level, 1), MAX_LEVEL))
         self.vulcan = Vulcan()
+        self.homing = HomingLauncher()
+        self.missiles = MissilePool()
         self.events = EventRing()
         self.enemies = EnemyPool()
         self.pickups = PickupPool()
@@ -213,6 +225,7 @@ class Game:
             "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self.ebullet_cap)),
             "enemies": array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP)),
             "pickups": array("f", bytes(4 * PICKUP_STRIDE * PICKUP_CAP)),
+            "missiles": array("f", bytes(4 * MISSILE_STRIDE * MISSILE_CAP)),
             "events": self.events.buf,
         }
 
@@ -227,6 +240,7 @@ class Game:
                 "ebullets": {"stride": EBULLET_STRIDE, "cap": self.ebullet_cap},
                 "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
                 "pickups": {"stride": PICKUP_STRIDE, "cap": PICKUP_CAP},
+                "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
                 "events": {"stride": EVENT_STRIDE, "cap": EVENT_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
@@ -293,6 +307,7 @@ class Game:
             self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
             self.enemies.pack_into(self.buffers["enemies"])
             self.pickups.pack_into(self.buffers["pickups"])
+            self.missiles.pack_into(self.buffers["missiles"])
             self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 
@@ -311,6 +326,7 @@ class Game:
         header[H_PBULLET_N] = self.pbullets.n
         header[H_ENEMY_N] = self.enemies.n
         header[H_PICKUP_N] = self.pickups.n
+        header[H_MISSILE_N] = self.missiles.n
         header[H_KILLS] = self.enemies.kills
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
@@ -349,13 +365,32 @@ class Game:
             self.pbullets,
             self.events,
         )
+        self.homing.step(
+            self._firing and self.loadout.kind is WeaponKind.HOMING,
+            self.ship.x,
+            self.ship.y,
+            self.loadout.level,
+            self.missiles,
+            self.enemies,
+            self.events,
+        )
         self.pbullets.integrate()
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.gallery.step(self.enemies)
         self.enemies.step(self.ship.x, self.ship.y)
+        self.missiles.steer(self.enemies)
         self.grid.rebuild(self.enemies.x, self.enemies.y, self.enemies.n)
         resolve_shots_vs_enemies(
             self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events
+        )
+        resolve_shots_vs_enemies(
+            self.missiles,
+            self.enemies,
+            self.grid,
+            self._scratch,
+            HOMING_DAMAGE[self.loadout.level - 1],
+            self.events,
+            radius=MISSILE_RADIUS,
         )
         self.enemies.remove_dead(self.events)
         self._drop_crystals()

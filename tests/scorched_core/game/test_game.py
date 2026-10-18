@@ -34,6 +34,7 @@ from scorched_core.protocol import (
     H_KILLS,
     H_LEVEL,
     H_MAX_BONUS,
+    H_MISSILE_N,
     H_PBULLET_N,
     H_PICKUP_N,
     H_SCROLL_Y,
@@ -44,6 +45,8 @@ from scorched_core.protocol import (
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
+    MISSILE_CAP,
+    MISSILE_STRIDE,
     PBULLET_CAP,
     PBULLET_STRIDE,
     PICKUP_CAP,
@@ -77,7 +80,8 @@ def test_manifest_contract() -> None:
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
     assert header["slots"]["PICKUP_N"] == 15 == H_PICKUP_N
     assert header["slots"]["MAX_BONUS"] == 20 == H_MAX_BONUS
-    assert len(header["slots"]) == 18
+    assert header["slots"]["MISSILE_N"] == 19 == H_MISSILE_N
+    assert len(header["slots"]) == 19
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
@@ -85,6 +89,7 @@ def test_manifest_contract() -> None:
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
         "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
         "pickups": {"stride": 4, "cap": 16},
+        "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
         "events": {"stride": 6, "cap": 128},
     }
     assert manifest["pickup_kinds"] == {"RED": 0, "BLUE": 1, "PURPLE": 2, "CRYSTAL": 3, "BOMB": 4}
@@ -186,6 +191,7 @@ def test_buffer_lengths_and_zero_fill() -> None:
         "pbullets": PBULLET_STRIDE * PBULLET_CAP,
         "ebullets": EBULLET_STRIDE * 750,
         "enemies": ENEMY_STRIDE * ENEMY_CAP,
+        "missiles": MISSILE_STRIDE * MISSILE_CAP,
         "pickups": PICKUP_STRIDE * PICKUP_CAP,
         "events": EVENT_STRIDE * EVENT_CAP,
     }
@@ -384,13 +390,65 @@ def test_a_firing_vulcan_pushes_one_shot_event_per_volley() -> None:
     assert game.events.buf[3] == WeaponKind.VULCAN
 
 
-def test_a_laser_or_homing_loadout_fires_no_bolts_yet() -> None:
+def test_a_laser_or_homing_loadout_fires_no_bolts() -> None:
     for weapon in (WeaponKind.LASER, WeaponKind.HOMING):
         game = Game(weapon=weapon, level=3)
         _hold_fire(game, 30)
         assert game.pbullets.n == 0
         assert game.buffers["header"][H_WEAPON] == weapon
         assert game.buffers["header"][H_LEVEL] == 3
+
+
+def test_the_missiles_channel_is_four_floats_by_forty_eight_and_matches_the_manifest() -> None:
+    game = Game()
+    assert MISSILE_STRIDE == 4
+    assert MISSILE_CAP == 48
+    assert len(game.buffers["missiles"]) == MISSILE_STRIDE * MISSILE_CAP
+
+
+def test_a_homing_loadout_launches_a_missile_and_packs_it_with_the_header_count() -> None:
+    game = Game(weapon=WeaponKind.HOMING)
+    _hold_fire(game, 1)
+    assert game.missiles.n == 1
+    assert game.buffers["header"][H_MISSILE_N] == 1
+    x, y, angle, life = game.buffers["missiles"][:4]
+    assert x == game.ship.x
+    assert y < game.ship.y
+    assert (angle, life) == (0.0, pytest.approx(1 / 90))
+    assert game.events.buf[0] == EV_SHOT
+    assert game.events.buf[3] == WeaponKind.HOMING
+
+
+def test_the_vulcan_launches_no_missiles() -> None:
+    game = Game()
+    _hold_fire(game, 30)
+    assert game.missiles.n == 0
+    assert game.buffers["header"][H_MISSILE_N] == 0
+
+
+def test_switching_to_homing_only_launches_with_fire_held() -> None:
+    game = Game(weapon=WeaponKind.HOMING, level=3)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.missiles.n == 0
+    _hold_fire(game, 1)
+    assert game.missiles.n == 3
+
+
+def test_a_scripted_homing_run_curves_missiles_onto_enemies_and_damages_them() -> None:
+    game = Game(weapon=WeaponKind.HOMING, level=3)
+    flashed = False
+    peak_heading = 0.0
+    for _ in range(240):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+        flashed = flashed or any(game.enemies.flash[i] > 0 for i in range(game.enemies.n))
+        peak_heading = max(
+            [peak_heading, *(abs(game.missiles.angle[i]) for i in range(game.missiles.n))]
+        )
+    assert flashed or game.enemies.kills > 0  # a missile reached an enemy
+    assert game.pbullets.n == 0  # purple has no forward shot
+    assert peak_heading > math.radians(5.0)  # a missile curved beyond its launch angle
+    assert all(math.isfinite(v) for v in game.buffers["missiles"])
+    assert game.buffers["header"][H_MISSILE_N] == game.missiles.n
 
 
 def test_the_header_follows_the_loadout_when_it_changes() -> None:

@@ -6,6 +6,7 @@ from scorched_core.tuning import (
     ENEMY_HP,
     ENEMY_RADIUS,
     GRID_CELL,
+    MISSILE_RADIUS,
     PBULLET_RADIUS,
 )
 
@@ -45,6 +46,10 @@ def test_every_enemy_plus_a_player_bolt_fits_in_one_grid_cell() -> None:
     # The 3x3 broadphase query only sees neighbouring cells, so a touching pair must be closer
     # than one cell edge.
     assert max(ENEMY_RADIUS) + PBULLET_RADIUS <= GRID_CELL
+
+
+def test_every_enemy_plus_a_missile_fits_in_one_grid_cell() -> None:
+    assert max(ENEMY_RADIUS) + MISSILE_RADIUS <= GRID_CELL
 
 
 def test_a_hit_needs_at_least_one_bolt_and_every_hp_is_positive() -> None:

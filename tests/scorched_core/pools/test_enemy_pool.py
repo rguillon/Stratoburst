@@ -600,3 +600,30 @@ def test_a_corrupt_motion_value_fails_loudly_instead_of_standing_still() -> None
     pool.motion[0] = 99
     with pytest.raises(ValueError, match="unknown motion 99"):
         pool.step(SHIP_X, SHIP_Y)
+
+
+def test_index_of_uid_returns_the_live_slot_of_an_enemy() -> None:
+    pool = EnemyPool()
+    for x in (10.0, 20.0, 30.0):
+        jet(pool, x=x)
+    assert [pool.index_of_uid(int(pool.uid[i])) for i in range(3)] == [0, 1, 2]
+
+
+def test_index_of_uid_follows_an_enemy_through_a_swap_remove() -> None:
+    pool = EnemyPool()
+    for x in (10.0, 20.0, 30.0):
+        jet(pool, x=x)
+    last_uid = int(pool.uid[2])
+    pool.hp[0] = 0
+    pool.remove_dead(EventRing())
+    assert pool.index_of_uid(last_uid) == 0  # the last enemy took the freed slot
+    assert pool.index_of_uid(1) == -1  # the removed enemy's uid is gone for good
+
+
+def test_index_of_uid_is_minus_one_for_an_unknown_uid_and_ignores_dead_slots() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    assert pool.index_of_uid(0) == -1
+    assert pool.index_of_uid(999) == -1
+    pool.uid[5] = 42  # a stale value past the live count is never found
+    assert pool.index_of_uid(42) == -1

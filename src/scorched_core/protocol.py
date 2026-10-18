@@ -26,10 +26,11 @@ H_EVENT_N: Final = 12
 H_EVENT_DROPPED: Final = 13
 # Slots 14-29 are reserved by later Phase 2 plans (numbering table in 02-01-PLAN.md) and
 # slots 30-47 by Phase 3. Plan 02-08 takes the weapon slots; plan 02-10 takes PICKUP_N and
-# MAX_BONUS.
+# MAX_BONUS; plan 02-13 takes MISSILE_N.
 H_PICKUP_N: Final = 15
 H_WEAPON: Final = 16
 H_LEVEL: Final = 17
+H_MISSILE_N: Final = 19
 H_MAX_BONUS: Final = 20
 
 FLAG_PAUSED: Final = 1
@@ -45,6 +46,8 @@ ENEMY_STRIDE: Final = 8
 ENEMY_CAP: Final = 48
 PICKUP_STRIDE: Final = 4  # x, y, colour index, kind
 PICKUP_CAP: Final = 16
+MISSILE_STRIDE: Final = 4  # x, y, angle, life fraction
+MISSILE_CAP: Final = 48
 
 # Events channel: one record per event, written fresh every tick (never replayed).
 EVENT_STRIDE: Final = 6  # kind, x, y, a, b, c

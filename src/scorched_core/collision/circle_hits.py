@@ -6,6 +6,7 @@ from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
+from scorched_core.pools.missile_pool import MissilePool
 from scorched_core.tuning import PBULLET_RADIUS
 
 
@@ -17,14 +18,20 @@ def circles_touch(ax: float, ay: float, ar: float, bx: float, by: float, br: flo
 
 
 def resolve_shots_vs_enemies(  # noqa: PLR0913, PLR0917 - one pass needs both pools, the grid and the hit
-    bullets: BulletPool,
+    bullets: BulletPool | MissilePool,
     enemies: EnemyPool,
     grid: UniformGrid,
     scratch: array,
     damage: int,
     events: EventRing,
+    *,
+    radius: float = PBULLET_RADIUS,
 ) -> int:
-    """Hit enemies with player bolts through the grid broadphase; return the hits landed.
+    """Hit enemies with player shots through the grid broadphase; return the hits landed.
+
+    ``bullets`` is any shot pool with ``x``, ``y``, ``n`` and ``remove_at`` (bolts or missiles) and
+    ``radius`` is the shot circle's radius. The largest enemy radius plus ``radius`` must stay
+    within one grid cell, or a touching pair could sit outside the 3x3 query.
 
     The caller rebuilds ``grid`` from the enemy positions once per step before any damage pass.
     A bolt hits at most one enemy: the first live one, in grid query order, that it touches,
@@ -32,7 +39,7 @@ def resolve_shots_vs_enemies(  # noqa: PLR0913, PLR0917 - one pass needs both po
     consumed bolt only ever moves one that was already visited. Dead enemies stay in the pool
     (absorbing no further bolts) until the caller runs ``EnemyPool.remove_dead``.
     """
-    bx, by, hp, ex, ey, radius = (
+    bx, by, hp, ex, ey, enemy_radius = (
         bullets.x,
         bullets.y,
         enemies.hp,
@@ -45,7 +52,7 @@ def resolve_shots_vs_enemies(  # noqa: PLR0913, PLR0917 - one pass needs both po
         px, py = bx[i], by[i]
         for k in range(grid.query(px, py, scratch)):
             j = scratch[k]
-            if hp[j] > 0 and circles_touch(px, py, PBULLET_RADIUS, ex[j], ey[j], radius[j]):
+            if hp[j] > 0 and circles_touch(px, py, radius, ex[j], ey[j], enemy_radius[j]):
                 enemies.apply_hit(j, damage, events)
                 bullets.remove_at(i)
                 hits += 1

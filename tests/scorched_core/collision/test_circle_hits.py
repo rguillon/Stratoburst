@@ -8,12 +8,14 @@ from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
+from scorched_core.pools.missile_pool import MissilePool
 from scorched_core.protocol import ENEMY_CAP, EV_HIT
 from scorched_core.tuning import (
     ENEMY_FLASH_TICKS,
     ENEMY_HP,
     ENEMY_RADIUS,
     GRID_CELL,
+    MISSILE_RADIUS,
     PBULLET_RADIUS,
 )
 
@@ -172,3 +174,44 @@ def test_surviving_bolts_keep_their_velocity_after_swap_removals() -> None:
     _resolve(pool, enemies, grid, scratch)
     assert pool.n == 1
     assert (pool.x[0], pool.y[0], pool.vy[0]) == (10.0, 10.0, -8.0)
+
+
+# --- missiles use the same pass with their own radius -------------------------------------
+
+
+def _missile_world(
+    enemy: tuple[float, float], missile: tuple[float, float]
+) -> tuple[MissilePool, EnemyPool, UniformGrid, array]:
+    _, pool_e, grid, scratch = _world([enemy], [])
+    missiles = MissilePool()
+    missiles.spawn(missile[0], missile[1], 0.0, 0)
+    return missiles, pool_e, grid, scratch
+
+
+def test_a_missile_hits_at_its_own_radius_and_is_consumed() -> None:
+    reach = JET_RADIUS + MISSILE_RADIUS
+    missiles, enemies, grid, scratch = _missile_world((100.0, 100.0), (100.0 + reach, 100.0))
+    hits = resolve_shots_vs_enemies(
+        missiles, enemies, grid, scratch, 3, EventRing(), radius=MISSILE_RADIUS
+    )
+    assert hits == 1
+    assert missiles.n == 0
+    assert enemies.hp[0] == JET_HP - 3
+
+
+def test_the_default_bolt_radius_would_miss_a_missile_that_the_missile_radius_hits() -> None:
+    reach = JET_RADIUS + MISSILE_RADIUS
+    assert reach > JET_RADIUS + PBULLET_RADIUS
+    missiles, enemies, grid, scratch = _missile_world((100.0, 100.0), (100.0 + reach, 100.0))
+    assert resolve_shots_vs_enemies(missiles, enemies, grid, scratch, 3, EventRing()) == 0
+    assert missiles.n == 1
+
+
+def test_a_missile_just_past_its_radius_sum_misses() -> None:
+    reach = JET_RADIUS + MISSILE_RADIUS + 0.5
+    missiles, enemies, grid, scratch = _missile_world((100.0, 100.0), (100.0 + reach, 100.0))
+    hits = resolve_shots_vs_enemies(
+        missiles, enemies, grid, scratch, 3, EventRing(), radius=MISSILE_RADIUS
+    )
+    assert hits == 0
+    assert missiles.n == 1

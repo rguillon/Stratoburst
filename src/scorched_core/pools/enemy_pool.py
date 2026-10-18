@@ -191,6 +191,19 @@ class EnemyPool:
             if flash[i] > 0:
                 flash[i] -= 1
 
+    def index_of_uid(self, uid: int) -> int:
+        """Return the live slot of the enemy with ``uid``, or -1 when it is gone.
+
+        Slots move on every swap-remove, so anything that tracks an enemy over time (a homing
+        missile) holds the uid and looks the slot up again each step. The scan is bounded by
+        ``ENEMY_MAX_ALIVE`` and allocates nothing.
+        """
+        uids = self.uid
+        for i in range(self.n):
+            if uids[i] == uid:
+                return i
+        return -1
+
     def apply_hit(self, i: int, damage: int, events: EventRing) -> None:
         """Deal ``damage`` to enemy ``i`` and flash it.
 

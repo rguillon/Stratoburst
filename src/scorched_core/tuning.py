@@ -54,6 +54,21 @@ VULCAN_STREAMS: Final = (
 # Steps between volleys, per level.
 VULCAN_INTERVAL: Final = (5, 5, 5, 4, 4)
 
+# Homing missiles (PLYR-04, D-03): purple fires no forward shot, only a centred fan of missiles
+# per volley (``HOMING_VOLLEY[level - 1]`` of them, ``HOMING_FAN_DEG`` apart). Each turns toward
+# its target by at most ``HOMING_TURN_DEG`` per step, so it visibly curves, and re-acquires the
+# nearest on-screen enemy every ``HOMING_RETARGET_TICKS`` steps or when its target is gone.
+HOMING_VOLLEY: Final = (1, 2, 3, 4, 5)
+HOMING_INTERVAL: Final = (14, 14, 13, 12, 12)
+HOMING_DAMAGE: Final = (3, 3, 3, 3, 4)
+HOMING_SPEED: Final = 4.5
+HOMING_TURN_DEG: Final = 5.0
+HOMING_RETARGET_TICKS: Final = 8
+HOMING_LIFE_TICKS: Final = 90
+HOMING_FAN_DEG: Final = 22.0
+HOMING_MUZZLE_AHEAD: Final = 4.0
+MISSILE_RADIUS: Final = 2.5
+
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames
@@ -130,6 +145,6 @@ PICKUP_GRAB_RADIUS: Final = 10.0
 PICKUP_LIFE_TICKS: Final = 600
 PICKUP_EXIT_SPEED: Final = 0.8
 
-# Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS must stay at or below it
-# so a 3x3 query suffices.
+# Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS or MISSILE_RADIUS must stay
+# at or below it so a 3x3 query suffices.
 GRID_CELL: Final = 32.0
