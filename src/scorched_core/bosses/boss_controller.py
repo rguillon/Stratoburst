@@ -310,7 +310,11 @@ class BossController:
     def _change_phase(
         self, target: int, enemies: EnemyPool, ebullets: BulletPool, events: EventRing
     ) -> None:
-        """Switch to phase ``target``: one event, a short shield, clean bullets, fresh emitters."""
+        """Switch to phase ``target``: one event, a short shield, clean bullets, fresh emitters.
+
+        The hull row takes the deepest ``hull_kind`` named by any phase up to ``target``, so a hit
+        that jumps over a phase still gets that phase's model.
+        """
         self._phase = target
         events.push(EV_BOSS_PHASE, self._x, self._y, target + 1, self.slot)
         self._set_shield(enemies, self.hull_uid, BOSS_PHASE_SHIELD_TICKS)
@@ -319,7 +323,14 @@ class BossController:
                 self._set_shield(enemies, int(self._part_uids[k]), BOSS_PHASE_SHIELD_TICKS)
         ebullets.clear()
         self._restart_emitters()
-        kind = self.spec.phases[target].hull_kind
+        kind = next(
+            (
+                p.hull_kind
+                for p in reversed(self.spec.phases[: target + 1])
+                if p.hull_kind is not None
+            ),
+            None,
+        )
         if kind is not None:
             i = enemies.index_of_uid(self.hull_uid)
             if i >= 0:

@@ -100,10 +100,13 @@ def _engine(dx: float) -> PartSpec:
 # The boss (D-09): a giant bomber that descends over the city on the centre column. Parts 0 and 1
 # are the wing turrets and parts 2 and 3 the engines. The turrets stand clear of the hull circle
 # so a bolt or a missile reaches them; an engine pod centre lies just inside the hull circle, so a
-# bolt reaches it only past the hull's outer edge (about 8 units on the outer side), while the
-# laser and the bomb pierce the hull and hit it anywhere. Total hit points are 2240 (hull plus
-# parts), the research's starting range for a 60 to 75 s fight at Lv4-5; the kill pays nothing
-# directly because the stage tally pays the boss bonus (D-18).
+# bolt reaches it only through the narrow gap between the hull and the wing turret (the sway sweeps
+# that gap across the screen, and a tracking Lv1 vulcan does wear a pod down), while the laser and
+# the bomb pierce the hull and hit it anywhere. Total hit points are 2240 (hull plus
+# parts), the research's starting range for a 60 to 75 s fight at Lv4-5 (tuned at the vertical-slice
+# gate with ?at=boss); the kill pays nothing directly because the stage tally pays the boss bonus
+# (D-18). Phase 2 starts at 60% hull or with all four parts gone and opens the core (the hull row
+# becomes BOMBER_OPEN); phase 3 at 25% is the desperation, faster and denser but still sparse.
 BOMBER_1: Final = BossSpec(
     hull_kind=EnemyKind.BOMBER,
     hull_hp=1400,
@@ -131,6 +134,28 @@ BOMBER_1: Final = BossSpec(
             ),
             sway_x=30.0,
             sway_period=360,
+        ),
+        PhaseSpec(
+            hp_frac=0.6,  # or as soon as all four parts are gone (D-11)
+            emitters=(
+                EmitterSpec("bomber_turret_spread", part=0),  # fire only while the turret lives
+                EmitterSpec("bomber_turret_spread", part=1),
+                EmitterSpec("bomber_core_ring"),
+                EmitterSpec("bomber_core_stream"),
+            ),
+            sway_x=36.0,
+            sway_period=300,
+            hull_kind=EnemyKind.BOMBER_OPEN,
+        ),
+        PhaseSpec(
+            hp_frac=0.25,
+            emitters=(
+                EmitterSpec("bomber_desperation_ring"),
+                EmitterSpec("bomber_desperation_spread"),
+            ),
+            sway_x=44.0,
+            sway_y=8.0,
+            sway_period=240,
         ),
     ),
 )

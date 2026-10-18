@@ -39,6 +39,20 @@ PATTERNS: Final[dict[str, PatternSpec]] = {
     "bomber_nose_ring": PatternSpec(
         FirePattern.RING, count=10, speed=1.2, interval=160, phase_step_deg=18.0
     ),
+    # Phase 2: the core opens with a slowly rotating ring and a short stream.
+    "bomber_core_ring": PatternSpec(
+        FirePattern.RING, count=12, speed=1.4, interval=80, phase_step_deg=7.5
+    ),
+    "bomber_core_stream": PatternSpec(
+        FirePattern.STREAM, speed=1.8, interval=120, burst=3, burst_gap=8
+    ),
+    # Phase 3, desperation: faster and denser, still nowhere near bullet hell.
+    "bomber_desperation_ring": PatternSpec(
+        FirePattern.RING, count=16, speed=1.6, interval=50, phase_step_deg=11.25
+    ),
+    "bomber_desperation_spread": PatternSpec(
+        FirePattern.SPREAD, count=5, speed=1.6, interval=70, arc_deg=50.0
+    ),
 }
 PATTERN_NAMES: Final = tuple(PATTERNS)
 PATTERN_TABLE: Final = tuple(PATTERNS.values())
