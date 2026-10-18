@@ -28,7 +28,7 @@ turns the flagged lots into the stage's ground rows, which spawn on their blocks
 import math
 from typing import Final
 
-from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
+from scorched_core.bosses.stage_1_bosses import BOMBER_1, MIDBOSS_1
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
@@ -525,4 +525,5 @@ STAGE_1: Final = StageData(
     seed=1,
     ground=target_entries(_CITY),
     midboss=MIDBOSS_1,
+    boss=BOMBER_1,
 )

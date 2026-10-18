@@ -83,6 +83,7 @@ _AIMING: Final = (
     EnemyKind.TANK,
     EnemyKind.TURRET,
     EnemyKind.TRAIN_TURRET,
+    EnemyKind.BOMBER_TURRET,
 )  # kinds whose turret tracks the ship
 _EXIT_BOTTOM: Final = PLAYFIELD_H + ENEMY_EXIT_MARGIN
 _EXIT_LEFT: Final = -2.0 * ENEMY_EXIT_MARGIN
@@ -421,6 +422,27 @@ class EnemyPool:
                 self.kill_n = k + 1
                 self._remove_at(i)
                 self.kills += 1
+
+    def detonate_all(self, events: EventRing) -> None:
+        """Blow up every enemy at once with no kill, no points and no drop, and empty the pool.
+
+        This is the stage clear (plan 03-19): whatever is left on the field when the boss is gone
+        goes up in a low-priority EXPLOSION each, so nothing can hit the ship while the clear
+        plays out. The kill buffer and the cumulative ``kills`` counter are left alone.
+        """
+        self.kill_n = 0
+        for i in range(self.n):
+            kind = self.kind[i]
+            events.push(
+                EV_EXPLOSION,
+                self.x[i],
+                self.y[i],
+                ENEMY_BLAST[kind],
+                ENEMY_GROUND[kind],
+                kind,
+                low=True,
+            )
+        self.n = 0
 
     def clear(self) -> None:
         """Remove every enemy and forget this step's kills (a new run); ``uid`` keeps counting."""

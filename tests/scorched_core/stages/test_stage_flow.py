@@ -593,3 +593,11 @@ def test_the_midboss_marker_does_not_raise_the_warning_and_the_two_fights_can_sh
     flow.terrain.distance = BOSS_MARKER
     flow.step()
     assert flow.state == FlowState.WARNING
+
+
+def test_a_boss_state_with_no_controller_clears_as_not_destroyed() -> None:
+    flow = make_bomber_flow()
+    flow.state = FlowState.BOSS
+    flow.step()
+    assert flow.state == FlowState.CLEAR
+    assert flow.boss_destroyed is False

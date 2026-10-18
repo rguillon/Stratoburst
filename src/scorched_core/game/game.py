@@ -139,7 +139,7 @@ from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
-from scorched_core.stages.stage_flow import StageFlow
+from scorched_core.stages.stage_flow import BOSS_SLOT, StageFlow
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import (
@@ -407,6 +407,7 @@ class Game:
                 stage_number=stage.number,
                 terrain=self.terrain,
                 enemies=self.enemies,
+                ebullets=self.ebullets,
                 stage=stage,
             )
             if stage is not None
@@ -703,9 +704,18 @@ class Game:
         header[H_BOMB_T] = bomb.progress
 
     def _pack_boss_header(self, header: array) -> None:
-        """Write the boss slots: its slot number, phase, hull health and the last-seconds timer."""
+        """Write the boss slots: its slot number, phase, hull health and the last-seconds timer.
+
+        The WARNING reports the boss as already up with a full bar, so the bar appears with it.
+        """
         flow = self.flow
         boss = None if flow is None else flow.boss
+        if boss is None and flow is not None and flow.state is FlowState.WARNING:
+            header[H_BOSS_ACTIVE] = BOSS_SLOT
+            header[H_BOSS_PHASE] = 1
+            header[H_BOSS_HP] = 1.0
+            header[H_BOSS_TIMER_S] = -1
+            return
         if boss is None:
             header[H_BOSS_ACTIVE] = 0
             header[H_BOSS_PHASE] = 0

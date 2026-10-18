@@ -1,4 +1,6 @@
-"""Stage 1's bosses as data (D-02, D-11, D-12): the armored train that rolls in halfway.
+"""Stage 1's bosses as data (D-02, D-09 to D-12): the armored train and the giant bomber.
+
+The mid-boss is the armored train that rolls in halfway.
 
 The train runs in from above the screen along the maglev line at x 120 and holds in the upper
 half while the terrain crawls beneath it. It has two destructible turrets, one fore and one aft
@@ -64,6 +66,71 @@ MIDBOSS_1: Final = BossSpec(
             emitters=(EmitterSpec("train_hull_spread"),),
             sway_y=8.0,
             sway_period=240,
+        ),
+    ),
+)
+
+
+_WING_X: Final = 46.0  # how far to each side of the bomber's centre a wing turret sits
+_ENGINE_X: Final = 26.0  # and an engine pod
+
+
+def _wing_turret(dx: float) -> PartSpec:
+    return PartSpec(
+        kind=EnemyKind.BOMBER_TURRET,
+        dx=dx,
+        dy=6.0,
+        hp=200,
+        points=8000,
+        stump_kind=EnemyKind.BOMBER_STUMP,
+    )
+
+
+def _engine(dx: float) -> PartSpec:
+    return PartSpec(
+        kind=EnemyKind.BOMBER_ENGINE,
+        dx=dx,
+        dy=-2.0,
+        hp=220,
+        points=6000,
+        stump_kind=EnemyKind.BOMBER_STUMP,
+    )
+
+
+# The boss (D-09): a giant bomber that descends over the city on the centre column. Parts 0 and 1
+# are the wing turrets and parts 2 and 3 the engines. The turrets stand clear of the hull circle
+# so a bolt or a missile reaches them; an engine pod centre lies just inside the hull circle, so a
+# bolt reaches it only past the hull's outer edge (about 8 units on the outer side), while the
+# laser and the bomb pierce the hull and hit it anywhere. Total hit points are 2240 (hull plus
+# parts), the research's starting range for a 60 to 75 s fight at Lv4-5; the kill pays nothing
+# directly because the stage tally pays the boss bonus (D-18).
+BOMBER_1: Final = BossSpec(
+    hull_kind=EnemyKind.BOMBER,
+    hull_hp=1400,
+    hull_radius=28.0,
+    x=120.0,
+    enter_y=-60.0,
+    hold_y=84.0,
+    enter_speed=1.2,
+    parts=(
+        _wing_turret(-_WING_X),
+        _wing_turret(_WING_X),
+        _engine(-_ENGINE_X),
+        _engine(_ENGINE_X),
+    ),
+    timeout_ticks=100 * 60,  # 100 s of fight steps (D-12): then the bomber retreats
+    kill_points=0,
+    death_ticks=150,
+    phases=(
+        PhaseSpec(
+            hp_frac=1.0,
+            emitters=(
+                EmitterSpec("bomber_turret_spread", part=0),
+                EmitterSpec("bomber_turret_spread", part=1),
+                EmitterSpec("bomber_nose_ring", dy=24.0),
+            ),
+            sway_x=30.0,
+            sway_period=360,
         ),
     ),
 )

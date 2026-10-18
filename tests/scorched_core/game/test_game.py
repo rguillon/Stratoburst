@@ -4415,3 +4415,24 @@ def test_a_restart_after_the_clear_triggers_the_whole_boss_again() -> None:
     assert header[H_FLOW] == FlowState.INTRO
     _tick_until(game, _warning, limit=800)
     assert header[H_BOSS_ACTIVE] == 2
+
+
+@pytest.mark.parametrize(("side", "turret", "engine"), [(-1.0, 0, 2), (1.0, 1, 3)])
+def test_a_level_one_vulcan_reaches_a_wing_turret_and_an_engine_pod(
+    side: float, turret: int, engine: int
+) -> None:
+    # Bolts stop at the first row they touch and the hull spawns first. The turrets stand clear of
+    # the hull circle and each engine pod pokes past it, so plain bolts can still take the parts
+    # (the laser and the bomb pierce and reach them anyway).
+    game = _quiet_boss_game(god=True, weapon=WeaponKind.VULCAN, level=1)
+    _tick_until(game, _fight_started, limit=1500)
+    boss = game.flow.boss
+    assert boss is not None
+    hull = _hull_index(game)
+    turret_row = game.enemies.index_of_uid(boss.part_uid(turret))
+    engine_row = game.enemies.index_of_uid(boss.part_uid(engine))
+    for _ in range(900):
+        game.ship.x = float(game.enemies.x[hull]) + side * 40.0
+        _fire_tick(game)
+    assert game.enemies.kind[turret_row] == EnemyKind.BOMBER_STUMP  # shot off
+    assert game.enemies.hp[engine_row] < BOMBER_1.parts[engine].hp  # and the pod is dented

@@ -18,3 +18,8 @@ class EnemyKind(IntEnum):
     FUEL_TANK = 9
     DEPOT = 10
     BILLBOARD = 11
+    BOMBER = 12  # the stage 1 boss hull: a giant bomber over the city (air unit)
+    BOMBER_TURRET = 13  # a destructible wing turret that tracks the ship
+    BOMBER_ENGINE = 14  # a destructible engine pod
+    BOMBER_STUMP = 15  # what a destroyed wing turret or engine leaves on the hull
+    BOMBER_OPEN = 16  # the hull once its core is open (phases 2 and 3)

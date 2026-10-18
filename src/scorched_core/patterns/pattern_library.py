@@ -31,6 +31,14 @@ PATTERNS: Final[dict[str, PatternSpec]] = {
     "train_hull_spread": PatternSpec(
         FirePattern.SPREAD, count=5, speed=1.3, interval=170, arc_deg=60.0
     ),
+    # The stage 1 giant bomber (plan 03-19), phase 1: wing turrets and a nose ring. Every bomber
+    # pattern stays at 2.0 units per step or less and 45 steps or more between volleys.
+    "bomber_turret_spread": PatternSpec(
+        FirePattern.SPREAD, count=3, speed=1.5, interval=100, arc_deg=24.0
+    ),
+    "bomber_nose_ring": PatternSpec(
+        FirePattern.RING, count=10, speed=1.2, interval=160, phase_step_deg=18.0
+    ),
 }
 PATTERN_NAMES: Final = tuple(PATTERNS)
 PATTERN_TABLE: Final = tuple(PATTERNS.values())
