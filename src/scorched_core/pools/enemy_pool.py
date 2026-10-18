@@ -5,6 +5,7 @@ from array import array
 from dataclasses import dataclass, field
 from typing import Final
 
+from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.protocol import (
     ENEMY_CAP,
@@ -24,9 +25,15 @@ from scorched_core.tuning import (
     ENEMY_RADIUS,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
+    HOVER_DRIFT,
+    HOVER_DRIFT_PERIOD,
+    HOVER_EXIT_SPEED,
+    HOVER_HOLD_TICKS,
+    HOVER_STOP_Y,
 )
 
 _PHASE_STEP: Final = math.tau / ENEMY_SWAY_PERIOD
+_HOVER_PHASE_STEP: Final = math.tau / HOVER_DRIFT_PERIOD
 _EXIT_BOTTOM: Final = PLAYFIELD_H + ENEMY_EXIT_MARGIN
 _EXIT_LEFT: Final = -2.0 * ENEMY_EXIT_MARGIN
 _EXIT_RIGHT: Final = PLAYFIELD_W + 2.0 * ENEMY_EXIT_MARGIN
@@ -51,6 +58,8 @@ class EnemyPool:
     radius: array = field(init=False)
     aux: array = field(init=False)
     kind: array = field(init=False)
+    motion: array = field(init=False)
+    timer: array = field(init=False)
     hp: array = field(init=False)
     flash: array = field(init=False)
     uid: array = field(init=False)
@@ -77,6 +86,8 @@ class EnemyPool:
         self.radius = array("f", zeros)
         self.aux = array("f", zeros)
         self.kind = array("i", zeros)
+        self.motion = array("i", zeros)
+        self.timer = array("i", zeros)
         self.hp = array("i", zeros)
         self.flash = array("i", zeros)
         self.uid = array("i", zeros)
@@ -87,10 +98,20 @@ class EnemyPool:
         self.kill_kind = array("i", zeros)
         self.kill_drop = array("i", zeros)
 
-    def spawn(  # noqa: PLR0913, PLR0917 - a spawn is a kind, a position, a velocity and a drop
-        self, kind: int, x: float, y: float, vx: float, vy: float, drop: int = -1
+    def spawn(  # noqa: PLR0913, PLR0917 - a spawn is a kind, a position, a motion, a velocity, a drop
+        self,
+        kind: int,
+        x: float,
+        y: float,
+        motion: int,
+        vx: float,
+        vy: float,
+        drop: int = -1,
     ) -> bool:
-        """Add an enemy of ``kind``; return False when ``ENEMY_MAX_ALIVE`` are already alive."""
+        """Add an enemy of ``kind``; return False when ``ENEMY_MAX_ALIVE`` are already alive.
+
+        ``motion`` is a ``MotionKind``; a HOVER enemy starts with its full hold timer.
+        """
         i = self.n
         if i >= ENEMY_MAX_ALIVE:
             return False
@@ -104,6 +125,8 @@ class EnemyPool:
         self.radius[i] = ENEMY_RADIUS[kind]
         self.aux[i] = 0.0
         self.kind[i] = kind
+        self.motion[i] = motion
+        self.timer[i] = HOVER_HOLD_TICKS if motion == MotionKind.HOVER else 0
         self.hp[i] = ENEMY_HP[kind]
         self.flash[i] = 0
         self.uid[i] = self._next_uid
@@ -114,23 +137,40 @@ class EnemyPool:
         return True
 
     def step(self) -> None:
-        """Advance one 60 Hz step: sway down the screen, face the heading, decay the flash.
+        """Advance one 60 Hz step by each enemy's motion and decay the hit flash.
 
+        SWAY sways down the screen facing its heading. HOVER descends to ``HOVER_STOP_Y``, holds
+        there drifting side to side, then leaves downward, always facing the player (angle 0).
         Enemies that left the playfield alive are removed with neither a kill nor an event.
         """
         x, y, vx, vy, base_x = self.x, self.y, self.vx, self.vy, self.base_x
         phase, angle, flash, age = self.phase, self.angle, self.flash, self.age
+        motion, timer = self.motion, self.timer
         for i in range(self.n - 1, -1, -1):
             age[i] += 1
-            previous_x = x[i]
-            y[i] += vy[i]
-            base_x[i] += vx[i]
-            phase[i] += _PHASE_STEP
-            x[i] = base_x[i] + ENEMY_SWAY * math.sin(phase[i])
+            match motion[i]:
+                case MotionKind.SWAY:
+                    previous_x = x[i]
+                    y[i] += vy[i]
+                    base_x[i] += vx[i]
+                    phase[i] += _PHASE_STEP
+                    x[i] = base_x[i] + ENEMY_SWAY * math.sin(phase[i])
+                    angle[i] = math.atan2(x[i] - previous_x, vy[i])
+                case MotionKind.HOVER:
+                    base_x[i] += vx[i]
+                    if timer[i] == HOVER_HOLD_TICKS and y[i] < HOVER_STOP_Y:
+                        y[i] = min(y[i] + vy[i], HOVER_STOP_Y)
+                    elif timer[i] > 0:
+                        timer[i] -= 1
+                        phase[i] += _HOVER_PHASE_STEP
+                    else:
+                        y[i] += HOVER_EXIT_SPEED
+                    x[i] = base_x[i] + HOVER_DRIFT * math.sin(phase[i])
+                case _:
+                    pass
             if y[i] > _EXIT_BOTTOM or x[i] < _EXIT_LEFT or x[i] > _EXIT_RIGHT:
                 self._remove_at(i)
                 continue
-            angle[i] = math.atan2(x[i] - previous_x, vy[i])
             if flash[i] > 0:
                 flash[i] -= 1
 
@@ -193,6 +233,8 @@ class EnemyPool:
             self.radius[i] = self.radius[last]
             self.aux[i] = self.aux[last]
             self.kind[i] = self.kind[last]
+            self.motion[i] = self.motion[last]
+            self.timer[i] = self.timer[last]
             self.hp[i] = self.hp[last]
             self.flash[i] = self.flash[last]
             self.uid[i] = self.uid[last]

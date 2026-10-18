@@ -4,6 +4,7 @@ from array import array
 from scorched_core.collision.circle_hits import circles_touch, resolve_shots_vs_enemies
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
@@ -53,7 +54,7 @@ def _world(
 ) -> tuple[BulletPool, EnemyPool, UniformGrid, array]:
     pool_e = EnemyPool()
     for x, y in enemies:
-        pool_e.spawn(kind, x, y, 0.0, 0.0)
+        pool_e.spawn(kind, x, y, MotionKind.SWAY, 0.0, 0.0)
         pool_e.hp[pool_e.n - 1] = hp
     pool = BulletPool(128)
     for x, y in bolts:

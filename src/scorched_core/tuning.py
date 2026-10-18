@@ -3,6 +3,7 @@
 from typing import Final
 
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL, PLAYFIELD_H, PLAYFIELD_W
 
 # About 1.2 s to cross the playfield width at 60 steps per second (D-10).
@@ -44,13 +45,29 @@ ENEMY_HP: Final = (3, 6, 12, 8, 6)
 ENEMY_BLAST: Final = (BLAST_SMALL, BLAST_MEDIUM, BLAST_MEDIUM, BLAST_LARGE, BLAST_MEDIUM)
 ENEMY_GROUND: Final = (False, False, False, True, True)
 
+# Helicopters (D-17): descend to HOVER_STOP_Y, hold there drifting side to side, then leave.
+HOVER_STOP_Y: Final = 96.0
+HOVER_HOLD_TICKS: Final = 240
+HOVER_DRIFT: Final = 20.0  # side-to-side amplitude in units
+HOVER_DRIFT_PERIOD: Final = 180  # steps per full drift cycle
+HOVER_EXIT_SPEED: Final = 1.4  # units per step, straight down
+
 # The shooting gallery's looping spawn script (D-17), the stand-in for the Phase 3 stage
-# timeline. Entries are ``(tick, kind, x, y, vx, vy, drop)`` sorted by tick; ten jets arrive
-# 40 ticks apart (the Phase 1 drone cadence), the last one inside the loop.
+# timeline. Entries are ``(tick, kind, x, y, motion, vx, vy, drop)`` sorted by tick; ten jets
+# arrive 40 ticks apart (the Phase 1 drone cadence), the last one inside the loop.
 GALLERY_LOOP_TICKS: Final = 400
 _GALLERY_JET_X: Final = (60.0, 180.0, 120.0, 90.0, 150.0, 70.0, 170.0, 110.0, 130.0, 100.0)
 GALLERY_SCRIPT: Final = tuple(
-    (39 + 40 * i, EnemyKind.JET, x, -12.0, 0.0, 0.9, -1) for i, x in enumerate(_GALLERY_JET_X)
+    sorted(
+        (
+            *(
+                (39 + 40 * i, EnemyKind.JET, x, -12.0, MotionKind.SWAY, 0.0, 0.9, -1)
+                for i, x in enumerate(_GALLERY_JET_X)
+            ),
+            (200, EnemyKind.HELI, 80.0, -14.0, MotionKind.HOVER, 0.0, 1.2, -1),
+        ),
+        key=lambda entry: entry[0],
+    )
 )
 
 # Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS must stay at or below it

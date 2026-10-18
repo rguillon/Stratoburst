@@ -7,6 +7,7 @@ import pytest
 
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
@@ -428,7 +429,7 @@ def _park_one_enemy(game: Game, hp: int, kind: EnemyKind = EnemyKind.JET) -> Non
     """Replace the gallery's population with one stationary enemy above the ship's bolts."""
     enemies = game.enemies
     enemies.n = 0
-    enemies.spawn(kind, game.ship.x, game.ship.y - 40.0, 0.0, 0.0)
+    enemies.spawn(kind, game.ship.x, game.ship.y - 40.0, MotionKind.SWAY, 0.0, 0.0)
     enemies.hp[0] = hp
 
 
@@ -480,7 +481,7 @@ def test_live_enemies_never_exceed_the_alive_cap_over_two_thousand_steps() -> No
 def test_a_flooded_gallery_refuses_spawns_instead_of_growing() -> None:
     game = Game()
     for _ in range(ENEMY_MAX_ALIVE):
-        game.enemies.spawn(EnemyKind.TURRET, 120.0, 10.0, 0.0, 0.0)
+        game.enemies.spawn(EnemyKind.TURRET, 120.0, 10.0, MotionKind.SWAY, 0.0, 0.0)
     for _ in range(GALLERY_LOOP_TICKS):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.enemies.n == ENEMY_MAX_ALIVE
@@ -491,7 +492,7 @@ def test_overkill_two_bolts_on_one_enemy_give_one_explosion_and_one_kill() -> No
     game = Game()
     x, y = game.ship.x, game.ship.y - 40.0
     game.enemies.n = 0
-    game.enemies.spawn(EnemyKind.JET, x, y, 0.0, 0.0)
+    game.enemies.spawn(EnemyKind.JET, x, y, MotionKind.SWAY, 0.0, 0.0)
     game.enemies.hp[0] = 1
     game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
     game.pbullets.spawn(x + 1.0, y + 10.0, 0.0, -8.0)
@@ -506,7 +507,7 @@ def test_a_kill_publishes_its_blast_class_ground_flag_and_kind() -> None:
     game = Game()
     x, y = game.ship.x, game.ship.y - 40.0
     game.enemies.n = 0
-    game.enemies.spawn(EnemyKind.TANK, x, y, 0.0, 0.0)
+    game.enemies.spawn(EnemyKind.TANK, x, y, MotionKind.SWAY, 0.0, 0.0)
     game.enemies.hp[0] = 1
     game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
@@ -732,7 +733,7 @@ def _kill_one_enemy(game: Game, x: float, y: float) -> None:
     """Park a one-hp jet just above a bolt that reaches it on the next step."""
     enemies = game.enemies
     enemies.n = 0
-    enemies.spawn(EnemyKind.JET, x, y, 0.0, 0.0)
+    enemies.spawn(EnemyKind.JET, x, y, MotionKind.SWAY, 0.0, 0.0)
     enemies.hp[0] = 1
     game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
 

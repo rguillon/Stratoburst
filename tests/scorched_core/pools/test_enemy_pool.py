@@ -4,6 +4,7 @@ from array import array
 import pytest
 
 from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import (
@@ -26,17 +27,22 @@ from scorched_core.tuning import (
     ENEMY_RADIUS,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
+    HOVER_DRIFT,
+    HOVER_DRIFT_PERIOD,
+    HOVER_EXIT_SPEED,
+    HOVER_HOLD_TICKS,
+    HOVER_STOP_Y,
 )
 
 
 def jet(pool: EnemyPool, x: float = 120.0, y: float = 100.0, vy: float = 0.9) -> int:
-    assert pool.spawn(EnemyKind.JET, x, y, 0.0, vy)
+    assert pool.spawn(EnemyKind.JET, x, y, MotionKind.SWAY, 0.0, vy)
     return pool.n - 1
 
 
 def test_spawn_fills_the_kind_row_with_a_fresh_uid() -> None:
     pool = EnemyPool()
-    assert pool.spawn(EnemyKind.JET, 120.0, -12.0, 0.0, 0.9)
+    assert pool.spawn(EnemyKind.JET, 120.0, -12.0, MotionKind.SWAY, 0.0, 0.9)
     assert pool.n == 1
     assert (pool.x[0], pool.y[0], pool.base_x[0]) == (120.0, -12.0, 120.0)
     assert (pool.kind[0], pool.radius[0], pool.hp[0]) == (EnemyKind.JET, 9.0, 3)
@@ -46,7 +52,7 @@ def test_spawn_fills_the_kind_row_with_a_fresh_uid() -> None:
 def test_each_kind_takes_its_radius_and_hp_from_the_tables() -> None:
     pool = EnemyPool()
     for kind in EnemyKind:
-        pool.spawn(kind, 100.0, 50.0, 0.0, 0.0, drop=int(kind))
+        pool.spawn(kind, 100.0, 50.0, MotionKind.SWAY, 0.0, 0.0, drop=int(kind))
     assert [pool.radius[i] for i in range(pool.n)] == list(ENEMY_RADIUS)
     assert [pool.hp[i] for i in range(pool.n)] == list(ENEMY_HP)
     assert [pool.drop[i] for i in range(pool.n)] == [0, 1, 2, 3, 4]
@@ -65,8 +71,8 @@ def test_uids_strictly_increase_and_are_never_reused_after_removal() -> None:
 def test_the_forty_first_live_spawn_is_refused() -> None:
     pool = EnemyPool()
     for _ in range(ENEMY_MAX_ALIVE):
-        assert pool.spawn(EnemyKind.JET, 100.0, 0.0, 0.0, 0.0)
-    assert not pool.spawn(EnemyKind.JET, 100.0, 0.0, 0.0, 0.0)
+        assert pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.0, 0.0)
+    assert not pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.0, 0.0)
     assert pool.n == ENEMY_MAX_ALIVE < ENEMY_CAP
 
 
@@ -83,7 +89,7 @@ def test_a_step_moves_down_and_follows_the_sine_sway() -> None:
 
 def test_vx_drifts_the_sway_centre() -> None:
     pool = EnemyPool()
-    pool.spawn(EnemyKind.JET, 100.0, 0.0, 0.5, 0.0)
+    pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.5, 0.0)
     for _ in range(ENEMY_SWAY_PERIOD):
         pool.step()
     assert pool.x[0] == pytest.approx(100.0 + 0.5 * ENEMY_SWAY_PERIOD, abs=1e-2)
@@ -132,7 +138,7 @@ def test_an_enemy_just_inside_the_exit_line_stays() -> None:
 )
 def test_an_enemy_far_outside_either_side_leaves(x: float) -> None:
     pool = EnemyPool()
-    pool.spawn(EnemyKind.JET, x, 100.0, 0.0, 0.0)
+    pool.spawn(EnemyKind.JET, x, 100.0, MotionKind.SWAY, 0.0, 0.0)
     pool.step()
     assert pool.n == 0
     assert pool.kills == 0
@@ -152,7 +158,7 @@ def test_a_leaver_swap_removal_keeps_the_other_enemies_stepping() -> None:
 def test_a_hit_on_a_resting_enemy_pushes_one_low_priority_hit_with_its_kind() -> None:
     ring = EventRing()
     pool = EnemyPool()
-    pool.spawn(EnemyKind.HELI, 60.0, 90.0, 0.0, 0.0)
+    pool.spawn(EnemyKind.HELI, 60.0, 90.0, MotionKind.SWAY, 0.0, 0.0)
     pool.apply_hit(0, 1, ring)
     assert ring.n == 1
     assert list(ring.buf[:EVENT_STRIDE]) == [EV_HIT, 60.0, 90.0, float(EnemyKind.HELI), 0.0, 0.0]
@@ -173,7 +179,7 @@ def test_hits_while_flashing_push_no_extra_event() -> None:
 def test_a_finished_flash_allows_a_fresh_hit_event() -> None:
     ring = EventRing()
     pool = EnemyPool()
-    pool.spawn(EnemyKind.HELI, 60.0, 90.0, 0.0, 0.0)
+    pool.spawn(EnemyKind.HELI, 60.0, 90.0, MotionKind.SWAY, 0.0, 0.0)
     pool.apply_hit(0, 1, ring)
     pool.flash[0] = 0
     pool.apply_hit(0, 1, ring)
@@ -182,7 +188,7 @@ def test_a_finished_flash_allows_a_fresh_hit_event() -> None:
 
 def test_the_damage_argument_is_subtracted() -> None:
     pool = EnemyPool()
-    pool.spawn(EnemyKind.CARRIER, 60.0, 90.0, 0.0, 0.0)
+    pool.spawn(EnemyKind.CARRIER, 60.0, 90.0, MotionKind.SWAY, 0.0, 0.0)
     pool.apply_hit(0, 5, EventRing())
     assert pool.hp[0] == ENEMY_HP[EnemyKind.CARRIER] - 5
 
@@ -211,7 +217,7 @@ def test_a_kill_pushes_one_explosion_with_its_class_ground_flag_and_kind(
 ) -> None:
     ring = EventRing()
     pool = EnemyPool()
-    pool.spawn(kind, 60.0, 90.0, 0.0, 0.0)
+    pool.spawn(kind, 60.0, 90.0, MotionKind.SWAY, 0.0, 0.0)
     pool.hp[0] = 0
     pool.remove_dead(ring)
     assert list(ring.buf[:EVENT_STRIDE]) == [EV_EXPLOSION, 60.0, 90.0, blast, ground, float(kind)]
@@ -221,9 +227,9 @@ def test_a_kill_pushes_one_explosion_with_its_class_ground_flag_and_kind(
 def test_the_kill_buffer_records_position_kind_and_drop_and_resets_each_call() -> None:
     ring = EventRing()
     pool = EnemyPool()
-    pool.spawn(EnemyKind.TANK, 30.0, 40.0, 0.0, 0.0, drop=2)
-    pool.spawn(EnemyKind.JET, 50.0, 60.0, 0.0, 0.0)
-    pool.spawn(EnemyKind.HELI, 70.0, 80.0, 0.0, 0.0, drop=1)
+    pool.spawn(EnemyKind.TANK, 30.0, 40.0, MotionKind.SWAY, 0.0, 0.0, drop=2)
+    pool.spawn(EnemyKind.JET, 50.0, 60.0, MotionKind.SWAY, 0.0, 0.0)
+    pool.spawn(EnemyKind.HELI, 70.0, 80.0, MotionKind.SWAY, 0.0, 0.0, drop=1)
     for i in (0, 2):
         pool.hp[i] = 0
     pool.remove_dead(ring)
@@ -250,7 +256,7 @@ def test_remove_dead_swap_removes_and_keeps_the_survivors_intact() -> None:
 
 def test_pack_writes_stride_eight_with_normalised_flash_and_hp() -> None:
     pool = EnemyPool()
-    pool.spawn(EnemyKind.HELI, 60.0, 90.0, 0.0, 0.0)
+    pool.spawn(EnemyKind.HELI, 60.0, 90.0, MotionKind.SWAY, 0.0, 0.0)
     pool.apply_hit(0, 2, EventRing())
     pool.angle[0] = 0.25
     pool.aux[0] = 7.0
@@ -312,3 +318,130 @@ def test_uids_are_never_reissued_across_many_swap_removals() -> None:
         live = [pool.uid[i] for i in range(pool.n)]
         assert len(live) == len(set(live))
     assert issued == sorted(set(issued))  # strictly increasing: nothing was ever reissued
+
+
+# --- HOVER ---------------------------------------------------------------------------------
+
+
+def heli(pool: EnemyPool, x: float = 80.0, y: float = -14.0, vy: float = 1.2) -> int:
+    assert pool.spawn(EnemyKind.HELI, x, y, MotionKind.HOVER, 0.0, vy)
+    return pool.n - 1
+
+
+def test_a_hover_spawn_starts_with_the_full_hold_timer_and_other_motions_with_none() -> None:
+    pool = EnemyPool()
+    heli(pool)
+    jet(pool)
+    assert (pool.motion[0], pool.timer[0]) == (MotionKind.HOVER, HOVER_HOLD_TICKS)
+    assert (pool.motion[1], pool.timer[1]) == (MotionKind.SWAY, 0)
+
+
+def test_hover_descends_at_its_speed_without_drifting_until_it_reaches_the_stop_line() -> None:
+    pool = EnemyPool()
+    heli(pool)
+    for k in range(1, 11):
+        pool.step()
+        assert pool.y[0] == pytest.approx(-14.0 + 1.2 * k, abs=1e-4)
+        assert pool.x[0] == 80.0
+    assert pool.timer[0] == HOVER_HOLD_TICKS
+
+
+def test_hover_stops_exactly_on_the_stop_line_and_holds_for_the_hold_ticks() -> None:
+    pool = EnemyPool()
+    heli(pool)
+    descent = math.ceil((HOVER_STOP_Y + 14.0) / 1.2)
+    for _ in range(descent):
+        pool.step()
+    assert pool.y[0] == HOVER_STOP_Y
+    assert pool.timer[0] == HOVER_HOLD_TICKS
+    for k in range(1, HOVER_HOLD_TICKS + 1):
+        pool.step()
+        assert pool.y[0] == HOVER_STOP_Y, k
+        assert pool.timer[0] == HOVER_HOLD_TICKS - k
+    pool.step()
+    assert pool.y[0] == pytest.approx(HOVER_STOP_Y + HOVER_EXIT_SPEED, abs=1e-4)
+
+
+def test_hover_drifts_side_to_side_on_a_sine_while_holding() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y, MotionKind.HOVER, 0.0, 1.2)
+    xs = []
+    for k in range(1, HOVER_DRIFT_PERIOD + 1):
+        pool.step()
+        expected = 120.0 + HOVER_DRIFT * math.sin(k * math.tau / HOVER_DRIFT_PERIOD)
+        assert pool.x[0] == pytest.approx(expected, abs=2e-3), k
+        xs.append(pool.x[0])
+    assert max(xs) > 120.0 + HOVER_DRIFT - 1.0
+    assert min(xs) < 120.0 - HOVER_DRIFT + 1.0
+
+
+def test_hover_leaves_downward_after_the_hold_and_is_culled_at_the_exit_line() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y, MotionKind.HOVER, 0.0, 1.2)
+    for _ in range(HOVER_HOLD_TICKS):
+        pool.step()
+    held_x = pool.x[0]
+    leave_steps = math.ceil((PLAYFIELD_H + ENEMY_EXIT_MARGIN - HOVER_STOP_Y) / HOVER_EXIT_SPEED)
+    for _ in range(leave_steps - 1):
+        pool.step()
+        assert pool.x[0] == held_x  # the drift is frozen on the way out
+    assert pool.n == 1
+    pool.step()
+    assert pool.n == 0
+    assert pool.kills == 0
+
+
+def test_a_hover_helicopter_keeps_facing_the_player_at_angle_zero() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y - 3.0, MotionKind.HOVER, 0.0, 1.2)
+    for _ in range(HOVER_HOLD_TICKS // 2):
+        pool.step()
+        assert pool.angle[0] == 0.0
+
+
+def test_hover_vx_carries_the_drift_centre() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.HELI, 100.0, HOVER_STOP_Y, MotionKind.HOVER, 0.25, 1.2)
+    for _ in range(HOVER_DRIFT_PERIOD):
+        pool.step()
+    assert pool.x[0] == pytest.approx(100.0 + 0.25 * HOVER_DRIFT_PERIOD, abs=1e-2)
+
+
+def test_a_hover_helicopter_spawned_below_the_stop_line_holds_at_once() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y + 20.0, MotionKind.HOVER, 0.0, 1.2)
+    pool.step()
+    assert pool.y[0] == HOVER_STOP_Y + 20.0
+    assert pool.timer[0] == HOVER_HOLD_TICKS - 1
+
+
+def test_removal_moves_the_motion_and_timer_with_the_swapped_enemy() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    heli(pool)
+    pool.step()
+    pool.hp[0] = 0
+    pool.remove_dead(EventRing())
+    assert pool.n == 1
+    assert (pool.kind[0], pool.motion[0]) == (EnemyKind.HELI, MotionKind.HOVER)
+    assert pool.timer[0] == HOVER_HOLD_TICKS
+
+
+def test_killing_a_hover_helicopter_pushes_a_medium_air_explosion() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y, MotionKind.HOVER, 0.0, 1.2)
+    for _ in range(30):
+        pool.step()
+    pool.hp[0] = 0
+    pool.remove_dead(ring)
+    assert ring.buf[0] == EV_EXPLOSION
+    assert (ring.buf[3], ring.buf[4], ring.buf[5]) == (BLAST_MEDIUM, 0.0, float(EnemyKind.HELI))
+
+
+def test_dive_and_ground_motions_do_not_move_yet() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.JET, 50.0, 50.0, MotionKind.DIVE, 1.0, 1.0)
+    pool.spawn(EnemyKind.TANK, 70.0, 50.0, MotionKind.GROUND, 1.0, 1.0)
+    pool.step()
+    assert [(pool.x[i], pool.y[i]) for i in range(2)] == [(50.0, 50.0), (70.0, 50.0)]
