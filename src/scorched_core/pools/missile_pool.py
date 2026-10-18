@@ -7,7 +7,12 @@ from typing import Final
 
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import MISSILE_CAP, PLAYFIELD_H, PLAYFIELD_W
-from scorched_core.tuning import HOMING_LIFE_TICKS, HOMING_SPEED, HOMING_TURN_DEG
+from scorched_core.tuning import (
+    HOMING_LIFE_TICKS,
+    HOMING_RETARGET_TICKS,
+    HOMING_SPEED,
+    HOMING_TURN_DEG,
+)
 
 _TURN: Final = math.radians(HOMING_TURN_DEG)
 _MARGIN: Final = 16.0  # a missile this far outside the playfield is gone
@@ -20,7 +25,8 @@ class MissilePool:
 
     ``angle`` is the heading in radians, 0 straight up the screen and positive to the right.
     ``target`` holds an enemy's stable ``uid`` (never a pool index, which a swap-remove
-    changes); ``life`` counts the steps flown. Removal swaps the last missile into the freed
+    changes); ``life`` counts the steps flown and ``retarget`` the steps until the next
+    re-acquisition. Removal swaps the last missile into the freed
     slot, so slot order carries no meaning.
     """
 
@@ -31,6 +37,7 @@ class MissilePool:
     angle: array = field(init=False)
     target: array = field(init=False)
     life: array = field(init=False)
+    retarget: array = field(init=False)
 
     def __post_init__(self) -> None:
         zeros = bytes(4 * self.capacity)
@@ -39,6 +46,7 @@ class MissilePool:
         self.angle = array("f", zeros)
         self.target = array("i", zeros)
         self.life = array("i", zeros)
+        self.retarget = array("i", zeros)
 
     def spawn(self, x: float, y: float, angle: float, target_uid: int) -> bool:
         """Add a missile heading ``angle`` at ``target_uid``; return False when the pool is full."""
@@ -50,35 +58,34 @@ class MissilePool:
         self.angle[i] = angle
         self.target[i] = target_uid
         self.life[i] = 0
+        self.retarget[i] = HOMING_RETARGET_TICKS
         self.n = i + 1
         return True
 
     def nearest_uid(self, enemies: EnemyPool, x: float, y: float) -> int:
-        """Return the uid of the live enemy nearest ``(x, y)``, or 0 when there is none."""
-        best = _NO_TARGET
-        best_d2 = math.inf
-        ex, ey, hp, uid = enemies.x, enemies.y, enemies.hp, enemies.uid
-        for j in range(enemies.n):
-            dx = ex[j] - x
-            dy = ey[j] - y
-            d2 = dx * dx + dy * dy
-            if hp[j] > 0 and d2 < best_d2:
-                best_d2 = d2
-                best = uid[j]
-        return best
+        """Return the uid of the nearest live on-screen enemy to ``(x, y)``, or 0 when none."""
+        j = self._nearest(enemies, x, y)
+        return int(enemies.uid[j]) if j >= 0 else _NO_TARGET
 
     def steer(self, enemies: EnemyPool) -> None:
         """Turn each missile toward its target, fly it one step, age it and cull it.
 
-        The turn is the signed angle to the target wrapped to ``[-pi, pi]`` and clamped to the
-        turn rate, so a missile curves instead of snapping onto its target. A missile whose
-        target is gone (or that never had one) flies straight. Missiles are visited from the
-        highest slot down so a swap-remove only ever moves one that was already visited.
+        A missile re-acquires the nearest live on-screen enemy every ``HOMING_RETARGET_TICKS``
+        steps, and at once when its target is gone. The turn is the signed angle to the target
+        wrapped to ``[-pi, pi]`` and clamped to the turn rate, so a missile curves instead of
+        snapping onto its target. A missile with no target flies straight. Missiles are visited
+        from the highest slot down so a swap-remove only ever moves one that was already visited.
         """
         x, y, angle, target, life = self.x, self.y, self.angle, self.target, self.life
+        retarget = self.retarget
         ex, ey = enemies.x, enemies.y
         for i in range(self.n - 1, -1, -1):
             j = enemies.index_of_uid(target[i])
+            retarget[i] -= 1
+            if retarget[i] <= 0 or (j < 0 and target[i] != _NO_TARGET):
+                j = self._nearest(enemies, x[i], y[i])
+                target[i] = enemies.uid[j] if j >= 0 else _NO_TARGET
+                retarget[i] = HOMING_RETARGET_TICKS
             if j >= 0:
                 wanted = math.atan2(ex[j] - x[i], y[i] - ey[j])
                 turn = (wanted - angle[i] + math.pi) % math.tau - math.pi
@@ -95,6 +102,30 @@ class MissilePool:
             ):
                 self.remove_at(i)
 
+    @staticmethod
+    def _nearest(enemies: EnemyPool, x: float, y: float) -> int:
+        """Return the slot of the nearest live enemy inside the playfield, or -1.
+
+        Slots are scanned in ascending order and only a strictly nearer enemy replaces the
+        best, so a tie goes to the lower pool index and the choice is deterministic.
+        """
+        best = -1
+        best_d2 = math.inf
+        ex, ey, hp = enemies.x, enemies.y, enemies.hp
+        for j in range(enemies.n):
+            dx = ex[j] - x
+            dy = ey[j] - y
+            d2 = dx * dx + dy * dy
+            if (
+                hp[j] > 0
+                and 0.0 <= ex[j] <= PLAYFIELD_W
+                and 0.0 <= ey[j] <= PLAYFIELD_H
+                and d2 < best_d2
+            ):
+                best_d2 = d2
+                best = j
+        return best
+
     def remove_at(self, i: int) -> None:
         """Swap-remove missile ``i``: the last live missile takes its slot."""
         last = self.n - 1
@@ -104,6 +135,7 @@ class MissilePool:
             self.angle[i] = self.angle[last]
             self.target[i] = self.target[last]
             self.life[i] = self.life[last]
+            self.retarget[i] = self.retarget[last]
         self.n = last
 
     def pack_into(self, out: array) -> None:

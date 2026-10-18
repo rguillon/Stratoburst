@@ -5,10 +5,16 @@ import pytest
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
+from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.pools.missile_pool import MissilePool
-from scorched_core.protocol import MISSILE_CAP
-from scorched_core.tuning import HOMING_LIFE_TICKS, HOMING_SPEED, HOMING_TURN_DEG
+from scorched_core.protocol import MISSILE_CAP, PLAYFIELD_H, PLAYFIELD_W
+from scorched_core.tuning import (
+    HOMING_LIFE_TICKS,
+    HOMING_RETARGET_TICKS,
+    HOMING_SPEED,
+    HOMING_TURN_DEG,
+)
 
 TURN = math.radians(HOMING_TURN_DEG)
 
@@ -35,6 +41,7 @@ def test_spawn_fills_a_row_and_respects_capacity() -> None:
         7,
         0,
     )
+    assert pool.retarget[0] == HOMING_RETARGET_TICKS
     assert pool.spawn(0.0, 0.0, 0.0, 0)
     assert not pool.spawn(0.0, 0.0, 0.0, 0)
     assert pool.n == 2
@@ -45,9 +52,16 @@ def test_remove_at_swaps_the_last_missile_into_the_slot() -> None:
     for i in range(3):
         pool.spawn(float(i), float(i), float(i), i + 1)
     pool.life[2] = 9
+    pool.retarget[2] = 5
     pool.remove_at(0)
     assert pool.n == 2
-    assert (pool.x[0], pool.angle[0], pool.target[0], pool.life[0]) == (2.0, 2.0, 3, 9)
+    assert (pool.x[0], pool.angle[0], pool.target[0], pool.life[0], pool.retarget[0]) == (
+        2.0,
+        2.0,
+        3,
+        9,
+        5,
+    )
     pool.remove_at(1)  # the last slot just shrinks
     assert pool.n == 1
 
@@ -196,3 +210,163 @@ def test_pack_into_writes_x_y_angle_and_life_fraction_at_stride_four() -> None:
     pool.pack_into(out)
     assert list(out[:8]) == pytest.approx([10.0, 100.0, 0.0, 0.0, 20.0, 110.0, 0.0, 0.5])
     assert list(out[8:]) == [-7.0] * 8
+
+
+# --- acquisition ---------------------------------------------------------------------------
+
+
+def test_a_missile_follows_its_target_by_uid_through_a_swap_remove() -> None:
+    enemies = EnemyPool()
+    first = enemy_at(enemies, 40.0, 100.0)
+    second = enemy_at(enemies, 200.0, 100.0)
+    third = enemy_at(enemies, 120.0, 40.0)
+    pool = MissilePool()
+    pool.spawn(120.0, 200.0, 0.0, second)
+    enemies.hp[0] = 0  # the first enemy dies: the third takes slot 0, the second stays at 1
+    enemies.remove_dead(EventRing())
+    assert enemies.index_of_uid(third) == 0
+    pool.steer(enemies)
+    assert pool.target[0] == second  # still the second enemy, not the newcomer in slot 0
+    assert pool.angle[0] > 0.0  # and it turns toward the second, which is to the right
+    assert first not in {int(enemies.uid[i]) for i in range(enemies.n)}
+
+
+def test_a_missile_whose_target_died_re_acquires_a_different_uid() -> None:
+    enemies = EnemyPool()
+    enemy_at(enemies, 40.0, 100.0)
+    second = enemy_at(enemies, 200.0, 100.0)
+    enemy_at(enemies, 120.0, 40.0)
+    pool = MissilePool()
+    pool.spawn(120.0, 200.0, 0.0, second)
+    enemies.hp[1] = 0
+    enemies.remove_dead(EventRing())  # the second is gone: the third takes slot 1
+    pool.steer(enemies)
+    assert pool.target[0] != second  # its target died, so it re-acquired a different uid
+
+
+def test_a_missile_re_acquires_at_once_when_its_target_is_gone() -> None:
+    enemies = EnemyPool()
+    survivor = enemy_at(enemies, 100.0, 80.0)
+    pool = MissilePool()
+    pool.spawn(100.0, 200.0, 0.0, 999)  # the target uid no longer exists
+    pool.steer(enemies)
+    assert pool.target[0] == survivor
+    assert pool.retarget[0] == HOMING_RETARGET_TICKS
+
+
+def test_a_missile_re_acquires_every_eight_steps() -> None:
+    enemies = EnemyPool()
+    far = enemy_at(enemies, 200.0, 40.0)
+    pool = MissilePool()
+    pool.spawn(100.0, 200.0, 0.0, far)
+    near = enemy_at(enemies, 100.0, 150.0)  # appears after launch, nearer than the target
+    for _ in range(HOMING_RETARGET_TICKS - 1):
+        pool.steer(enemies)
+        assert pool.target[0] == far  # not yet due
+    pool.steer(enemies)
+    assert pool.target[0] == near
+    assert pool.retarget[0] == HOMING_RETARGET_TICKS
+
+
+def test_acquisition_ignores_dead_and_off_screen_enemies() -> None:
+    enemies = EnemyPool()
+    enemy_at(enemies, 100.0, 190.0)  # dead
+    enemy_at(enemies, 100.0, -12.0)  # still above the playfield
+    enemy_at(enemies, -5.0, 150.0)  # off the left edge
+    enemy_at(enemies, PLAYFIELD_W + 1.0, 150.0)  # off the right edge
+    enemy_at(enemies, 100.0, PLAYFIELD_H + 1.0)  # below the playfield
+    on_screen = enemy_at(enemies, 220.0, 20.0)
+    enemies.hp[0] = 0
+    assert MissilePool().nearest_uid(enemies, 100.0, 200.0) == on_screen
+
+
+def test_acquisition_accepts_enemies_exactly_on_the_playfield_edges() -> None:
+    for x, y in ((0.0, 100.0), (PLAYFIELD_W, 100.0), (100.0, 0.0), (100.0, PLAYFIELD_H)):
+        enemies = EnemyPool()
+        uid = enemy_at(enemies, x, y)
+        assert MissilePool().nearest_uid(enemies, 100.0, 100.0) == uid
+
+
+def test_a_tie_in_distance_goes_to_the_lower_pool_index() -> None:
+    enemies = EnemyPool()
+    left = enemy_at(enemies, 60.0, 100.0)
+    enemy_at(enemies, 140.0, 100.0)  # exactly as far from x = 100
+    assert MissilePool().nearest_uid(enemies, 100.0, 100.0) == left
+    enemies = EnemyPool()
+    enemy_at(enemies, 140.0, 100.0)
+    right_first = int(enemies.uid[0])
+    enemy_at(enemies, 60.0, 100.0)
+    assert MissilePool().nearest_uid(enemies, 100.0, 100.0) == right_first
+
+
+def test_with_no_live_on_screen_enemy_the_missile_flies_straight_and_clears_its_target() -> None:
+    enemies = EnemyPool()
+    enemy_at(enemies, 100.0, -12.0)  # off-screen above: not acquirable
+    pool = MissilePool()
+    pool.spawn(100.0, 200.0, 0.3, 999)
+    pool.steer(enemies)
+    assert pool.target[0] == 0
+    assert pool.angle[0] == pytest.approx(0.3)
+    assert pool.x[0] == pytest.approx(100.0 + math.sin(0.3) * HOMING_SPEED, rel=1e-6)
+
+
+def test_an_untargeted_missile_waits_for_its_retarget_timer_before_looking_again() -> None:
+    enemies = EnemyPool()
+    pool = MissilePool()
+    pool.spawn(100.0, 250.0, 0.0, 0)
+    pool.steer(enemies)
+    late = enemy_at(enemies, 100.0, 150.0)  # appears while the missile has no target
+    for _ in range(HOMING_RETARGET_TICKS - 2):
+        pool.steer(enemies)
+        assert pool.target[0] == 0
+    pool.steer(enemies)
+    assert pool.target[0] == late
+
+
+def test_a_missile_is_removed_on_exactly_the_ninetieth_step() -> None:
+    pool = MissilePool()
+    pool.spawn(120.0, 160.0, 0.0, 0)
+    pool.life[0] = HOMING_LIFE_TICKS - 1
+    pool.y[0] = 160.0
+    pool.steer(EnemyPool())
+    assert pool.n == 0
+
+
+def test_a_missile_circling_a_target_expires_after_ninety_steps() -> None:
+    enemies = EnemyPool()
+    uid = enemy_at(enemies, 120.0, 160.0)
+    pool = MissilePool()
+    pool.spawn(120.0, 160.0, 0.0, uid)  # on top of its target: it never leaves the field
+    for _ in range(HOMING_LIFE_TICKS - 1):
+        pool.steer(enemies)
+    assert pool.n == 1
+    pool.steer(enemies)
+    assert pool.n == 0
+
+
+def test_every_cull_edge_removes_a_missile_sixteen_units_outside() -> None:
+    cases = (
+        (-20.0, 100.0, -math.pi / 2),
+        (PLAYFIELD_W + 20.0, 100.0, math.pi / 2),
+        (100.0, -20.0, 0.0),
+        (100.0, PLAYFIELD_H + 20.0, math.pi),
+    )
+    for x, y, angle in cases:
+        pool = MissilePool()
+        pool.spawn(x, y, angle, 0)
+        pool.steer(EnemyPool())
+        assert pool.n == 0, (x, y)
+
+
+def test_pack_into_is_finite_for_every_live_missile_after_a_chase() -> None:
+    enemies = EnemyPool()
+    uid = enemy_at(enemies, 200.0, 60.0)
+    pool = MissilePool()
+    for k in range(6):
+        pool.spawn(100.0 + k, 250.0, math.radians(-40.0 + 16.0 * k), uid)
+    out = array("f", bytes(4 * 4 * MISSILE_CAP))
+    for _ in range(30):
+        pool.steer(enemies)
+        pool.pack_into(out)
+        assert all(math.isfinite(v) for v in out)
+    assert 0.0 < out[3] < 1.0

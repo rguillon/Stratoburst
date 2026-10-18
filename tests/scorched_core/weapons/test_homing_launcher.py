@@ -7,7 +7,7 @@ from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.pools.missile_pool import MissilePool
-from scorched_core.protocol import EV_SHOT, EVENT_STRIDE
+from scorched_core.protocol import EV_SHOT, EVENT_STRIDE, MISSILE_CAP
 from scorched_core.tuning import (
     HOMING_FAN_DEG,
     HOMING_INTERVAL,
@@ -173,3 +173,23 @@ def test_the_shot_event_is_refused_once_the_soft_cap_is_reached() -> None:
     assert _fire(HomingLauncher(), missiles, enemies, events) == 1
     assert events.n == 96
     assert events.dropped == 1
+
+
+def test_a_volley_beyond_the_protocol_capacity_launches_what_fits() -> None:
+    missiles, enemies, events = MissilePool(), EnemyPool(), EventRing()
+    launcher = HomingLauncher()
+    launched = 0
+    for _ in range(MISSILE_CAP):  # more than enough steps to overfill at level 5
+        launched += _fire(launcher, missiles, enemies, events, level=5)
+        launcher.cooldown = 0  # fire again immediately
+    assert missiles.n == MISSILE_CAP == 48
+    assert launched == 48
+    assert _fire(launcher, missiles, enemies, events, level=5) == 0
+
+
+def test_a_target_that_is_swap_removed_before_launch_is_not_chosen() -> None:
+    missiles, enemies, events = MissilePool(), EnemyPool(), EventRing()
+    enemies.spawn(EnemyKind.JET, 100.0, 150.0, MotionKind.DIVE, 0.0, 0.0)
+    enemies.hp[0] = 0
+    _fire(HomingLauncher(), missiles, enemies, events)
+    assert missiles.target[0] == 0
