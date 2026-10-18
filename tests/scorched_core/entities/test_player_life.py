@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import pytest
 
 from scorched_core.entities.player_life import PlayerLife
@@ -141,6 +143,35 @@ def test_grant_invuln_takes_the_larger_remaining_value() -> None:
     life.grant_invuln(100)
     life.grant_invuln(40)
     assert life.invuln == 100
+
+
+def test_invuln_max_holds_whichever_order_the_sources_arrive_in() -> None:
+    life = PlayerLife()
+    life.grant_invuln(40)
+    life.grant_invuln(100)
+    assert life.invuln == 100
+    life.grant_invuln(100)
+    assert life.invuln == 100
+
+
+def test_a_hit_while_invulnerable_changes_nothing() -> None:
+    life, events = PlayerLife(), EventRing()
+    life.grant_invuln(5)
+    assert not life.hit(10.0, 20.0, events)
+    assert life.phase == PlayerPhase.ALIVE
+    assert life.timer == 0
+    assert life.deaths == 0
+    assert events.n == 0
+
+
+@pytest.mark.parametrize("builder", [_to_grace, _to_dying, _to_respawn])
+def test_a_hit_outside_alive_changes_nothing(
+    builder: Callable[[], tuple[PlayerLife, PlayerShip, EventRing]],
+) -> None:
+    life, ship, events = builder()
+    phase, timer, deaths, count = life.phase, life.timer, life.deaths, events.n
+    assert not life.hit(ship.x, ship.y, events)
+    assert (life.phase, life.timer, life.deaths, events.n) == (phase, timer, deaths, count)
 
 
 def test_full_cycle_runs_hit_grace_death_fly_in_and_a_second_life() -> None:
