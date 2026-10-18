@@ -131,4 +131,77 @@ export const SFX_TABLE = Object.freeze({
     cooldownMs: 0,
     priority: 3,
   },
+  // The stage events (appended after the Phase 2 sounds, in SfxId order). The big stage moments sit
+  // above every gameplay sound in priority so heavy fire never drowns them out.
+  // The largest, lowest explosion: the boss's death blasts.
+  EXPLODE_HUGE: {
+    params: [1, 0.06, 55, 0, 0.15, 1.3, 4, 2.4, -2, 0, 0, 0, 0, 0.8, 0, 0.4, 0.05, 0.75, 0.15, 0, 600],
+    volume: 1,
+    cooldownMs: 150,
+    priority: 6,
+  },
+  // The boss alarm: a pulsing low-passed saw that holds 880 Hz for half a second, then drops 330 Hz for
+  // the rest of its second. The pulse period (0.34 s) puts the re-armed second drop past the sound's end.
+  WARNING: {
+    params: [1, 0, 880, 0.01, 0.85, 0.15, 2, 1, 0, 0, -330, 0.5, 0.34, 0, 0, 0, 0, 0.8, 0, 0.5, 3200],
+    volume: 0.9,
+    cooldownMs: 500,
+    priority: 12,
+  },
+  // An extra life: a bright triangle arpeggio, one rising step every 0.1 s, with an echo.
+  EXTEND: {
+    params: [1, 0, 659, 0.005, 0.3, 0.35, 1, 1, 0, 0, 130, 0.04, 0.1, 0, 0, 0, 0.08, 0.7, 0.03, 0.3, 0],
+    volume: 0.9,
+    cooldownMs: 500,
+    priority: 11,
+  },
+  // A short glassy ping: a high sine that jumps up a fifth-ish just after the start.
+  MEDAL: {
+    params: [0.9, 0, 1568, 0, 0.01, 0.22, 0, 1, 0, 0, 392, 0.03, 0, 0, 0, 0, 0.04, 0.6, 0.01, 0, 0],
+    volume: 0.6,
+    cooldownMs: 60,
+    priority: 6,
+  },
+  // A punchy metallic crunch: a bit-crushed tan wave with noise and a fast falling pitch.
+  PART_DESTROY: {
+    params: [1, 0.1, 220, 0, 0.03, 0.3, 3, 1.5, -6, 0, 0, 0, 0, 0.5, 0, 0.3, 0.02, 0.8, 0.02, 0, 3000],
+    volume: 0.9,
+    cooldownMs: 80,
+    priority: 6,
+  },
+  // A low rising whoosh that swells in over a third of a second.
+  BOSS_PHASE: {
+    params: [1, 0.05, 55, 0.35, 0.2, 0.45, 4, 1.5, 3, 0, 0, 0, 0, 0.7, 0, 0.1, 0, 0.8, 0.1, 0, 900],
+    volume: 0.9,
+    cooldownMs: 400,
+    priority: 8,
+  },
+  // The boss's death: the huge boom with a very long tail, the longest sound in the game.
+  BOSS_DEFEAT: {
+    params: [1, 0.05, 45, 0, 0.3, 2.2, 4, 2.6, -1, 0, 0, 0, 0, 0.9, 0, 0.5, 0.08, 0.85, 0.25, 0, 500],
+    volume: 1,
+    cooldownMs: 1000,
+    priority: 13,
+  },
+  // A crisp counter tick: one per tally line, a line a second, so the cooldown stays far below that.
+  TALLY_TICK: {
+    params: [0.9, 0, 1800, 0, 0.004, 0.04, 1, 1, -20, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    volume: 0.5,
+    cooldownMs: 120,
+    priority: 7,
+  },
+  // A short victory fanfare: a triangle climbing in octave-ish steps every 0.2 s, with an echo.
+  STAGE_CLEAR: {
+    params: [1, 0, 523, 0.005, 0.5, 0.6, 1, 1, 0, 0, 262, 0.1, 0.2, 0, 0, 0, 0.12, 0.8, 0.05, 0.2, 0],
+    volume: 0.9,
+    cooldownMs: 2000,
+    priority: 12,
+  },
+  // A falling sting: a saw that sags in pitch and drops again part way through.
+  GAME_OVER: {
+    params: [1, 0, 440, 0.01, 0.5, 0.7, 2, 1, -0.4, 0, -100, 0.4, 0, 0, 0, 0, 0.05, 0.8, 0.05, 0.1, 1800],
+    volume: 0.9,
+    cooldownMs: 2000,
+    priority: 12,
+  },
 });

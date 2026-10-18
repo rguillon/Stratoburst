@@ -7,11 +7,29 @@ from scorched_core.protocol import EV_SFX, EVENT_STRIDE
 from scorched_core.weapons.pickup_outcome import PickupOutcome
 from scorched_core.weapons.weapon_kind import WeaponKind
 
-# Indexed by blast class (BLAST_SMALL 0, MEDIUM 1, LARGE 2).
-_EXPLOSIONS: tuple[SfxId, ...] = (SfxId.EXPLODE_SMALL, SfxId.EXPLODE_MEDIUM, SfxId.EXPLODE_LARGE)
+# Indexed by blast class (BLAST_SMALL 0, MEDIUM 1, LARGE 2, HUGE 3).
+_EXPLOSIONS: tuple[SfxId, ...] = (
+    SfxId.EXPLODE_SMALL,
+    SfxId.EXPLODE_MEDIUM,
+    SfxId.EXPLODE_LARGE,
+    SfxId.EXPLODE_HUGE,
+)
 
 # Frequent sounds: pushed low priority, so they are the first refused when the ring is busy.
 _NOISY: frozenset[SfxId] = frozenset({SfxId.VULCAN, SfxId.MISSILE, SfxId.HIT, SfxId.ENEMY_FIRE})
+
+# The stage events that make one fixed sound each, whatever their payload.
+_STAGE_SOUNDS: dict[int, SfxId] = {
+    protocol.EV_MEDAL: SfxId.MEDAL,
+    protocol.EV_EXTEND: SfxId.EXTEND,
+    protocol.EV_PART_DESTROYED: SfxId.PART_DESTROY,
+    protocol.EV_BOSS_WARNING: SfxId.WARNING,
+    protocol.EV_BOSS_PHASE: SfxId.BOSS_PHASE,
+    protocol.EV_BOSS_DEFEATED: SfxId.BOSS_DEFEAT,
+    protocol.EV_TALLY_LINE: SfxId.TALLY_TICK,
+    protocol.EV_STAGE_CLEAR: SfxId.STAGE_CLEAR,
+    protocol.EV_GAME_OVER: SfxId.GAME_OVER,
+}
 
 _SILENT = -1
 
@@ -67,6 +85,8 @@ def _sound_for(kind: int, a: int, b: int) -> int:
             sound = SfxId.BOMB_BLAST
         case protocol.EV_DEATHBOMB_SAVE:
             sound = SfxId.DEATHBOMB
+        case _:
+            sound = _STAGE_SOUNDS.get(kind, _SILENT)
     return sound
 
 
