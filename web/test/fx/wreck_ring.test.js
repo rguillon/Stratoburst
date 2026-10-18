@@ -4,7 +4,7 @@ import { PALETTE } from '../../src/fx/palette.js';
 import { createWreckRing } from '../../src/fx/wreck_ring.js';
 import { enemyModel } from '../../src/render/models/enemy_models.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, STAGE_START: 20 };
 const KINDS = { TANK: 3, TURRET: 4 };
 const W = 240;
 const H = 320;
@@ -365,3 +365,62 @@ describe('the smouldering trickle', () => {
   });
 });
 
+
+describe('a stage start (D-26, RESEARCH Pattern 1)', () => {
+  it('clears every stored wreck, even when the scroll jumped back to 0', () => {
+    const { ring, byName } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.handle(EVENTS.EXPLOSION, 60, 80, 2, 1, KINDS.TURRET);
+    ring.update(100);
+    expect(ring.live).toBe(2);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(0);
+    expect(ring.live).toBe(0);
+    expect(byName['wreck-tank'].count).toBe(0);
+    expect(byName['wreck-turret'].count).toBe(0);
+  });
+
+  it('adds wrecks normally afterwards, in the first slot again', () => {
+    const { ring, state, byName } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    state.scroll = 0;
+    ring.handle(EVENTS.EXPLOSION, 40, 30, 2, 1, KINDS.TANK);
+    ring.update(0);
+    expect(ring.live).toBe(1);
+    const p = positionOf(byName['wreck-tank'], 0);
+    expect(Array.from(p.toArray()).every(Number.isFinite)).toBe(true);
+    expect(p.toArray()).toEqual([40 - W / 2, 0, 30 - H / 2]);
+  });
+
+  it('stops the smoulder of a cleared wreck at once', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    const t = run(ring, 0, 1);
+    expect(emitted.normal.length).toBeGreaterThan(0);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    const before = { normal: emitted.normal.length, additive: emitted.additive.length };
+    run(ring, t, 2, 0);
+    expect(emitted.normal.length).toBe(before.normal);
+    expect(emitted.additive.length).toBe(before.additive);
+  });
+
+  it('leaves a finite matrix behind in the cleared meshes', () => {
+    const { ring, byName } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.update(100);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(0);
+    const m = byName['wreck-tank'].instanceMatrix.array.slice(0, 16);
+    expect(Array.from(m).every(Number.isFinite)).toBe(true);
+  });
+
+  it('keeps the previous behaviour when the events table has no STAGE_START', () => {
+    const { ring } = build({ events: { EXPLOSION: 1, HIT: 2 } });
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.handle(undefined, 0, 0, 0, 0, 0);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(100);
+    expect(ring.live).toBe(1);
+  });
+});

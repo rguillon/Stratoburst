@@ -94,8 +94,23 @@ export function createWreckRing({
   let live = 0;
   let clock = 0; // the effect clock of the latest update
 
-  // Only a ground-anchored kill (EXPLOSION with b == 1) leaves a wreck; air kills add nothing.
+  // A stage start restarts the scroll at 0, so every stored wreck would jump to a wrong place:
+  // forget them all (RESEARCH Pattern 1). The lifetime `spawned` count is left alone.
+  function clear() {
+    wreckKind.fill(-1);
+    smokeDue.fill(0);
+    flameDue.fill(0);
+    next = 0;
+    live = 0;
+  }
+
+  // Only a ground-anchored kill (EXPLOSION with b == 1) leaves a wreck; air kills add nothing. A
+  // STAGE_START event clears the ring (an events table without it keeps the old behaviour).
   function handle(type, x, y, a, b, c) {
+    if (events.STAGE_START !== undefined && type === events.STAGE_START) {
+      clear();
+      return;
+    }
     if (type !== events.EXPLOSION || b !== 1 || meshByKind[c] === undefined) return;
     wreckX[next] = x;
     wreckY[next] = y;

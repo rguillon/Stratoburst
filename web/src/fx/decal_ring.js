@@ -115,8 +115,21 @@ export function createDecalRing({
     if (stored < capacity) stored += 1;
   }
 
-  // Only a ground-anchored kill (EXPLOSION with b == 1) scorches the terrain; air kills do not.
+  // A stage start restarts the scroll at 0, so every stored mark would jump to a wrong place:
+  // forget them all (RESEARCH Pattern 1).
+  function clear() {
+    stored = 0;
+    next = 0;
+    live = 0;
+  }
+
+  // Only a ground-anchored kill (EXPLOSION with b == 1) scorches the terrain; air kills do not. A
+  // STAGE_START event clears the ring (an events table without it keeps the old behaviour).
   function handle(type, x, y, a, b) {
+    if (events.STAGE_START !== undefined && type === events.STAGE_START) {
+      clear();
+      return;
+    }
     if (type !== events.EXPLOSION || b !== 1) return;
     if (a === blast.LARGE) add(x, y, MARK_SIZE.LARGE);
     else if (a === blast.MEDIUM) add(x, y, MARK_SIZE.MEDIUM);
