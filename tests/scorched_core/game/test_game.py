@@ -70,6 +70,8 @@ def test_manifest_contract() -> None:
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
     assert len(header["slots"]) == 16
+    assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
+    assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},

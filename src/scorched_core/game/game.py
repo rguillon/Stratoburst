@@ -77,6 +77,7 @@ from scorched_core.tuning import (
     MAX_LEVEL,
     SCROLL_SPEED,
 )
+from scorched_core.weapons.pickup_outcome import PickupOutcome
 from scorched_core.weapons.vulcan import Vulcan
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_core.weapons.weapon_loadout import WeaponLoadout
@@ -216,6 +217,8 @@ class Game:
             "events": dict(_EVENT_KINDS),
             "blast": dict(_BLAST_CLASSES),
             "enemy_kinds": {kind.name: kind.value for kind in EnemyKind},
+            "weapons": {kind.name: kind.value for kind in WeaponKind},
+            "outcomes": {outcome.name: outcome.value for outcome in PickupOutcome},
             "tuning": {
                 "scroll_speed": SCROLL_SPEED,
                 "hitbox_radius": HITBOX_RADIUS,

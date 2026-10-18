@@ -2,12 +2,28 @@
 
 from dataclasses import dataclass
 
+from scorched_core.tuning import MAX_LEVEL
+from scorched_core.weapons.pickup_outcome import PickupOutcome
 from scorched_core.weapons.weapon_kind import WeaponKind
 
 
 @dataclass(slots=True)
 class WeaponLoadout:
-    """Weapon ``kind`` and ``level`` (1..``MAX_LEVEL``)."""
+    """Weapon ``kind`` and ``level`` (1..``MAX_LEVEL``); every crystal obeys the colour rules."""
 
     kind: WeaponKind = WeaponKind.VULCAN
     level: int = 1
+
+    def collect(self, color: WeaponKind) -> PickupOutcome:
+        """Apply a crystal of ``color`` (PLYR-05, D-07).
+
+        The current colour raises the level by one up to ``MAX_LEVEL``; at the top it changes
+        nothing and reports MAXED (D-06). Another colour switches the weapon and keeps the level.
+        """
+        if color is not self.kind:
+            self.kind = color
+            return PickupOutcome.SWITCHED
+        if self.level >= MAX_LEVEL:
+            return PickupOutcome.MAXED
+        self.level += 1
+        return PickupOutcome.RAISED
