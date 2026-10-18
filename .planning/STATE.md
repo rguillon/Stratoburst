@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-11-PLAN.md
-last_updated: "2026-10-18T17:35:30.901Z"
+stopped_at: Completed 03-12-PLAN.md
+last_updated: "2026-10-18T17:45:11.175Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 43f2ba0d864323d4aba51db379f89e3fe031d23c
+state_head: 1884c68fdb0e4ab59d30497e1418f02349cecac1
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 54
+  completed_plans: 55
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 12 of 28
+Plan: 13 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -111,6 +111,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P09 | 12 min | 2 tasks | 7 files |
 | Phase 03 P10 | 11 min | 2 tasks | 18 files |
 | Phase 03 P11 | 25 min | 2 tasks | 21 files |
+| Phase 03 P12 | 12 min | 2 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,7 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-10: wreck and scorch rings clear on events.STAGE_START (guarded for older events tables) because the scroll restarts at 0; the banner overlay is state-driven from FLOW, STAGE and FLOW_T
 - [Phase 03]: 03-11: a medal stores no velocity; PickupPool.step(ground_speed) drifts it by the live ground speed, and only a medal leaving the playfield increments medals_missed (a refused spawn or an eviction is never a miss)
 - [Phase 03]: 03-11: Game._step_pickups drains medals_missed into chain.miss() after the catch callbacks, a confirmed death calls chain.miss(), stage_reset() zeroes only the stage catch count; the wreck ring takes only ground kinds with a JS model (hasModel)
+- [Phase 03]: 03-12: the city is road-grid data (CityBlock rows plus MAGLEV/RUNWAY_LIGHT CityFeature lines) expanded once in StageData into stride-6 placements that ship in the manifest; a feature corridor of 6 units skips any overlapping building, margin blocks fill columns -2, -1, 3 and 4, and stage 1 has 2609 placements under the 3000 cap
 
 ### Pending Todos
 
@@ -249,6 +251,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T17:35:30.631Z
-Stopped at: Completed 03-11-PLAN.md
+Last session: 2026-10-18T17:45:10.971Z
+Stopped at: Completed 03-12-PLAN.md
 Resume file: None

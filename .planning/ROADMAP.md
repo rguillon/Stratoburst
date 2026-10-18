@@ -161,7 +161,7 @@ Plans:
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
 
-**Plans:** 11/28 plans executed (19 waves)
+**Plans:** 12/28 plans executed (19 waves)
 
 Plans:
 **Wave 1**
@@ -194,7 +194,7 @@ Plans:
 - [x] 03-11-PLAN.md — (wave 9) Raiden II medals: chain ladder, drift, miss and death resets, popups
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 03-12-PLAN.md — (wave 10) Stage 1 city as data: road-grid blocks, slums / downtown / airbase arc, manifest layout (Python)
+- [x] 03-12-PLAN.md — (wave 10) Stage 1 city as data: road-grid blocks, slums / downtown / airbase arc, manifest layout (Python)
 
 **Wave 11** *(blocked on Wave 10 completion)*
 - [ ] 03-13-PLAN.md — (wave 11) City on one ground frame with ground units (NDC-proven), neon scenery and road grid
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
-| 3. Stage 1 Vertical Slice | 11/28 | In Progress | - |
+| 3. Stage 1 Vertical Slice | 12/28 | In Progress | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
