@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-15-PLAN.md
-last_updated: "2026-10-18T18:40:22.949Z"
+stopped_at: Completed 03-16-PLAN.md
+last_updated: "2026-10-18T18:57:25.885Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 65dc1acfe57adca7e05c7751993e930dd759c66a
+state_head: c2b714562ec2fab3ae2d902afd52423860b59e99
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 58
+  completed_plans: 59
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 16 of 28
+Plan: 17 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -115,6 +115,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P13 | 25 min | 2 tasks | 19 files |
 | Phase 03 P14 | 15 min | 2 tasks | 24 files |
 | Phase 03 P15 | 7 min | 2 tasks | 17 files |
+| Phase 03 P16 | 7 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -239,6 +240,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-14: settle() returns the points to award (train kinds pay 0 in the pool); plan 03-17 must add the return value to the score and keep boss parts outside the hull circle so bolts reach them
 - [Phase 03]: 03-15: fires burn only non-target lots, and a debug jump keeps ground targets still on screen so a ?at= start has no holes
 - [Phase 03]: 03-15: stage 1 flags the middle lot of every 6th-7th block per section, skipping feature corridors and the BOSS_QUIET window (44 targets, 30 with medals)
+- [Phase 03]: 03-16: city rubble and flicker kinds are Sets of manifest kind values (the cityKinds Set shared with the explosion fx); the hit flash holds a damaged building's glow at full instead of multiplying the neon
+- [Phase 03]: 03-16: wreck kinds come from wreckKindsFor(groundKindNames, manifest enemy_wreck, hasModel); all four city kinds share one rubble pile through the wreck ring's rubble option
 
 ### Pending Todos
 
@@ -262,6 +265,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T18:40:22.724Z
-Stopped at: Completed 03-15-PLAN.md
+Last session: 2026-10-18T18:57:25.656Z
+Stopped at: Completed 03-16-PLAN.md
 Resume file: None
