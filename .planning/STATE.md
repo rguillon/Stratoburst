@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-10-18T15:42:13.774Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-10-18T15:49:24.645Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 2d207e0b4b95e00e1dd10caf8b2c807f09010ab1
+state_head: 1b6c5c95e5a6eae59c30c1fb3c7e35d22ef681f1
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 44
+  completed_plans: 45
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 2 of 28
+Plan: 3 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -101,6 +101,7 @@ Progress: [█████░░░░░] 50%
 | Phase 02 P32 | 14 min | 3 tasks | 11 files |
 | Phase 02 P33 | 30min | 3 tasks | 3 files |
 | Phase 03 P01 | 25 min | 2 tasks | 15 files |
+| Phase 03 P02 | 12 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -193,6 +194,8 @@ Recent decisions affecting current work:
 - [Phase 03]: StageData validates ordering and ranges in __post_init__ (stage modules are valid at import)
 - [Phase 03]: StageDirector.jump skips rows with at <= distance; a clamped ?at= start (distance 0) keeps rows at 0.0
 - [Phase 03]: Gallery parity guarded by SHA-256 over header slots 0-29 and live enemy rows of a 1200-step run
+- [Phase 03]: 03-02: moon light takes the old sun position so rig.sun and air-shadow displacement are unchanged; light count fixed at three
+- [Phase 03]: 03-02: bloomStrength is a TIERS property (high 0.6, mid 0.5, low 0.5) published as bloomPass.baseStrength; bomb pulse reads the live base
 
 ### Pending Todos
 
@@ -216,6 +219,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T15:42:13.579Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-10-18T15:49:24.436Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
