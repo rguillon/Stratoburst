@@ -17,3 +17,22 @@ for (const [tier, rainCount] of [
     await expect(page.locator('#error-panel')).toHaveCount(0);
   });
 }
+
+// D-33 / D-36: burning ruins send up plumes at the high tier through the GPU particle layers and
+// the low tier sheds them. The first burning lot of stage 1 is a few dozen units into the scroll.
+test('?tier=high: burning ruins send up plumes within 20 s of a stage boot', async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootGame(page, '?debug&tier=high', { stage: true });
+  await expect.poll(() => hook(page, 'plumes'), { timeout: 20_000 }).toBeGreaterThan(0);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+test('?tier=low: no plume is ever emitted', async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootGame(page, '?debug&tier=low', { stage: true });
+  // Long enough for fires to have been in view at the other tier; the count must still be 0.
+  await page.waitForTimeout(8_000);
+  expect(await hook(page, 'plumes')).toBe(0);
+  expect(await hook(page, 'rainCount')).toBe(0);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

@@ -28,6 +28,7 @@ import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing, wreckKindsFor } from './fx/wreck_ring.js';
 import { createStumpFx, stumpKindsFor } from './fx/stump_fx.js';
+import { createFirePlumes } from './fx/fire_plumes.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
@@ -263,6 +264,15 @@ async function main() {
     toWorld: (x, y, ground, out) =>
       ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
   });
+  // Burning ruins send up fire and smoke (D-33, D-36) through the same particle layers, from the
+  // fire placements the city layer lists each frame. The puffs ride with the ground's speed.
+  const plumes = createFirePlumes({
+    layers: fxLayers,
+    getScale: () => TIERS[currentTier].particleScale,
+    toWorld: (x, y, out) => rig.groundLayer.toWorld(x, y, out),
+    getDrift: () =>
+      header[slots.SCROLL_RATE] * 60 * manifest.tuning.ground_scroll_ratio * rig.groundLayer.k,
+  });
   // Scorch marks of ground kills lie on the terrain below the shadows and the dim mask.
   const decals = createDecalRing({
     events: manifest.events,
@@ -374,7 +384,10 @@ async function main() {
   rig.scene.add(rain.mesh);
   // The rain-soaked atmosphere follows the tier (D-36): counts and visibility only, never a rebuild.
   const applyAtmosphere = (tierName) => {
-    rain.setCount(TIERS[tierName].rain);
+    const tier = TIERS[tierName];
+    rain.setCount(tier.rain);
+    city.setReflections(tier.reflections);
+    plumes.setEnabled(tier.plumes);
   };
   // Screen shake: only the big events (a bomb detonation, the ship's death, a boss part blowing off and the
   // boss's end, a chain) move the camera, and only around the render call. The freeze itself is Python's hitstop.
@@ -385,7 +398,9 @@ async function main() {
   let fxTime = 0;
   let hitstopFrames = 0; // frames drawn while Python held the simulation frozen (e2e reads it)
 
-  // Compile and render through both paths now, so a tier switch never compiles a shader.
+  // Compile and render through both paths now, so a tier switch never compiles a shader. The wet-street
+  // reflections are shown for the compile (they are hidden on the low tier) and set by the tier below.
+  city.setReflections(true);
   rig.prewarm();
   const controller = createQualityController({
     initialTier: tier0,
@@ -633,12 +648,13 @@ async function main() {
       shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);
       bossSweep.update(header[slots.FLOW], header[slots.FLOW_T]);
       cityGround.update(scrollNow);
-      city.update(scrollNow);
+      city.update(scrollNow, fxTime);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
       const effectDt = effectClockDelta(dt, clockState);
       fxTime += effectDt;
       stumpFx.update(header[slots.ENEMY_N], effectDt);
+      plumes.update(city.firePositions, city.fireCount, effectDt);
       lightPool.update(dt / 1000);
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
@@ -771,6 +787,10 @@ async function main() {
         // Rain streaks drawn this frame: the tier's count, 0 on the low tier (e2e).
         get rainCount() {
           return rain.count;
+        },
+        // Fire and smoke particles the burning ruins have emitted so far; 0 on the low tier (e2e).
+        get plumes() {
+          return plumes.emitted;
         },
         get lightsFlashed() {
           return lightPool.flashes;

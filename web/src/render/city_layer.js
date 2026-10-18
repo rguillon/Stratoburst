@@ -39,6 +39,51 @@ const CORNERS = Object.freeze([
 const WALK_LIMIT = 64;
 const MAX_SLOTS = 4;
 
+// Wet streets (D-36, a cheap fake): every glowing kind gets one more InstancedMesh that draws its
+// glow geometry again, flattened onto the road in front of the building and stretched along it,
+// dim and additive. It shares the glow's instance colour, so it takes the same neon hue and flicker.
+export const REFLECTION_GAIN = 0.3;
+// A reflection runs this share of the building's height along the road, but never more than the cap.
+const REFLECTION_STRETCH = 0.5;
+const REFLECTION_MAX_LENGTH = 14;
+// Thickness of the flattened glow and its lift above the road (against z-fighting).
+const REFLECTION_FLAT = 0.05;
+const REFLECTION_LIFT = 0.04;
+
+// Neon sign flicker (D-32): the share of signs that flicker, the level a flickering sign drops to
+// while it is off, and how its on / off pattern runs. Every number is a pure function of the
+// placement and the effect clock, so the same game flickers the same way and a held clock holds it.
+export const FLICKER_SHARE = 0.15;
+export const FLICKER_DIM = 0.08;
+const FLICKER_PERIOD = 1.6;
+const FLICKER_PERIOD_SPREAD = 1.4;
+const FLICKER_LIT = 0.72; // share of each period the sign is steadily on
+const FLICKER_STUTTER = 40; // stutter toggles per period once it starts
+
+// A stable number in [0, 1) for a placement, from its x, distance and variant (an integer hash, so
+// every engine agrees). It decides which signs flicker and where each sits in its pattern.
+export function placementUnit(x, distance, variant) {
+  let h =
+    Math.imul(Math.round(x * 16), 0x9e3779b1) ^
+    Math.imul(Math.round(distance * 16), 0x85ebca6b) ^
+    Math.imul(variant | 0, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+  h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+// The brightness factor of a sign whose placement unit is `unit` at effect time `timeS`: 1 for a
+// steady sign, and for a flickering one 1 while it is on, then a stutter of on and FLICKER_DIM.
+export function flickerLevel(unit, timeS) {
+  if (!(unit < FLICKER_SHARE)) return 1;
+  const u = unit / FLICKER_SHARE;
+  const cycle = timeS / (FLICKER_PERIOD + u * FLICKER_PERIOD_SPREAD) + u * 13.7;
+  const phase = cycle - Math.floor(cycle);
+  if (phase < FLICKER_LIT) return 1;
+  return Math.floor((phase - FLICKER_LIT) * FLICKER_STUTTER) % 2 === 0 ? 1 : FLICKER_DIM;
+}
+
 // The logical y of a placement at stage distance `d` when the scroll is `scroll`.
 export function cityY(scroll, d, y0, ratio) {
   return y0 + ratio * (scroll - d);
@@ -131,6 +176,9 @@ const matrix = new THREE.Matrix4();
 const position = new THREE.Vector3();
 const scale = new THREE.Vector3();
 const NO_TURN = new THREE.Quaternion();
+// A quarter turn about x: the glow's height axis becomes the road direction (+z) and its depth axis
+// becomes the vertical, which the reflection then squashes flat.
+const LAY_FLAT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 const tintColor = new THREE.Color();
 const UNTINTED = new THREE.Color(1, 1, 1);
 
@@ -184,6 +232,14 @@ export function createCityLayer({
     metalness: 0.1,
   });
   const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const reflectionMaterial = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    color: new THREE.Color(REFLECTION_GAIN, REFLECTION_GAIN, REFLECTION_GAIN),
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
   let currentDetail = normalizeDetail(detail);
 
   function instanced(geometry, material, name, capacity) {
@@ -199,6 +255,8 @@ export function createCityLayer({
   const byValue = [];
   const entries = [];
   const capacities = {};
+  let reflecting = false;
+  let fireCapacity = 0;
   for (const [value, list] of distances) {
     const name = names.get(value);
     const capacity = windowCapacity(list, span, loop, length);
@@ -212,12 +270,22 @@ export function createCityLayer({
       body: instanced(model.body, bodyMaterial, `city-${lower}`, capacity),
       glow:
         model.glow === null ? null : instanced(model.glow, glowMaterial, `city-${lower}-glow`, capacity),
+      reflection: null,
+      flickers: name === 'SIGN',
+      fire: name === 'FIRE',
     };
+    if (entry.glow !== null) {
+      entry.reflection = instanced(model.glow, reflectionMaterial, `city-${lower}-reflection`, capacity);
+      entry.reflection.visible = false;
+    }
+    if (entry.fire) fireCapacity = capacity;
     if (entry.glow !== null && tintFor(name, 0) !== null) {
       // Allocate instanceColor up front so the first update never reshapes the buffers.
       entry.tinted = true;
       entry.glow.setColorAt(0, UNTINTED);
       entry.glow.instanceColor.setUsage(THREE.DynamicDrawUsage);
+      // One attribute, two meshes: the reflection takes the glow's hue and flicker for free.
+      entry.reflection.instanceColor = entry.glow.instanceColor;
     }
     byValue[value] = entry;
     entries.push(entry);
@@ -256,9 +324,14 @@ export function createCityLayer({
 
   const hints = new Array(MAX_SLOTS).fill(0);
 
+  // The burning ruins in the window as logical x, y pairs (what the plumes ask the ground layer to
+  // place), refreshed by update(). Preallocated at the FIRE capacity, so it never reallocates.
+  const firePositions = new Float32Array(fireCapacity * 2);
+  let fireCount = 0;
+
   // Writes every placement with a distance in [from, to] (layout distances; `offset` is the
   // distance of the cycle the span belongs to).
-  function sweep(from, to, offset, slot, scroll) {
+  function sweep(from, to, offset, slot, scroll, timeS) {
     let i = seek(from, hints[slot]);
     hints[slot] = i;
     for (; i < count; i++) {
@@ -276,7 +349,24 @@ export function createCityLayer({
       if (entry.glow !== null) entry.glow.setMatrixAt(entry.written, matrix);
       if (entry.tinted) {
         const rgb = tintFor(entry.name, data[base + VARIANT]);
-        entry.glow.setColorAt(entry.written, tintColor.setRGB(rgb[0], rgb[1], rgb[2]));
+        const level = entry.flickers
+          ? flickerLevel(placementUnit(data[base + X], d + offset, data[base + VARIANT]), timeS)
+          : 1;
+        entry.glow.setColorAt(
+          entry.written,
+          tintColor.setRGB(rgb[0] * level, rgb[1] * level, rgb[2] * level),
+        );
+      }
+      if (reflecting && entry.reflection !== null) {
+        const length = Math.min(data[base + HEIGHT] * REFLECTION_STRETCH, REFLECTION_MAX_LENGTH);
+        position.set(data[base + X] - halfW, REFLECTION_LIFT, y - halfH + width / 2);
+        scale.set(width, length, REFLECTION_FLAT);
+        matrix.compose(position, LAY_FLAT, scale);
+        entry.reflection.setMatrixAt(entry.written, matrix);
+      }
+      if (entry.fire) {
+        firePositions[entry.written * 2] = data[base + X];
+        firePositions[entry.written * 2 + 1] = y;
       }
       entry.written += 1;
     }
@@ -284,7 +374,7 @@ export function createCityLayer({
 
   let drawn = 0;
 
-  function update(scroll) {
+  function update(scroll, timeS = 0) {
     for (const entry of entries) entry.written = 0;
     // A placement is in the window when its y is; y falls as the distance grows.
     const low = scroll - (area.yMax - y0) / ratio;
@@ -292,21 +382,41 @@ export function createCityLayer({
     if (loop) {
       const last = Math.floor(high / length);
       for (let cycle = Math.floor(low / length), slot = 0; cycle <= last; cycle++, slot++) {
-        sweep(low - cycle * length, high - cycle * length, cycle * length, Math.min(slot, MAX_SLOTS - 1), scroll);
+        sweep(
+          low - cycle * length,
+          high - cycle * length,
+          cycle * length,
+          Math.min(slot, MAX_SLOTS - 1),
+          scroll,
+          timeS,
+        );
       }
     } else {
-      sweep(low, high, 0, 0, scroll);
+      sweep(low, high, 0, 0, scroll, timeS);
     }
     drawn = 0;
+    fireCount = 0;
     for (const entry of entries) {
       const written = entry.written;
       drawn += written;
+      if (entry.fire) fireCount = written;
       entry.body.count = written;
       if (entry.glow !== null) entry.glow.count = written;
+      if (entry.reflection !== null) entry.reflection.count = reflecting ? written : 0;
       if (written === 0) continue; // nothing was written, so nothing to upload
       entry.body.instanceMatrix.needsUpdate = true;
       if (entry.glow !== null) entry.glow.instanceMatrix.needsUpdate = true;
       if (entry.tinted) entry.glow.instanceColor.needsUpdate = true;
+      if (reflecting && entry.reflection !== null) entry.reflection.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  // The wet-street reflections follow the quality tier. Turning them on only shows the meshes; the
+  // next update() writes their matrices, so nothing is built or compiled here.
+  function setReflections(on) {
+    reflecting = Boolean(on);
+    for (const entry of entries) {
+      if (entry.reflection !== null) entry.reflection.visible = reflecting;
     }
   }
 
@@ -317,6 +427,7 @@ export function createCityLayer({
       const model = geometryFor(entry.name, currentDetail);
       entry.body.geometry = model.body;
       if (entry.glow !== null) entry.glow.geometry = model.glow;
+      if (entry.reflection !== null) entry.reflection.geometry = model.glow;
     }
   }
 
@@ -325,8 +436,13 @@ export function createCityLayer({
     group,
     update,
     setDetail,
+    setReflections,
     window: area,
     capacities,
+    firePositions,
+    get fireCount() {
+      return fireCount;
+    },
     get drawn() {
       return drawn;
     },

@@ -510,7 +510,6 @@ describe('createCityLayer', () => {
 
 // Wet streets (D-36): a dim, flattened copy of every glow lies on the road in front of its building.
 describe('reflections', () => {
-  const FIRE = 7;
   const glowModel = () => ({
     body: new THREE.BoxGeometry(1, 1, 1),
     glow: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
@@ -752,9 +751,9 @@ describe('visible fires', () => {
   const FIRE_KIND = 7;
   const FIRE_ROWS = [
     [FIRE_KIND, 60, 10, 10, 2, 0],
+    [TOWER, 30, 20, 10, 20, 0],
     [FIRE_KIND, 150, 40, 10, 2, 1],
     [FIRE_KIND, 90, 3000, 10, 2, 2],
-    [TOWER, 30, 20, 10, 20, 0],
   ];
 
   it('exposes the FIRE placements in the window as logical x, y pairs plus a count', () => {
