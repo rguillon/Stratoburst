@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-23-PLAN.md
-last_updated: "2026-10-18T06:18:31.385Z"
+stopped_at: Completed 02-24-PLAN.md
+last_updated: "2026-10-18T06:31:17.765Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: fbecdb9a4c51cf14a68ec9454f4933fd8f0be682
+state_head: dc1515a94172b4db91c822bcc99815c29edfa3ed
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 33
+  completed_plans: 34
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 24 of 33
+Plan: 25 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -89,6 +89,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P21 | 15 min | 2 tasks | 12 files |
 | Phase 02 P22 | 9 min | 2 tasks | 13 files |
 | Phase 02 P23 | 9 min | 2 tasks | 7 files |
+| Phase 02 P24 | 14 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -163,6 +164,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-22: blast radius is 20 on the first blast step and 230 from step 30, damage lands on blast steps 1, 7, 13; the launch-step invulnerability grant protects 143 steps because that step already decrements it
 - [Phase 02]: 02-23: homing missiles are a baked violet lathe model turned by minus the angle, with 50 ms trail puffs of min(count, max(1, round(count * particleScale))) from a rotating start index
 - [Phase 02]: 02-23: perf_node.mjs validates --weapon itself (exit 2) and fails a held-fire run whose weapon output slot never rises, so the per-weapon gate cannot pass on an idle weapon
+- [Phase 02]: 02-24: crystals are a lathe gem drawn with HDR instance colours from Python's packed colour index (bomb kind takes BOMB_PICKUP, an out-of-range index draws red); spin and bob follow the effect clock
+- [Phase 02]: 02-24: the MAX flash is static markup armed by the MAXED PICKUP event and started by the next frame tick (900 ms, 400 ms fade, repeat restarts it); createStatusReadout now requires events, maxed and #max-flash
 
 ### Pending Todos
 
@@ -185,6 +188,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T06:18:31.291Z
-Stopped at: Completed 02-23-PLAN.md
+Last session: 2026-10-18T06:31:13.605Z
+Stopped at: Completed 02-24-PLAN.md
 Resume file: None
