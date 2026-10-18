@@ -11,7 +11,12 @@ const size = (box) => (box ? `${text(box.width)}x${text(box.height)}` : NA);
 function flagsLine(flags) {
   if (!flags) return NA;
   const debug = flags.debug ? 'on' : 'off';
-  return `debug=${debug} stress=${text(flags.stress)} tier=${flags.tier ?? 'auto'} crash=${flags.crash ?? 'none'}`;
+  const god = flags.god ? 'on' : 'off';
+  return (
+    `debug=${debug} stress=${text(flags.stress)} tier=${flags.tier ?? 'auto'} ` +
+    `crash=${flags.crash ?? 'none'} weapon=${flags.weapon ?? 'default'} ` +
+    `level=${flags.level ?? 'default'} god=${god} bombs=${flags.bombs ?? 'default'}`
+  );
 }
 
 function tierLines(info) {
