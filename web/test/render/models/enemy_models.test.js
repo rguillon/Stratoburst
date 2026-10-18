@@ -50,19 +50,36 @@ describe('every registered kind', () => {
   }
 });
 
+describe('TANK', () => {
+  it('is cached per detail and has a turret top', () => {
+    for (const detail of ['high', 'mid', 'low']) {
+      expect(enemyModel('TANK', detail)).toBe(enemyModel('TANK', detail));
+      expect(enemyModel('TANK', detail).top).not.toBeNull();
+    }
+  });
+
+  it('has fewer body vertices at each lower detail', () => {
+    const count = (detail) => vertexCount(enemyModel('TANK', detail).body);
+    expect(count('high')).toBeGreaterThan(count('mid'));
+    expect(count('mid')).toBeGreaterThan(count('low'));
+  });
+});
+
 describe('hasModel', () => {
   it('is true for kinds with a builder and false for the rest', () => {
     expect(hasModel('JET')).toBe(true);
-    expect(hasModel('TANK')).toBe(false);
+    expect(hasModel('TANK')).toBe(true);
+    expect(hasModel('MYSTERY')).toBe(false);
   });
 });
 
 describe('warmModels', () => {
   it('builds every detail of the kinds with a builder, skips the others and returns the warmed list', () => {
     const warmed = warmModels(['JET', 'MYSTERY', 'TANK']);
-    expect(warmed).toEqual(['JET']);
+    expect(warmed).toEqual(['JET', 'TANK']);
     for (const detail of ['high', 'mid', 'low']) {
       expect(enemyModel('JET', detail)).toBe(enemyModel('JET', detail));
+      expect(enemyModel('TANK', detail)).toBe(enemyModel('TANK', detail));
     }
   });
 

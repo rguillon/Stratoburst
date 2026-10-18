@@ -49,6 +49,8 @@ describe('createEnemyInstances', () => {
       'enemy-carrier',
       'enemy-carrier-glow',
       'enemy-tank',
+      'enemy-tank-glow',
+      'enemy-tank-top',
       'enemy-turret',
     ]);
     for (const mesh of enemies.meshes) {
@@ -79,7 +81,7 @@ describe('createEnemyInstances', () => {
   it('draws nothing until told how many enemies are live', () => {
     const { enemies } = build();
     enemies.update(0);
-    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(enemies.meshes.map((mesh) => mesh.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it('routes each instance to its kind mesh and counts per kind', () => {
@@ -185,11 +187,16 @@ describe('createEnemyInstances hit flash and bad data', () => {
     }
   });
 
-  it('tints the primitive stand-ins with a distinct military colour per kind', () => {
-    const { byName } = build();
-    const first = (name) => Array.from(byName[name].geometry.getAttribute('color').array.slice(0, 3));
-    expect(first('enemy-tank')).toEqual([expect.closeTo(0.62), expect.closeTo(0.52), expect.closeTo(0.34)]);
-    expect(first('enemy-tank')).not.toEqual(first('enemy-turret'));
+  it('tints the primitive stand-in of a kind without a model with the neutral fallback colour', () => {
+    const enemies = createEnemyInstances({
+      data: new Float32Array(STRIDE * 2),
+      capacity: 2,
+      kinds: { MYSTERY: 0 },
+      playfieldW: 240,
+      playfieldH: 320,
+    });
+    const colours = Array.from(enemies.meshes[0].geometry.getAttribute('color').array.slice(0, 3));
+    expect(colours).toEqual([expect.closeTo(0.45), expect.closeTo(0.45), expect.closeTo(0.4)]);
   });
 
   it('an enemy that stops flashing goes back to the base colour', () => {
@@ -299,13 +306,22 @@ describe('createEnemyInstances models', () => {
     for (let i = 0; i < 2; i++) expect(matrixOf(glow, i)).toEqual(matrixOf(body, i));
   });
 
-  it('builds the jet from the code-built model and keeps primitives for kinds without one', () => {
+  it('builds the jet and the tank from the code-built models and keeps a primitive for an unknown kind', () => {
     const { byName } = build();
     expect(byName['enemy-jet'].geometry).toBe(enemyModel('JET', 'high').body);
     expect(byName['enemy-jet-glow'].geometry).toBe(enemyModel('JET', 'high').glow);
-    expect(byName['enemy-tank'].geometry.type).toBe('BoxGeometry');
-    expect(byName['enemy-turret'].geometry.type).toBe('CylinderGeometry');
-    expect(byName['enemy-tank-glow']).toBeUndefined();
+    expect(byName['enemy-tank'].geometry).toBe(enemyModel('TANK', 'high').body);
+    expect(byName['enemy-tank-glow'].geometry).toBe(enemyModel('TANK', 'high').glow);
+    expect(byName['enemy-tank-top'].geometry).toBe(enemyModel('TANK', 'high').top);
+    const mystery = createEnemyInstances({
+      data: new Float32Array(STRIDE * 2),
+      capacity: 2,
+      kinds: { MYSTERY: 0 },
+      playfieldW: 240,
+      playfieldH: 320,
+    });
+    expect(mystery.meshes.map((mesh) => mesh.name)).toEqual(['enemy-mystery']);
+    expect(mystery.meshes[0].geometry.type).toBe('BoxGeometry');
   });
 
   it('starts at the requested detail', () => {
@@ -316,12 +332,12 @@ describe('createEnemyInstances models', () => {
   it('setDetail swaps the cached geometries on the existing meshes, creating nothing', () => {
     const { enemies, byName } = build();
     const meshes = [...enemies.meshes];
-    const primitive = byName['enemy-tank'].geometry;
     for (const detail of ['low', 'mid', 'high']) {
       enemies.setDetail(detail);
       expect(byName['enemy-jet'].geometry).toBe(enemyModel('JET', detail).body);
       expect(byName['enemy-jet-glow'].geometry).toBe(enemyModel('JET', detail).glow);
-      expect(byName['enemy-tank'].geometry).toBe(primitive);
+      expect(byName['enemy-tank'].geometry).toBe(enemyModel('TANK', detail).body);
+      expect(byName['enemy-tank-top'].geometry).toBe(enemyModel('TANK', detail).top);
       expect(enemies.meshes).toHaveLength(meshes.length);
       enemies.meshes.forEach((mesh, k) => expect(mesh).toBe(meshes[k]));
     }
