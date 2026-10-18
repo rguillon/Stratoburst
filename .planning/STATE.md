@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-07-PLAN.md
-last_updated: "2026-10-18T16:54:48.093Z"
+stopped_at: Completed 03-08-PLAN.md
+last_updated: "2026-10-18T17:03:04.306Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 1be1c7b0420b610c6833e70912ea50def6bbea29
+state_head: 66b7989c9a1313727c84bec433f52142a1bb434c
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 50
+  completed_plans: 51
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 8 of 28
+Plan: 9 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -107,6 +107,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P05 | 8 min | 2 tasks | 21 files |
 | Phase 03 P06 | 16min | 2 tasks | 20 files |
 | Phase 03 P07 | 9 min | 2 tasks | 12 files |
+| Phase 03 P08 | 9 min | 2 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -214,6 +215,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-06: formations are functions expanding to WaveEntry tuples; stage 1 sections merge with a stable sort on at; MIDBOSS_LULL 420 and BOSS_QUIET 240 are pinned constants
 - [Phase 03]: 03-07: kill payout runs through Game._settle_kills (remove_dead, award, drop pickups) to keep _step under the statement limit; later score sources call game.score.award so extends and the 9,999,999 cap apply uniformly
 - [Phase 03]: 03-07: score is a Python int clamped at 9,999,999 and extends use the int; lives icons are cyan U+25B2 capped at 9; reset_run makes the running high score the new best at start
+- [Phase 03]: 03-08: a life is taken on the confirmed death step in stage mode only; life.final mirrors score.lives == 0 before every PlayerLife step, so an extend before the last DYING step restores a ship
+- [Phase 03]: 03-08: on the game-over step OUT is reached, then FLOW becomes GAME_OVER with one GAME_OVER event and a save request; Game.restart() resets in place, keeps the high score and replays ?at=
 
 ### Pending Todos
 
@@ -237,6 +240,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T16:54:47.886Z
-Stopped at: Completed 03-07-PLAN.md
+Last session: 2026-10-18T17:03:04.096Z
+Stopped at: Completed 03-08-PLAN.md
 Resume file: None
