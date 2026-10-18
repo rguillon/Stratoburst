@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-14-PLAN.md
-last_updated: "2026-10-18T18:30:39.604Z"
+stopped_at: Completed 03-15-PLAN.md
+last_updated: "2026-10-18T18:40:22.949Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: 96fa129b211e3d99c80698b594d17ef88ea8517f
+state_head: 65dc1acfe57adca7e05c7751993e930dd759c66a
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 57
+  completed_plans: 58
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 15 of 28
+Plan: 16 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -114,6 +114,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P12 | 12 min | 2 tasks | 19 files |
 | Phase 03 P13 | 25 min | 2 tasks | 19 files |
 | Phase 03 P14 | 15 min | 2 tasks | 24 files |
+| Phase 03 P15 | 7 min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -236,6 +237,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-14: the BossController keeps the hull's logical position and writes it into the rows; rows are found by uid and a vanished row is skipped, so a boss always ends through the timeout
 - [Phase 03]: 03-14: phase thresholds compare as integer hit points so an exact fraction (0.6 of 500) triggers; settle order is parts, hull death, timeout, phase, so a kill on the timeout step counts as destroyed
 - [Phase 03]: 03-14: settle() returns the points to award (train kinds pay 0 in the pool); plan 03-17 must add the return value to the score and keep boss parts outside the hull circle so bolts reach them
+- [Phase 03]: 03-15: fires burn only non-target lots, and a debug jump keeps ground targets still on screen so a ?at= start has no holes
+- [Phase 03]: 03-15: stage 1 flags the middle lot of every 6th-7th block per section, skipping feature corridors and the BOSS_QUIET window (44 targets, 30 with medals)
 
 ### Pending Todos
 
@@ -259,6 +262,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T18:30:33.912Z
-Stopped at: Completed 03-14-PLAN.md
+Last session: 2026-10-18T18:40:22.724Z
+Stopped at: Completed 03-15-PLAN.md
 Resume file: None
