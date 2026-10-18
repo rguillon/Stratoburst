@@ -9,9 +9,13 @@ from scorched_core.tuning import (
     ENEMY_POINTS,
     ENEMY_RADIUS,
     GRID_CELL,
+    HITSTOP_BOSS_TICKS,
+    HITSTOP_PART_TICKS,
     MISSILE_RADIUS,
     PBULLET_RADIUS,
 )
+
+TRAIN_KINDS = (EnemyKind.TRAIN, EnemyKind.TRAIN_TURRET, EnemyKind.TRAIN_STUMP)
 
 
 def test_the_roster_values_are_the_wire_values() -> None:
@@ -21,11 +25,14 @@ def test_the_roster_values_are_the_wire_values() -> None:
         "CARRIER": 2,
         "TANK": 3,
         "TURRET": 4,
+        "TRAIN": 5,
+        "TRAIN_TURRET": 6,
+        "TRAIN_STUMP": 7,
     }
 
 
 def test_a_kind_is_usable_as_an_integer_index() -> None:
-    table = ("a", "b", "c", "d", "e")
+    table = ("a", "b", "c", "d", "e", "f", "g", "h")
     assert table[EnemyKind.TANK] == "d"
 
 
@@ -35,14 +42,29 @@ def test_every_per_kind_table_has_one_row_per_kind() -> None:
 
 
 def test_the_kind_tables_match_the_design_numbers() -> None:
-    assert ENEMY_RADIUS == (9.0, 10.0, 14.0, 11.0, 10.0)
-    assert ENEMY_HP == (3, 6, 12, 8, 6)
-    assert ENEMY_BLAST == (BLAST_SMALL, BLAST_MEDIUM, BLAST_MEDIUM, BLAST_LARGE, BLAST_MEDIUM)
+    assert ENEMY_RADIUS == (9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0)
+    assert ENEMY_HP == (3, 6, 12, 8, 6, 500, 120, 1)
+    assert ENEMY_BLAST == (
+        BLAST_SMALL,
+        BLAST_MEDIUM,
+        BLAST_MEDIUM,
+        BLAST_LARGE,
+        BLAST_MEDIUM,
+        BLAST_LARGE,
+        BLAST_MEDIUM,
+        BLAST_SMALL,
+    )
 
 
-def test_only_tanks_and_turrets_are_ground_units() -> None:
+def test_only_tanks_turrets_and_the_armored_train_are_ground_units() -> None:
     ground = {kind for kind in EnemyKind if ENEMY_GROUND[kind]}
-    assert ground == {EnemyKind.TANK, EnemyKind.TURRET}
+    assert ground == {
+        EnemyKind.TANK,
+        EnemyKind.TURRET,
+        EnemyKind.TRAIN,
+        EnemyKind.TRAIN_TURRET,
+        EnemyKind.TRAIN_STUMP,
+    }
 
 
 def test_every_enemy_plus_a_player_bolt_fits_in_one_grid_cell() -> None:
@@ -61,13 +83,35 @@ def test_a_hit_needs_at_least_one_bolt_and_every_hp_is_positive() -> None:
 
 
 def test_each_kind_names_its_default_pattern_and_the_carrier_has_none() -> None:
-    assert ENEMY_PATTERN == ("jet_aimed", "heli_ring", None, "tank_aimed", "turret_aimed")
+    assert ENEMY_PATTERN == (
+        "jet_aimed",
+        "heli_ring",
+        None,
+        "tank_aimed",
+        "turret_aimed",
+        None,
+        None,
+        None,
+    )
     assert ENEMY_PATTERN[EnemyKind.CARRIER] is None
+    assert all(ENEMY_PATTERN[kind] is None for kind in TRAIN_KINDS)
     assert all(name in PATTERNS for name in ENEMY_PATTERN if name is not None)
 
 
 def test_each_kind_pays_fixed_points_with_no_multiplier() -> None:
-    assert ENEMY_POINTS == (300, 800, 2000, 1000, 1200)
+    assert ENEMY_POINTS == (300, 800, 2000, 1000, 1200, 0, 0, 0)
     assert ENEMY_POINTS[EnemyKind.JET] == 300
     assert ENEMY_POINTS[EnemyKind.TURRET] == 1200
-    assert all(points > 0 for points in ENEMY_POINTS)
+    assert all(points > 0 for points in ENEMY_POINTS[: EnemyKind.TRAIN])
+    assert all(ENEMY_POINTS[kind] == 0 for kind in TRAIN_KINDS)  # the controller pays the train
+
+
+def test_the_train_hull_is_the_largest_row_and_still_fits_one_grid_cell() -> None:
+    assert max(ENEMY_RADIUS) == ENEMY_RADIUS[EnemyKind.TRAIN] == 28.0
+    assert ENEMY_RADIUS[EnemyKind.TRAIN] + max(PBULLET_RADIUS, MISSILE_RADIUS) <= GRID_CELL
+
+
+def test_the_boss_hitstop_lengths_are_the_d14_big_events() -> None:
+    assert HITSTOP_PART_TICKS == 4
+    assert HITSTOP_BOSS_TICKS == 8
+    assert HITSTOP_PART_TICKS < HITSTOP_BOSS_TICKS

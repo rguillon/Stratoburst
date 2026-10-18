@@ -84,6 +84,19 @@ def test_nearest_uid_skips_dead_enemies_and_returns_zero_when_there_is_none() ->
     assert pool.nearest_uid(enemies, 100.0, 100.0) == far
 
 
+def test_nearest_uid_never_picks_a_shielded_enemy() -> None:
+    pool = MissilePool()
+    enemies = EnemyPool()
+    enemy_at(enemies, 100.0, 90.0)
+    far = enemy_at(enemies, 200.0, 20.0)
+    enemies.shield[0] = -1  # the nearer one is shielded (a boss entrance, a phase change)
+    assert pool.nearest_uid(enemies, 100.0, 100.0) == far
+    enemies.shield[0] = 5
+    assert pool.nearest_uid(enemies, 100.0, 100.0) == far
+    enemies.shield[0] = 0
+    assert pool.nearest_uid(enemies, 100.0, 100.0) == int(enemies.uid[0])
+
+
 def test_an_untargeted_missile_flies_straight_at_the_homing_speed_along_its_angle() -> None:
     pool = MissilePool()
     pool.spawn(100.0, 200.0, 0.0, 0)

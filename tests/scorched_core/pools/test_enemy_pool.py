@@ -937,6 +937,7 @@ def test_columns_cover_every_array_field_except_the_kill_buffer() -> None:
     assert len(enemy_pool._COLUMNS) == len(set(enemy_pool._COLUMNS))
     assert {"pattern", "volley", "burst_left", "fire_timer"} <= set(enemy_pool._COLUMNS)
     assert {"path", "seg", "seg_t", "base_y", "flip"} <= set(enemy_pool._COLUMNS)
+    assert {"hp_max", "shield"} <= set(enemy_pool._COLUMNS)
 
 
 def test_a_randomized_spawn_and_remove_sequence_keeps_every_column_in_step() -> None:
@@ -1233,3 +1234,132 @@ def test_clear_empties_the_pool_and_the_kill_buffer_but_keeps_the_uid_counter() 
     assert pool.kills == 1  # the cumulative counter is the game's to reset
     jet(pool)
     assert pool.uid[0] > last_uid  # uids are never reused
+
+
+# --- boss rows: hp / radius / shield overrides, stumps and removal by uid (ENMY-06, ENMY-07) ---
+
+
+def scripted_train(pool: EnemyPool, kind: EnemyKind = EnemyKind.TRAIN, **kwargs: float) -> int:
+    assert pool.spawn(kind, 120.0, 60.0, MotionKind.SCRIPTED, 0.0, 0.0, **kwargs)
+    return pool.n - 1
+
+
+def test_spawn_overrides_hp_radius_and_shield_and_records_hp_max() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, hp=900, radius=20.0, shield=7)
+    assert (pool.hp[i], pool.hp_max[i], pool.radius[i], pool.shield[i]) == (900, 900, 20.0, 7)
+
+
+def test_spawn_without_overrides_takes_the_kind_defaults_and_no_shield() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, EnemyKind.TRAIN_TURRET)
+    assert pool.hp[i] == pool.hp_max[i] == ENEMY_HP[EnemyKind.TRAIN_TURRET]
+    assert pool.radius[i] == ENEMY_RADIUS[EnemyKind.TRAIN_TURRET]
+    assert pool.shield[i] == 0
+
+
+def test_a_spawn_with_no_hit_points_is_a_loud_error() -> None:
+    pool = EnemyPool()
+    with pytest.raises(ValueError, match="hp"):
+        pool.spawn(EnemyKind.TRAIN, 0.0, 0.0, MotionKind.SCRIPTED, 0.0, 0.0, hp=0)
+    assert pool.n == 0
+
+
+def test_pack_writes_the_hp_fraction_of_the_row_hp_max() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, hp=800)
+    pool.hp[i] = 200
+    out = array("f", bytes(4 * ENEMY_STRIDE))
+    pool.pack_into(out)
+    assert out[4] == pytest.approx(0.25)
+    assert out[5] == EnemyKind.TRAIN
+
+
+def test_a_shielded_row_takes_no_damage_no_flash_and_pushes_no_event() -> None:
+    pool = EnemyPool()
+    ring = EventRing()
+    i = scripted_train(pool, hp=50, shield=-1)
+    pool.apply_hit(i, 10, ring)
+    assert (pool.hp[i], pool.flash[i], ring.n) == (50, 0, 0)
+
+
+def test_a_positive_shield_counts_down_one_per_step_then_hits_land() -> None:
+    pool = EnemyPool()
+    ring = EventRing()
+    i = scripted_train(pool, hp=50, shield=3)
+    for left in (2, 1, 0):
+        pool.step(SHIP_X, SHIP_Y)
+        assert pool.shield[i] == left
+    pool.apply_hit(i, 10, ring)
+    assert pool.hp[i] == 40
+
+
+def test_a_permanent_shield_never_counts_down() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, shield=-1)
+    for _ in range(5):
+        pool.step(SHIP_X, SHIP_Y)
+    assert pool.shield[i] == -1
+
+
+def test_the_shield_follows_its_row_through_a_swap_remove() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    scripted_train(pool, shield=-1)
+    pool._remove_at(0)
+    assert pool.shield[0] == -1
+    assert pool.kind[0] == EnemyKind.TRAIN
+
+
+def test_a_train_turret_aims_at_the_ship() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, EnemyKind.TRAIN_TURRET)
+    pool.step(SHIP_X + 60.0, SHIP_Y)
+    assert pool.aux[i] == pytest.approx(math.atan2(60.0, SHIP_Y - 60.0))
+
+
+def test_become_stump_converts_the_row_in_place() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    i = scripted_train(pool, EnemyKind.TRAIN_TURRET, hp=40)
+    uid = int(pool.uid[i])
+    pool.hp[i] = -5
+    pool.pattern[i] = 2
+    pool.become_stump(i, EnemyKind.TRAIN_STUMP)
+    assert pool.uid[i] == uid
+    assert (pool.x[i], pool.y[i]) == (120.0, 60.0)
+    assert pool.kind[i] == EnemyKind.TRAIN_STUMP
+    assert (pool.hp[i], pool.hp_max[i], pool.shield[i]) == (1, 1, -1)
+    assert pool.radius[i] == ENEMY_RADIUS[EnemyKind.TRAIN_STUMP]
+    assert pool.pattern[i] == -1
+
+
+def test_a_stump_survives_remove_dead() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool, EnemyKind.TRAIN_TURRET, hp=40)
+    pool.hp[i] = 0
+    pool.become_stump(i, EnemyKind.TRAIN_STUMP)
+    pool.remove_dead(EventRing())
+    assert pool.n == 1
+    assert pool.kills == 0
+
+
+def test_remove_uid_removes_that_row_without_a_kill_or_an_event() -> None:
+    pool = EnemyPool()
+    ring = EventRing()
+    jet(pool)
+    i = scripted_train(pool)
+    uid = int(pool.uid[i])
+    assert pool.remove_uid(uid)
+    assert pool.n == 1
+    assert pool.index_of_uid(uid) == -1
+    assert (pool.kills, pool.kill_n, ring.n) == (0, 0, 0)
+
+
+def test_remove_uid_is_false_when_the_row_is_already_gone() -> None:
+    pool = EnemyPool()
+    i = scripted_train(pool)
+    uid = int(pool.uid[i])
+    assert pool.remove_uid(uid)
+    assert not pool.remove_uid(uid)
+    assert not pool.remove_uid(9999)
