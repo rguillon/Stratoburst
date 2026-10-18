@@ -16,9 +16,9 @@ affects: [phase-02-verification, phase-03-planning, ship-to-main]
 actuals:
   tokens: 9000
   tasks: 3
-  commits: 2
+  commits: 4
 plan_head_before: a1beb19111f4a6d57e2616e47ddcdd986b172cc3
-plan_head_after: d2c1096396366dcdf562ba8000f138d5bfa70572
+plan_head_after: 983af3973126f021b970c385a8804c988d093aba
 
 tech-stack:
   added: []
@@ -136,7 +136,13 @@ None. No code was changed by this plan.
 
 ## Ship Record
 
-(filled in after push, deploy and live checks; see below)
+After the user waiver, `main` was pushed fast-forward only (never forced): `origin/main` `6dcec36` -> `983af39`.
+
+- `make wait-deploy SHA=983af39...`: OK, Deploy run concluded success (https://github.com/rguillon/Stratoburst/actions/runs/39126778542), live at https://rguillon.github.io/Stratoburst/
+- `make e2e-live`: 1 passed (python moves the ship with the arrow keys, chromium, against the live URL)
+- Live `?debug` page: `__scorched.build` = `983af39`, equal to `git rev-parse --short HEAD` at push time; `ENEMY_N` = 2 after about 8 s (positive: the gallery is the default game, D-20)
+- Preview cleanup: `pr-preview/pr-1` and `pr-preview/pr-2` were still present on gh-pages shortly after the push (cosmetic; not removed within the check window; `pr-1` also lingers from Phase 1, so the closed-PR cleanup does not appear to run for these PRs)
+- Commits since the push-time HEAD (this SUMMARY update and the state/roadmap/requirements metadata commit) are docs-only and are local (not pushed) to avoid triggering another deploy; the live build is `983af39`.
 
 ## Next Phase Readiness
 

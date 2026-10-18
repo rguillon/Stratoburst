@@ -70,17 +70,17 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Visuals & Feel
 
 - [x] **VISL-01**: All ship, enemy, boss and terrain models are generated procedurally in code
-- [ ] **VISL-02**: Scene uses dynamic lighting and bloom/glow on emissive elements (bullets, engines, explosions)
+- [x] **VISL-02**: Scene uses dynamic lighting and bloom/glow on emissive elements (bullets, engines, explosions)
 - [x] **VISL-03**: Explosions use particle effects (fire, smoke, debris) sized by enemy class
 - [x] **VISL-04**: Big events (boss parts, boss death, bombs, player death) trigger screen shake and short hitstop
-- [ ] **VISL-05**: Enemy bullets stay clearly readable against the fiery backgrounds (dedicated palette and render pass)
+- [x] **VISL-05**: Enemy bullets stay clearly readable against the fiery backgrounds (dedicated palette and render pass)
 - [x] **VISL-06**: Air units cast shadows on the terrain so their altitude reads correctly from the tilted camera
 
 ### Input
 
 - [x] **INPT-01**: Player can control the game by keyboard: arrows and WASD (layout-independent via physical keys), fire, bomb, pause
 - [x] **INPT-02**: Player can control the ship by relative touch drag (1:1, ship never hidden under the finger) with auto-fire
-- [ ] **INPT-03**: Player can trigger a bomb on touch via a large on-screen button
+- [x] **INPT-03**: Player can trigger a bomb on touch via a large on-screen button
 - [ ] **INPT-04**: Player can pause and resume on touch via an on-screen button
 - [ ] **INPT-05**: Player can navigate all menus and enter initials by keyboard and by touch
 
@@ -88,7 +88,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **AUDI-01**: Player hears synthesized sound effects for shots, hits, explosions, pickups, bombs and deaths
 - [ ] **AUDI-02**: Player hears code-synthesized music for title, each stage and bosses
-- [ ] **AUDI-03**: Audio works on iOS Safari after the start gesture
+- [x] **AUDI-03**: Audio works on iOS Safari after the start gesture
 - [ ] **AUDI-04**: Player can mute or adjust music and SFX volume
 
 ### Screens
@@ -188,19 +188,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCOR-07 | Phase 4 | Pending |
 | SCOR-08 | Phase 3 | Pending |
 | VISL-01 | Phase 2 | Complete |
-| VISL-02 | Phase 2 | Pending |
+| VISL-02 | Phase 2 | Complete |
 | VISL-03 | Phase 2 | Complete |
 | VISL-04 | Phase 2 | Complete |
-| VISL-05 | Phase 2 | Pending |
+| VISL-05 | Phase 2 | Complete |
 | VISL-06 | Phase 2 | Complete |
 | INPT-01 | Phase 1 | Complete |
 | INPT-02 | Phase 1 | Complete |
-| INPT-03 | Phase 2 | Pending |
+| INPT-03 | Phase 2 | Complete |
 | INPT-04 | Phase 4 | Pending |
 | INPT-05 | Phase 4 | Pending |
 | AUDI-01 | Phase 2 | Complete |
 | AUDI-02 | Phase 4 | Pending |
-| AUDI-03 | Phase 2 | Pending |
+| AUDI-03 | Phase 2 | Complete |
 | AUDI-04 | Phase 4 | Pending |
 | SCRN-01 | Phase 4 | Pending |
 | SCRN-02 | Phase 4 | Pending |
