@@ -50,6 +50,12 @@ describe('createPlayfieldMask', () => {
     expect(dim.renderOrder).toBeGreaterThan(0);
   });
 
+  it('is night-coloured: a dark violet dim and a cool outline below the bloom threshold', () => {
+    expect(dim.material.color.getHex()).toBe(0x07061a);
+    expect(outline.material.color.getHex()).toBe(0x3a3f6b);
+    for (const channel of outline.material.color.toArray()) expect(channel).toBeLessThan(1);
+  });
+
   it('honours a custom playfield size', () => {
     const custom = createPlayfieldMask({ halfW: 10, halfH: 20, extent: 100 }).getObjectByName(
       'playfield-dim',
