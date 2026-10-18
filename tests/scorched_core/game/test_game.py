@@ -1128,3 +1128,103 @@ def test_a_flood_of_crystals_never_grows_the_pool_past_its_cap() -> None:
         _kill_carrier(game, 120.0, 80.0)
         _tick(game)
     assert game.pickups.n == PICKUP_CAP
+
+
+def test_a_gameplay_bullet_moves_by_its_velocity_every_step() -> None:
+    game = Game()
+    game.ebullets.spawn(100.0, 100.0, 1.5, 2.0)
+    game.tick(STEP_MS * 3, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.ebullets.x[0] == pytest.approx(104.5)
+    assert game.ebullets.y[0] == pytest.approx(106.0)
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "vx", "vy"),
+    [
+        (-15.5, 100.0, -1.0, 0.0),
+        (255.5, 100.0, 1.0, 0.0),
+        (100.0, -15.5, 0.0, -1.0),
+        (100.0, 335.5, 0.0, 1.0),
+    ],
+)
+def test_a_gameplay_bullet_is_culled_16_units_outside_the_playfield(
+    x: float, y: float, vx: float, vy: float
+) -> None:
+    game = Game()
+    game.ebullets.spawn(x, y, vx, vy)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)  # now exactly 16.5 outside
+    assert game.ebullets.n == 0
+    assert game.buffers["header"][H_EBULLET_N] == 0
+
+
+def test_a_gameplay_bullet_just_inside_the_margin_stays() -> None:
+    game = Game()
+    game.ebullets.spawn(-14.5, 100.0, -1.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)  # x == -15.5, inside the 16 unit margin
+    assert game.ebullets.n == 1
+
+
+def test_storm_bullets_keep_bouncing_and_are_never_culled_or_moved_by_the_gameplay_pass() -> None:
+    game = Game(stress=50)
+    game.ebullets.spawn(100.0, 100.0, 0.0, 0.0)
+    for _ in range(120):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.storm_pool.n == 50
+    assert all(
+        0.0 <= game.storm_pool.x[i] <= 240.0 and 0.0 <= game.storm_pool.y[i] <= 320.0
+        for i in range(50)
+    )
+    assert (game.ebullets.x[0], game.ebullets.y[0]) == (100.0, 100.0)
+
+
+def test_a_full_storm_plus_gameplay_bullets_pack_in_order_and_fit_the_channel() -> None:
+    game = Game(stress=99999)
+    for k in range(3):
+        game.ebullets.spawn(10.0 + k, 20.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    header = game.buffers["header"]
+    ebullets = game.buffers["ebullets"]
+    assert game.storm_pool.n == 5000
+    assert header[H_EBULLET_N] == 5003
+    assert header[H_STORM_N] == 5000
+    assert len(ebullets) == EBULLET_STRIDE * (5000 + EBULLET_GAME_CAP)
+    assert ebullets[0] == game.storm_pool.x[0]  # storm first
+    last_storm = (5000 - 1) * EBULLET_STRIDE
+    assert ebullets[last_storm] == game.storm_pool.x[4999]
+    gameplay = [ebullets[(5000 + k) * EBULLET_STRIDE] for k in range(3)]
+    assert gameplay == [10.0, 11.0, 12.0]  # gameplay right after the storm
+    assert ebullets[(5000 + 3) * EBULLET_STRIDE + 3] == 0.0  # nothing past the live bullets
+
+
+def test_a_full_gameplay_pool_with_a_full_storm_still_fits_the_channel() -> None:
+    game = Game(stress=99999)
+    for k in range(EBULLET_GAME_CAP):
+        assert game.ebullets.spawn(1.0 + k % 200, 50.0, 0.0, 0.0)
+    assert not game.ebullets.spawn(1.0, 1.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EBULLET_N] == 5000 + EBULLET_GAME_CAP
+
+
+def test_storm_never_kills_it_only_counts_and_changes_nothing_else() -> None:
+    game = Game(stress=1)
+    game.storm_pool.x[0] = game.ship.x
+    game.storm_pool.y[0] = game.ship.y
+    game.storm_pool.vx[0] = 0.0
+    game.storm_pool.vy[0] = 0.0
+    for _ in range(5):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.storm_hits == 5
+    assert game.ebullets.n == 0  # the gameplay pool, which later plans make lethal, is untouched
+    assert game.storm_pool.n == 1
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert game.events.n == 0
+
+
+def test_a_zero_step_tick_leaves_the_channel_alone_but_reports_both_counts() -> None:
+    game = Game(stress=2)
+    game.ebullets.spawn(50.0, 50.0, 0.0, 0.0)
+    game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
+    header = game.buffers["header"]
+    assert all(v == 0.0 for v in game.buffers["ebullets"])
+    assert header[H_EBULLET_N] == 3
+    assert header[H_STORM_N] == 2
