@@ -6,6 +6,7 @@ import pytest
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
+from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.pools import enemy_pool
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
@@ -26,10 +27,12 @@ from scorched_core.protocol import (
 from scorched_core.tuning import (
     ENEMY_EXIT_MARGIN,
     ENEMY_FIRE_DELAY,
+    ENEMY_FIRE_MAX_Y,
     ENEMY_FLASH_TICKS,
     ENEMY_HP,
     ENEMY_MAX_ALIVE,
     ENEMY_RADIUS,
+    ENEMY_RING_COUNT,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
     GROUND_SCROLL_RATIO,
@@ -741,3 +744,65 @@ def test_a_corrupt_fire_pattern_fails_loudly_instead_of_standing_silent(
     pool.fire_timer[0] = 1
     with pytest.raises(ValueError, match="unknown fire pattern 99"):
         pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+
+
+def test_a_helicopter_fires_a_ring_of_eight_at_its_speed_after_the_delay() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.HELI)
+    pool.age[0] = ENEMY_FIRE_DELAY
+    assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(ENEMY_FIRE_DELAY)) == 8
+    assert bullets.n == ENEMY_RING_COUNT == 8
+    assert all(
+        math.hypot(bullets.vx[k], bullets.vy[k]) == pytest.approx(1.3) for k in range(bullets.n)
+    )
+    assert pool.fire_timer[0] == 150
+    assert ring.n == 1
+    assert (ring.buf[0], ring.buf[3]) == (EV_ENEMY_FIRE, float(FirePattern.RING))
+
+
+def test_consecutive_rings_are_rotated_by_half_a_step_so_they_interleave() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.HELI)
+    pool.fire_timer[0] = 1
+    pool.age[0] = ENEMY_FIRE_DELAY
+    pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    pool.fire_timer[0] = 1
+    pool.age[0] = ENEMY_FIRE_DELAY + 150
+    pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    pool.fire_timer[0] = 1
+    pool.age[0] = ENEMY_FIRE_DELAY + 300
+    pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    assert bullets.n == 24
+    assert bullets.angle[0] == pytest.approx(0.0)
+    assert bullets.angle[8] == pytest.approx(math.pi / ENEMY_RING_COUNT)
+    assert bullets.angle[16] == pytest.approx(0.0)
+
+
+def test_a_helicopter_ring_into_a_nearly_full_pool_spawns_what_fits() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(5), EventRing()
+    shooter(pool, EnemyKind.HELI)
+    pool.fire_timer[0] = 1
+    assert pool.fire(bullets, SHIP_X, SHIP_Y, ring) == 5
+    assert ring.n == 1
+
+
+def test_an_enemy_above_the_top_edge_holds_fire_while_its_timer_keeps_running() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TURRET, y=-0.5)
+    assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(300)) == 0
+    assert pool.fire_timer[0] == 0  # the delay ran out while it was held
+    pool.y[0] = 0.0
+    assert pool.fire(bullets, SHIP_X, SHIP_Y, ring) == 1  # the held shot goes the moment it is in
+
+
+def test_an_enemy_below_the_fire_band_holds_fire() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TANK, y=ENEMY_FIRE_MAX_Y + 0.5)
+    assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(300)) == 0
+    assert ring.n == 0
+    pool.y[0] = ENEMY_FIRE_MAX_Y
+    assert pool.fire(bullets, SHIP_X, SHIP_Y, ring) == 1  # the edge of the band still fires
+
+
+def test_the_fire_band_is_the_top_seventy_percent_of_the_playfield() -> None:
+    assert pytest.approx(PLAYFIELD_H * 0.7) == ENEMY_FIRE_MAX_Y

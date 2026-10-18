@@ -1278,3 +1278,30 @@ def test_the_enemy_fire_event_reaches_the_event_ring_once() -> None:
 
 def test_the_manifest_publishes_the_fire_patterns_by_name() -> None:
     assert Game().manifest()["fire_patterns"] == {"NONE": 0, "AIMED": 1, "RING": 2}
+
+
+def _gallery_run(seed: int, steps: int) -> tuple[int, bytes]:
+    game = Game(seed=seed)
+    peak = 0
+    for _ in range(steps):
+        _tick(game)
+        peak = max(peak, game.ebullets.n)
+        assert game.ebullets.n <= EBULLET_GAME_CAP
+    return peak, bytes(game.buffers["ebullets"])
+
+
+def test_a_long_gallery_run_keeps_the_enemy_bullet_cap_and_stays_deterministic() -> None:
+    peak, channel = _gallery_run(7, 2400)
+    assert 0 < peak <= EBULLET_GAME_CAP
+    assert _gallery_run(7, 2400) == (peak, channel)
+
+
+def test_a_helicopter_in_the_gallery_fires_a_ring_of_eight() -> None:
+    game = Game()
+    script = ((0, EnemyKind.HELI, 120.0, -14.0, MotionKind.HOVER, 0.0, 1.2, -1),)
+    game.gallery = GallerySpawner(script=script, loop_ticks=100_000)
+    first_ring = 0
+    for _ in range(ENEMY_FIRE_DELAY + 60):
+        _tick(game)
+        first_ring = first_ring or game.ebullets.n
+    assert first_ring == 8
