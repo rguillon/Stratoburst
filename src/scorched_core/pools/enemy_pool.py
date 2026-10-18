@@ -155,12 +155,14 @@ class EnemyPool:
         self.n = i + 1
         return True
 
-    def step(self, ship_x: float, ship_y: float) -> None:
+    def step(self, ship_x: float, ship_y: float, ground_scroll: float = _GROUND_SCROLL) -> None:
         """Advance one 60 Hz step by each enemy's motion, aim turrets and decay the hit flash.
 
         SWAY sways down the screen facing its heading. DIVE flies a straight line facing it.
         HOVER descends to ``HOVER_STOP_Y``, holds
         there drifting side to side, then leaves downward, always facing the player (angle 0).
+        GROUND moves by ``ground_scroll`` (the terrain speed times the ground ratio) plus its own
+        crawl, so a ground unit stays anchored while the scroll slows down.
         Enemies that left the playfield alive are removed with neither a kill nor an event.
         """
         x, y, vx, vy, base_x = self.x, self.y, self.vx, self.vy, self.base_x
@@ -192,7 +194,7 @@ class EnemyPool:
                     x[i] = base_x[i] + HOVER_DRIFT * math.sin(phase[i])
                 case MotionKind.GROUND:
                     x[i] += vx[i]
-                    y[i] += _GROUND_SCROLL + vy[i]
+                    y[i] += ground_scroll + vy[i]
                     angle[i] = math.atan2(vx[i], vy[i])
                 case unknown:
                     msg = f"unknown motion {unknown} on enemy slot {i}"

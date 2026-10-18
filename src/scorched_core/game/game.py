@@ -104,6 +104,7 @@ from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import (
+    AT_LEAD,
     BOMB_BLAST_TICKS,
     BOMB_DROP_VY,
     BOMB_GROW_TICKS,
@@ -256,6 +257,7 @@ class Game:
         god: bool = False,
         bombs: int = BOMB_START_STOCK,
         stage: StageData | None = None,
+        at: str | None = None,
     ) -> None:
         self.fault = fault
         self.god = god  # test flag: hits are ignored so automated runs are never disturbed
@@ -291,6 +293,8 @@ class Game:
         )
         self.storm_hits = 0
         self.terrain = TerrainScroll()
+        if at is not None:
+            self._jump_to_marker(at)
         self.tick_count = 0
         self._firing = False
         self._move_x = 0.0
@@ -308,6 +312,25 @@ class Game:
             "missiles": array("f", bytes(4 * MISSILE_STRIDE * MISSILE_CAP)),
             "events": self.events.buf,
         }
+
+    def _jump_to_marker(self, name: str) -> None:
+        """Start the stage ``AT_LEAD`` units before the marker ``name`` (the ``?at=`` jump, D-30).
+
+        Every timeline row at or before the start is skipped. An unknown marker, or a marker with
+        no stage to look it up in, is a ValueError: the timeline never shifts silently.
+        """
+        if self.stage is None or self.director is None:
+            msg = f"cannot start at marker {name!r} without a stage"
+            raise ValueError(msg)
+        try:
+            marker = self.stage.marker(name)
+        except KeyError:
+            msg = f"stage {self.stage.number} has no marker {name!r}"
+            raise ValueError(msg) from None
+        distance = max(0.0, marker - AT_LEAD)
+        self.terrain.jump(distance)
+        if distance > 0.0:  # a clamped start is the stage's own start: its first rows are kept
+            self.director.jump(distance)
 
     def manifest(self) -> dict[str, object]:
         """Describe the boundary layout so JS can allocate matching typed arrays."""
@@ -558,7 +581,7 @@ class Game:
             self.director.step(self.terrain.distance, self.enemies)
         else:
             self.gallery.step(self.enemies)
-        self.enemies.step(self.ship.x, self.ship.y)
+        self.enemies.step(self.ship.x, self.ship.y, self.terrain.speed * GROUND_SCROLL_RATIO)
         self.enemies.fire(self.ebullets, self.ship.x, self.ship.y, self.events)
         self.missiles.steer(self.enemies)
         self.grid.rebuild(self.enemies.x, self.enemies.y, self.enemies.n)
