@@ -24,3 +24,21 @@ def fire_aimed(  # noqa: PLR0913, PLR0917 - a shot is a pool, a muzzle, a target
         return int(pool.spawn(x, y, 0.0, speed))
     scale = speed / distance
     return int(pool.spawn(x, y, dx * scale, dy * scale))
+
+
+def fire_ring(  # noqa: PLR0913, PLR0917 - a ring is a pool, a centre, a count, a speed and a phase
+    pool: BulletPool, x: float, y: float, count: int, speed: float, phase: float
+) -> int:
+    """Spawn ``count`` bullets from ``(x, y)`` evenly spaced in angle, the first at ``phase``.
+
+    Angles follow the bullet-pool convention: 0 flies straight up the screen and positive angles
+    turn clockwise (to the right). Returns how many bullets fit; a full pool spawns none.
+    """
+    step = math.tau / count
+    spawned = 0
+    for k in range(count):
+        angle = phase + k * step
+        if not pool.spawn(x, y, speed * math.sin(angle), -speed * math.cos(angle)):
+            break
+        spawned += 1
+    return spawned

@@ -8,7 +8,7 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
-from scorched_core.patterns.bullet_patterns import fire_aimed
+from scorched_core.patterns.bullet_patterns import fire_aimed, fire_ring
 from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
@@ -33,6 +33,7 @@ from scorched_core.tuning import (
     ENEMY_HP,
     ENEMY_MAX_ALIVE,
     ENEMY_RADIUS,
+    ENEMY_RING_COUNT,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
     GROUND_SCROLL_RATIO,
@@ -44,6 +45,7 @@ from scorched_core.tuning import (
     SCROLL_SPEED,
 )
 
+_RING_HALF_STEP: Final = math.pi / ENEMY_RING_COUNT  # alternate rings sit between each other
 _PHASE_STEP: Final = math.tau / ENEMY_SWAY_PERIOD
 _HOVER_PHASE_STEP: Final = math.tau / HOVER_DRIFT_PERIOD
 _GROUND_SCROLL: Final = SCROLL_SPEED * GROUND_SCROLL_RATIO  # terrain-anchored: 0.752 per step
@@ -224,11 +226,21 @@ class EnemyPool:
                 continue
             pattern = ENEMY_FIRE_PATTERN[kind[i]]
             match pattern:
-                case FirePattern.NONE | FirePattern.RING:  # a ring arrives with the helicopters
+                case FirePattern.NONE:
                     continue
                 case FirePattern.AIMED:
                     spawned = fire_aimed(
                         bullets, x[i], y[i], ship_x, ship_y, ENEMY_BULLET_SPEED[kind[i]]
+                    )
+                case FirePattern.RING:
+                    volley = self.age[i] // ENEMY_FIRE_INTERVAL[kind[i]]
+                    spawned = fire_ring(
+                        bullets,
+                        x[i],
+                        y[i],
+                        ENEMY_RING_COUNT,
+                        ENEMY_BULLET_SPEED[kind[i]],
+                        volley % 2 * _RING_HALF_STEP,
                     )
                 case unknown:
                     msg = f"unknown fire pattern {unknown} on enemy slot {i}"
