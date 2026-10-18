@@ -2,6 +2,7 @@ import itertools
 import math
 import random
 import sys
+from array import array
 from collections.abc import Callable
 
 import pytest
@@ -47,6 +48,7 @@ from scorched_core.protocol import (
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_HITSTOP,
     H_INVULN,
     H_KILLS,
     H_LEVEL,
@@ -87,6 +89,7 @@ from scorched_core.tuning import (
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
+    HITSTOP_BOMB_TICKS,
     INVULN_RESPAWN_TICKS,
     PICKUP_RADIUS,
     SHIP_HALF_H,
@@ -117,6 +120,7 @@ def test_manifest_contract() -> None:
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
     assert header["slots"]["BEAM_W"] == 18 == H_BEAM_W
+    assert header["slots"]["HITSTOP"] == 14 == H_HITSTOP
     assert header["slots"]["PICKUP_N"] == 15 == H_PICKUP_N
     assert header["slots"]["MAX_BONUS"] == 20 == H_MAX_BONUS
     assert header["slots"]["MISSILE_N"] == 19 == H_MISSILE_N
@@ -129,7 +133,7 @@ def test_manifest_contract() -> None:
     assert header["slots"]["BOMB_X"] == 27 == H_BOMB_X
     assert header["slots"]["BOMB_Y"] == 28 == H_BOMB_Y
     assert header["slots"]["BOMB_T"] == 29 == H_BOMB_T
-    assert len(header["slots"]) == 29
+    assert len(header["slots"]) == 30
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
@@ -1730,10 +1734,15 @@ def _tick_n(game: Game, count: int) -> None:
 
 
 def _detonate(game: Game) -> None:
-    """Press the bomb and run until the missile has just detonated."""
+    """Press the bomb and run until the missile has just detonated (hitstop is now owed)."""
     _press_bomb(game)
     while game.bomb.phase != BombPhase.BLAST:
         _tick(game)
+
+
+def _thaw(game: Game) -> None:
+    """Run the frozen steps a hitstop still owes, leaving the next tick a live step."""
+    _tick_n(game, game.hitstop.ticks)
 
 
 def test_manifest_maps_the_bomb_phases() -> None:
@@ -1771,6 +1780,7 @@ def test_the_header_follows_the_missile_and_then_the_blast_bomb() -> None:
     assert EV_BOMB_DETONATE in _event_kinds(game)
     assert header[H_BOMB_Y] == pytest.approx(target_y)
     assert header[H_BOMB_T] == 0.0
+    _thaw(game)
     _tick_n(game, 44)
     assert header[H_BOMB_T] == pytest.approx(44 / BOMB_BLAST_TICKS)
     _tick_n(game, BOMB_BLAST_TICKS - 44)
@@ -1814,6 +1824,7 @@ def test_the_fireball_burns_air_and_ground_enemies_and_the_kills_join_the_kill_p
     doomed = _place(game, EnemyKind.JET, SHIP_START_X - 5.0, SHIP_START_Y - 110.0, hp=BOMB_DAMAGE)
     _detonate(game)
     kills = game.enemies.kills
+    _thaw(game)
     _tick(game)  # the first blast step damages everything inside the radius
     assert game.enemies.kills == kills + 1  # the doomed jet was removed in the same step
     assert EV_EXPLOSION in _event_kinds(game)
@@ -1830,7 +1841,7 @@ def test_the_ship_is_invulnerable_through_the_launch_the_blast_and_a_30_step_tai
     _press_bomb(game)
     # The grant lands just before the same step's decrement, so the launch step already used one.
     assert _header(game, H_INVULN) == total - 1
-    for _ in range(total - 2):
+    for _ in range(total - 2 + HITSTOP_BOMB_TICKS):  # the frozen steps do not count down
         _put_bullet_on_ship(game)
         _tick(game)
         assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
@@ -1861,7 +1872,7 @@ def test_the_stock_counts_down_and_a_press_with_none_left_does_nothing_stock() -
     for expected in (2, 1, 0):
         _detonate(game)
         assert _header(game, H_BOMBS) == expected
-        _tick_n(game, BOMB_BLAST_TICKS)
+        _tick_n(game, BOMB_BLAST_TICKS + HITSTOP_BOMB_TICKS)
     _press_bomb(game)
     _tick_n(game, 5)
     assert game.bomb.phase == BombPhase.NONE
@@ -1954,6 +1965,7 @@ def test_a_bullet_inside_the_growing_radius_is_cleared_and_one_outside_survives_
     centre_x, centre_y = game.bomb.x, game.bomb.y
     game.ebullets.spawn(centre_x + BOMB_RADIUS_MIN - 1.0, centre_y, 0.0, 0.0)
     game.ebullets.spawn(centre_x + 60.0, centre_y, 0.0, 0.0)  # beyond the first radius of 20
+    _thaw(game)
     _tick(game)
     assert game.ebullets.n == 1
     assert game.ebullets.x[0] == pytest.approx(centre_x + 60.0)
@@ -2318,3 +2330,112 @@ def test_bombs_zero_starts_with_no_bombs_and_a_press_does_nothing() -> None:
     _tick_n(game, 3)
     assert game.bomb.phase == BombPhase.NONE
     assert EV_BOMB_LAUNCH not in _event_kinds(game)
+
+
+# --- hitstop: the bomb and the death freeze the simulation (plan 02-28) --------------------------
+
+# Header slots that legitimately differ between two frozen ticks: the step count and sub-step
+# alpha belong to the frame, the event count to the clear, and HITSTOP counts down.
+_FRAME_SLOTS = (H_STEPS, H_ALPHA, H_EVENT_N, H_HITSTOP)
+
+
+def _state_bytes(game: Game) -> bytes:
+    """Everything the renderer sees except the per-frame slots."""
+    header = game.buffers["header"]
+    kept = [header[i] for i in range(HEADER_LEN) if i not in _FRAME_SLOTS]
+    channels = b"".join(
+        game.buffers[name].tobytes()
+        for name in ("pbullets", "ebullets", "enemies", "pickups", "missiles")
+    )
+    return bytes(array("f", kept)) + channels
+
+
+def test_hitstop_the_detonation_step_shows_four_frozen_steps_to_come() -> None:
+    game = _bomb_game()
+    _detonate(game)
+    assert _header(game, H_HITSTOP) == HITSTOP_BOMB_TICKS == 4
+    assert game.hitstop.ticks == 4
+
+
+def test_hitstop_a_game_without_a_detonation_never_freezes() -> None:
+    game = _bomb_game()
+    _tick_n(game, 30)
+    assert _header(game, H_HITSTOP) == 0
+
+
+def test_hitstop_frozen_steps_identical_then_the_simulation_resumes() -> None:
+    game = Game(seed=3, god=True)
+    for _ in range(40):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, Button.FIRE | Button.BOMB, 0.0, 0.0, 0.0, 0.0)
+    while game.bomb.phase != BombPhase.BLAST:
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert game.pbullets.n > 0  # something is moving, so identical buffers mean something
+    before = _state_bytes(game)
+    ticks = game.tick_count
+    for left in range(HITSTOP_BOMB_TICKS - 1, -1, -1):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+        assert _header(game, H_HITSTOP) == left
+        assert _state_bytes(game) == before
+        assert game.tick_count == ticks
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert game.tick_count == ticks + 1
+    assert _state_bytes(game) != before
+
+
+def test_hitstop_a_frozen_step_does_not_scroll_the_terrain_or_fire_events() -> None:
+    game = _bomb_game()
+    _detonate(game)
+    scroll = game.terrain.distance
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.terrain.distance == scroll
+    assert _header(game, H_EVENT_N) == 0
+
+
+def test_hitstop_a_paused_tick_leaves_the_freeze_unchanged() -> None:
+    game = _bomb_game()
+    game.hitstop.trigger(4)
+    game.set_paused(True)
+    for _ in range(5):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.hitstop.ticks == 4
+    assert _header(game, H_HITSTOP) == 4
+    game.set_paused(False)
+    _tick_n(game, 2)
+    assert game.hitstop.ticks == 2
+
+
+def test_hitstop_a_bomb_press_during_the_freeze_is_latched_and_fires_on_the_first_live_step() -> (
+    None
+):
+    game = _bomb_game()
+    game.hitstop.trigger(3)
+    _press_bomb(game)  # the press edge arrives on a frozen step
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 3
+    _tick_n(game, 2)  # the freeze is still holding the latch
+    assert game.bomb.phase == BombPhase.NONE
+    _tick(game)  # the first live step
+    assert game.bomb.phase == BombPhase.LAUNCH
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_hitstop_a_press_during_the_bomb_freeze_is_consumed_by_the_first_live_step() -> None:
+    game = _bomb_game()
+    _detonate(game)
+    _press_bomb(game)
+    assert game._bomb_requested
+    _tick_n(game, HITSTOP_BOMB_TICKS - 1)
+    assert game._bomb_requested  # still latched: no live step has run
+    _tick(game)
+    assert not game._bomb_requested  # consumed on the first live step, refused while burning
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_hitstop_does_not_eat_the_deathbomb_window_it_has_not_started_yet() -> None:
+    game = _bomb_game()
+    _hit_and_wait(game, DEATHBOMB_TICKS - 1)
+    assert _header(game, H_HITSTOP) == 0
+    _press_bomb(game)
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert _header(game, H_HITSTOP) == 0

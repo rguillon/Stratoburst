@@ -25,6 +25,7 @@ import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
 import { createBeamMesh } from './fx/beam_mesh.js';
 import { createBombFx } from './fx/bomb_fx.js';
+import { createShake, withCameraOffset } from './fx/shake.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -37,6 +38,8 @@ const PLAYFIELD_W = 240;
 const PLAYFIELD_H = 320;
 const LOAD_TIMEOUT_MS = 60_000;
 const JS_FAULT_FRAME = 120;
+// Filled by the shake each frame and read right before the render call: one object, no allocation.
+const shakeScratch = { x: 0, z: 0 };
 
 const panel = installErrorPanel();
 
@@ -267,8 +270,14 @@ async function main() {
   });
   rig.scene.add(bombFx.group);
   bombFx.showAll(true);
-  const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool, bombFx] });
+  // Screen shake: only the big events (a bomb detonation, the ship's death) move the camera, and only
+  // around the render call. The freeze itself is Python's hitstop.
+  const shake = createShake({ events: manifest.events });
+  const fx = createFxDispatcher({
+    handlers: [explosionFx, wrecks, decals, lightPool, bombFx, shake],
+  });
   let fxTime = 0;
+  let hitstopFrames = 0; // frames drawn while Python held the simulation frozen (e2e reads it)
 
   // Compile and render through both paths now, so a tier switch never compiles a shader.
   rig.prewarm();
@@ -381,9 +390,16 @@ async function main() {
       const tickStart = debug ? performance.now() : 0;
       tick(dt, input.buttons, input.moveX, input.moveY, input.dragX, input.dragY);
       const tickEnd = debug ? performance.now() : 0;
+      // While Python holds the simulation frozen (hitstop) nothing may creep: the extrapolation
+      // alpha is 0 and the effect clock stands still, so the ground, the wrecks and the particles
+      // hold exactly. The effect clock also holds while the game is paused.
+      const hitstop = header[slots.HITSTOP] > 0;
+      const paused = (header[slots.FLAGS] & manifest.flags.PAUSED) !== 0;
+      if (hitstop) hitstopFrames += 1;
+      const alpha = hitstop ? 0 : header[slots.ALPHA];
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
       // while the simulation stays at 60 Hz. One value drives the terrain and the wrecks.
-      scrollNow = header[slots.SCROLL_Y] + header[slots.ALPHA] * manifest.tuning.scroll_speed;
+      scrollNow = header[slots.SCROLL_Y] + alpha * manifest.tuning.scroll_speed;
       fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
       readout.tick(ts);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
@@ -409,7 +425,7 @@ async function main() {
       enemies.update(
         header[slots.ENEMY_N],
         fxTime,
-        header[slots.ALPHA] * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
+        alpha * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
       );
       // A dying ship is gone: its model, hitbox marker and shadow all hide. Otherwise only the hull
       // blinks while invulnerable (hitbox marker always shown, Pitfall 9) and control is untouched.
@@ -420,11 +436,13 @@ async function main() {
       rig.terrain.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
-      fxTime += dt / 1000;
+      if (!hitstop && !paused) fxTime += dt / 1000;
       lightPool.update(dt / 1000);
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
-      rig.render();
+      // The shake runs on real time, hitstop included, and holds only while paused.
+      shake.update(paused ? 0 : dt / 1000);
+      withCameraOffset(rig.camera, shake.offset(shakeScratch), rig.render);
       if (debug) {
         const renderEnd = performance.now();
         debug.record({
@@ -528,6 +546,13 @@ async function main() {
         },
         get bombsShown() {
           return bombFx.shown;
+        },
+        // Big-event shakes triggered, and frames drawn while the simulation was frozen.
+        get shakes() {
+          return shake.count;
+        },
+        get hitstopFrames() {
+          return hitstopFrames;
         },
         // How many of the live pickups are bomb pickups (e2e checks a turret kill drops one).
         get bombPickups() {

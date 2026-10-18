@@ -104,6 +104,11 @@ BOMB_INVULN_TAIL_TICKS: Final = 30
 BOMB_RISE: Final = 110.0
 BOMB_MIN_Y: Final = 90.0
 
+# Hitstop (VISL-04, D-26, D-27): the simulation freezes for this many steps when a bomb detonates
+# and when the ship is destroyed. Nothing else freezes it: ordinary hits and kills stay smooth.
+HITSTOP_BOMB_TICKS: Final = 4
+HITSTOP_DEATH_TICKS: Final = 6
+
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames

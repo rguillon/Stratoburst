@@ -6,6 +6,7 @@ from array import array
 from typing import Final
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
+from scorched_core.clock.hitstop import Hitstop
 from scorched_core.clock.refresh_estimator import RefreshEstimator
 from scorched_core.collision.circle_hits import resolve_shots_vs_enemies
 from scorched_core.collision.ship_hits import (
@@ -67,6 +68,7 @@ from scorched_core.protocol import (
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_HITSTOP,
     H_INVULN,
     H_KILLS,
     H_LEVEL,
@@ -112,6 +114,7 @@ from scorched_core.tuning import (
     GRID_CELL,
     GROUND_SCROLL_RATIO,
     HITBOX_RADIUS,
+    HITSTOP_BOMB_TICKS,
     HOMING_DAMAGE,
     MAX_LEVEL,
     MISSILE_RADIUS,
@@ -148,6 +151,7 @@ _HEADER_SLOTS: dict[str, int] = {
     "KILLS": H_KILLS,
     "EVENT_N": H_EVENT_N,
     "EVENT_DROPPED": H_EVENT_DROPPED,
+    "HITSTOP": H_HITSTOP,
     "WEAPON": H_WEAPON,
     "PICKUP_N": H_PICKUP_N,
     "LEVEL": H_LEVEL,
@@ -211,6 +215,7 @@ class Game:
         "gallery",
         "god",
         "grid",
+        "hitstop",
         "homing",
         "input",
         "laser",
@@ -260,6 +265,7 @@ class Game:
         self.homing = HomingLauncher()
         self.laser = LaserBeam()
         self.bomb = Bomb(stock=min(max(bombs, 0), BOMB_MAX_STOCK))
+        self.hitstop = Hitstop()  # steps still frozen by a bomb detonation or a death (D-26)
         self._bomb_requested = False  # a press latched until a live step consumes it
         self.missiles = MissilePool()
         self.events = EventRing()
@@ -408,6 +414,7 @@ class Game:
         header[H_STORM_HITS] = self.storm_hits
         header[H_EVENT_N] = self.events.n
         header[H_EVENT_DROPPED] = self.events.dropped
+        header[H_HITSTOP] = self.hitstop.ticks
         header[H_WEAPON] = int(self.loadout.kind)
         header[H_LEVEL] = self.loadout.level
         header[H_BEAM_W] = self.laser.half_width
@@ -476,18 +483,30 @@ class Game:
             self.ebullets, ship.x, ship.y, HITBOX_RADIUS
         ) or resolve_bodies_vs_ship(self.enemies, ship.x, ship.y, HITBOX_RADIUS)
 
+    def _resolve_bomb_request(self) -> None:
+        """Consume a latched bomb press: launch when allowed, and save a ship in its grace window.
+
+        Resolved before ``life.step``, the call that lets the grace window expire: a press on the
+        last grace step still saves the ship, a press one step later cannot (D-11).
+        """
+        if not self._bomb_requested:
+            return
+        self._bomb_requested = False  # consumed whether or not it launches
+        life = self.life
+        if life.can_control and self.bomb.try_launch(self.ship.x, self.ship.y):
+            if life.try_deathbomb():
+                self.events.push(EV_DEATHBOMB_SAVE, self.ship.x, self.ship.y)
+            self.events.push(EV_BOMB_LAUNCH, self.ship.x, self.ship.y)
+            life.grant_invuln(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS)
+
     def _step(self) -> None:
+        # Hitstop (D-27): a frozen step does nothing at all, so no state moves and TICK_COUNT stays
+        # put. The bomb press stays latched: it is resolved only after this gate.
+        if self.hitstop.consume():
+            return
         self.terrain.step()
         life = self.life
-        if self._bomb_requested:
-            self._bomb_requested = False  # consumed whether or not it launches
-            # Resolved before life.step, the call that lets the grace window expire: a press on the
-            # last grace step still saves the ship, a press one step later cannot (D-11).
-            if life.can_control and self.bomb.try_launch(self.ship.x, self.ship.y):
-                if life.try_deathbomb():
-                    self.events.push(EV_DEATHBOMB_SAVE, self.ship.x, self.ship.y)
-                self.events.push(EV_BOMB_LAUNCH, self.ship.x, self.ship.y)
-                life.grant_invuln(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS)
+        self._resolve_bomb_request()
         was_dying = life.phase == PlayerPhase.DYING
         if life.step(self.ship, self.events):
             self._on_death()
@@ -533,7 +552,8 @@ class Game:
             self.enemies,
             self.events,
         )
-        self.bomb.step(self.enemies, self.ebullets, self.events)
+        if self.bomb.step(self.enemies, self.ebullets, self.events):
+            self.hitstop.trigger(HITSTOP_BOMB_TICKS)
         resolve_shots_vs_enemies(
             self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events
         )

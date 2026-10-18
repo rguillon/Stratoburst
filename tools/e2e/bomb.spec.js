@@ -81,6 +81,21 @@ test('a detonation is displayed as a fireball and costs no error', async ({ page
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
 
+// VISL-04, D-26, D-27: the detonation freezes the simulation for a few steps (Python's hitstop, header
+// slot HITSTOP) and shakes the camera (render-only). Both are counted by debug hooks, so a frame-rate
+// dependent poll cannot miss them: a frame is counted whenever it drew with HITSTOP above zero.
+test('a detonation shakes the screen and freezes the action for a few frames', async ({ page }) => {
+  await bootGame(page, '?debug');
+  const fx = () => page.evaluate(() => ({ ...globalThis.__scorched.fx }));
+  expect(await fx()).toMatchObject({ shakes: 0, hitstopFrames: 0 });
+  await page.keyboard.press('KeyK');
+  await expect.poll(async () => (await fx()).shakes, { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+  expect((await fx()).hitstopFrames).toBeGreaterThanOrEqual(1);
+  // The freeze is short: the simulation is running again well before the blast ends.
+  await expect.poll(() => readSlot(page, 'HITSTOP'), { timeout: 20_000 }).toBe(0);
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
 // PLYR-09, D-19: an AA turret drops an amber bomb pickup. The sweep holds the Lv5 vulcan fan until a
 // turret dies; a page-side recorder notes every frame that a bomb pickup was live, so catching it
 // (the ship sweeps through it) cannot hide it from the poll. The production build runs under
