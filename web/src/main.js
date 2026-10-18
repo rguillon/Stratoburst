@@ -452,6 +452,9 @@ async function main() {
       const paused = (header[slots.FLAGS] & manifest.flags.PAUSED) !== 0;
       clockState.hitstop = hitstop;
       clockState.paused = paused;
+      // The laser hums while its beam is on, and pausing or hiding the game silences everything.
+      sfxPlayer.setMuted(paused);
+      sfxPlayer.setLaser(header[slots.BEAM_W] > 0 && !paused);
       if (hitstop) hitstopFrames += 1;
       const alpha = hitstop ? 0 : header[slots.ALPHA];
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
@@ -589,10 +592,16 @@ async function main() {
       get tier() {
         return currentTier;
       },
-      // Sound voices started so far (e2e checks a kill is heard).
+      // Sound voices started so far, and whether the laser hum and the pause mute are on (e2e).
       sfx: {
         get played() {
           return sfxPlayer.played;
+        },
+        get laser() {
+          return sfxPlayer.laser;
+        },
+        get muted() {
+          return sfxPlayer.muted;
         },
       },
       fx: {
