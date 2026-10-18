@@ -7,7 +7,7 @@ from scorched_core.game.fault_mode import FaultMode
 from scorched_core.protocol import H_FLOW
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.stage_1 import STAGE_1
-from scorched_core.tuning import BOMB_START_STOCK
+from scorched_core.tuning import AT_LEAD, BOMB_START_STOCK
 from scorched_core.weapons.weapon_kind import WeaponKind
 from scorched_web.entrypoint import create_game
 from scorched_web.web_game import WebGame
@@ -181,3 +181,23 @@ def test_the_gallery_option_builds_the_phase_two_gallery() -> None:
 @pytest.mark.parametrize("value", [1, "yes", "true", None, False, 0, [True]])
 def test_a_gallery_value_that_is_not_a_real_true_builds_the_stage(value: object) -> None:
     assert create_game({"gallery": value})._game.stage is STAGE_1
+
+
+@pytest.mark.parametrize("marker", ["midboss", "boss"])
+def test_the_at_option_starts_the_stage_just_before_the_marker(marker: str) -> None:
+    game = create_game({"at": marker})._game
+    assert game.stage is STAGE_1
+    assert game.terrain.distance == STAGE_1.marker(marker) - AT_LEAD
+
+
+@pytest.mark.parametrize("value", ["nowhere", "BOSS", "", 3, None, ["boss"], True])
+def test_an_at_value_that_is_not_an_allow_listed_marker_starts_at_zero(value: object) -> None:
+    game = create_game({"at": value})._game
+    assert game.stage is STAGE_1
+    assert game.terrain.distance == 0.0
+
+
+def test_the_gallery_ignores_the_at_option() -> None:
+    game = create_game({"gallery": True, "at": "boss"})._game
+    assert game.stage is None
+    assert game.terrain.distance == 0.0

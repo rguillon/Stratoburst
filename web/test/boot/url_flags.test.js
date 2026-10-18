@@ -13,6 +13,7 @@ describe('parseUrlFlags', () => {
       god: false,
       bombs: null,
       gallery: false,
+      at: null,
     });
   });
 
@@ -102,6 +103,18 @@ describe('parseUrlFlags', () => {
     expect(parseUrlFlags('').gallery).toBe(false);
   });
 
+  it.each([
+    ['?at=boss', 'boss'],
+    ['?at=midboss', 'midboss'],
+    ['?at=BOSS', null],
+    ['?at=final', null],
+    ['?at=', null],
+    ['?at=boss%20', null],
+    ['', null],
+  ])('%s gives at %s', (query, expected) => {
+    expect(parseUrlFlags(query).at).toBe(expected);
+  });
+
   it('ignores unknown parameters', () => {
     expect(parseUrlFlags('?evil=1&debug')).toEqual({
       debug: true,
@@ -113,6 +126,7 @@ describe('parseUrlFlags', () => {
       god: false,
       bombs: null,
       gallery: false,
+      at: null,
     });
   });
 
