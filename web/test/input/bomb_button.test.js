@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBombButton } from '../../src/input/bomb_button.js';
+import { createBombButton, readSafeInsets } from '../../src/input/bomb_button.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
 function make() {
@@ -92,5 +92,55 @@ describe('createBombButton', () => {
     expect(types.map((type) => el.listenerCount(type))).toEqual([0, 0, 0, 0]);
     el.dispatch('pointerdown', { pointerId: 1 });
     expect(button.sample()).toBe(false);
+  });
+});
+
+describe('place', () => {
+  it('sets left, top, width and height in px and clears the right / bottom defaults', () => {
+    const { el, button } = make();
+    el.style.right = 'calc(16px + env(safe-area-inset-right, 0px))';
+    el.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+    button.place({ left: 306, top: 760, size: 72 });
+    expect(el.style).toMatchObject({
+      left: '306px',
+      top: '760px',
+      width: '72px',
+      height: '72px',
+      right: 'auto',
+      bottom: 'auto',
+    });
+  });
+});
+
+describe('readSafeInsets', () => {
+  // The probe is padded with env(safe-area-inset-*) and read back through getComputedStyle.
+  function docWith(computed) {
+    const doc = createFakeDocument();
+    const seen = { styles: [], inBody: null };
+    doc.defaultView.getComputedStyle = (probe) => {
+      seen.styles.push({ ...probe.style });
+      seen.inBody = doc.body.children.includes(probe);
+      return computed;
+    };
+    return { doc, seen };
+  }
+
+  it('returns the four insets in px and removes the probe afterwards', () => {
+    const { doc, seen } = docWith({
+      paddingLeft: '0px',
+      paddingRight: '44px',
+      paddingTop: '47px',
+      paddingBottom: '34px',
+    });
+    expect(readSafeInsets(doc)).toEqual({ left: 0, right: 44, top: 47, bottom: 34 });
+    expect(seen.inBody).toBe(true);
+    expect(doc.body.children).toHaveLength(0);
+    expect(seen.styles[0].paddingRight).toContain('safe-area-inset-right');
+    expect(seen.styles[0].paddingBottom).toContain('safe-area-inset-bottom');
+  });
+
+  it('is all zeros when env() is unsupported (no padding resolves)', () => {
+    const { doc } = docWith({ paddingLeft: '', paddingRight: '', paddingTop: '', paddingBottom: '' });
+    expect(readSafeInsets(doc)).toEqual({ left: 0, right: 0, top: 0, bottom: 0 });
   });
 });

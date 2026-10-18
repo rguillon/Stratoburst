@@ -26,6 +26,10 @@ function fakeElement({ captureThrows = false } = {}) {
   };
 }
 
+// A pointerdown target inside the bomb button: closest() finds a [data-no-steer] ancestor.
+const onButton = { closest: (selector) => (selector === '[data-no-steer]' ? {} : null) };
+const onField = { closest: () => null };
+
 describe('createTouchInput', () => {
   it('a touchstart alone produces no movement', () => {
     const el = fakeElement();
@@ -107,6 +111,38 @@ describe('createTouchInput', () => {
     el.emit('pointerup', { pointerId: 1, pointerType: 'mouse' });
     el.emit('pointerdown', { pointerId: 2, pointerType: 'touch' });
     expect(calls).toBe(1);
+  });
+
+  it('a pointerdown inside [data-no-steer] neither steers, captures nor switches touch mode', () => {
+    const el = fakeElement();
+    let calls = 0;
+    const touch = createTouchInput(el, { onTouchMode: () => calls++ });
+    el.emit('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, target: onButton });
+    el.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 0, target: onButton });
+    expect(calls).toBe(0);
+    expect(el.captured).toEqual([]);
+    expect(touch.sample()).toEqual({ dxPx: 0, dyPx: 0, active: false });
+  });
+
+  it('a pointer that starts on the button leaves the steering pointer alone', () => {
+    const el = fakeElement();
+    const touch = createTouchInput(el);
+    el.emit('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, target: onField });
+    el.emit('pointerdown', { pointerId: 2, clientX: 300, clientY: 700, target: onButton });
+    el.emit('pointermove', { pointerId: 2, clientX: 360, clientY: 700, target: onButton });
+    el.emit('pointerup', { pointerId: 2, target: onButton });
+    el.emit('pointermove', { pointerId: 1, clientX: 8, clientY: 0, target: onField });
+    expect(touch.sample()).toEqual({ dxPx: 8, dyPx: 0, active: true });
+  });
+
+  it('after a press on the button a later pointerdown elsewhere still steers', () => {
+    const el = fakeElement();
+    const touch = createTouchInput(el);
+    el.emit('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, target: onButton });
+    el.emit('pointerup', { pointerId: 1, target: onButton });
+    el.emit('pointerdown', { pointerId: 2, clientX: 100, clientY: 100, target: onField });
+    el.emit('pointermove', { pointerId: 2, clientX: 130, clientY: 100, target: onField });
+    expect(touch.sample()).toEqual({ dxPx: 30, dyPx: 0, active: true });
   });
 
   it('clear() drops the steering pointer and the accumulated movement', () => {
