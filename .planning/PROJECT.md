@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Scorched is an old-school vertical shoot-'em-up in the spirit of 90s arcade shmups (Raiden, Strikers 1945), written in Python and playable directly in a web browser with no server. Gameplay is classic 2D on a single plane, but everything is rendered in 3D — modern, polished visuals (lighting, bloom, particles, big explosions) seen through a tilted top-down camera. Military / scorched-earth theme: jets, tanks and gun emplacements over burning cities and deserts. Built for the author and friends, shared via a link.
+Scorched is an old-school vertical shoot-'em-up in the spirit of 90s arcade shmups (Raiden, Strikers 1945), written in Python and playable directly in a web browser with no server. Gameplay is classic 2D on a single plane, but everything is rendered in 3D — modern, polished visuals (lighting, bloom, particles, big explosions) seen through a tilted top-down camera. Military theme with a neon cyberpunk art direction: jets, tanks and gun emplacements over rain-soaked neon megacities under attack, at night. Built for the author and friends, shared via a link.
 
 ## Core Value
 
@@ -70,6 +70,7 @@ Shooting feels great: tight, responsive ship control and satisfying, punchy 3D f
 | Python running in the browser (WASM), no server | User choice; shareable link, no hosting cost | ✓ Good — live on GitHub Pages (rguillon/Stratoburst) |
 | 90s arcade era (Raiden-style) over bullet hell | User choice | — Pending |
 | Raiden-style colored weapon pickups | User choice | — Pending |
+| Neon military cyberpunk art direction (game-wide); enemy bullets orange-yellow instead of pink | User choice in Phase 3 discussion; magenta is freed for city neon | — Pending |
 | Fixed tilted top-down camera | User choice | ✓ Good — 25° tilt, 30° FOV, letterboxed portrait playfield |
 | Procedural/code-built models | User choice; no asset pipeline | — Pending |
 | GitHub Pages hosting with gated CI/CD and PR previews | Static host, no special headers needed on the main thread | ✓ Good — Phase 1 |

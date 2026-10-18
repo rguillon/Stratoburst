@@ -82,3 +82,22 @@ Mid-boss staging, HP and timeout; exact score, medal and bonus numbers; wave and
 ## Deferred Ideas
 
 None.
+
+---
+
+## Revision: cyberpunk art direction (same day, after the context was first written)
+
+The user asked for a cyberpunk style, which replaced the dusk / smoky-orange "General game look" decisions.
+
+| Question | Options | Selected |
+|----------|---------|----------|
+| Scope | Neon military / Full cyberpunk theme / Stage 1 only | Neon military ✓ |
+| Bullet vs magenta clash | Bullets change color / Keep pink, avoid magenta neon | Bullets change color ✓ |
+| Mood | Night rain neon / Smoggy neon dusk / Synthwave | Night rain neon ✓ |
+| Warzone | Neon city under attack / Intact clean megacity | Under attack ✓ |
+| Bullet color | Orange-yellow white core / Acid lime / White with outline | Orange-yellow ✓ |
+| Game-wide | Whole game / Stage 1 only | Whole game ✓ |
+| Stage arc | Slums → downtown → rooftop airbase / Downtown only / You decide | Slums → downtown → airbase ✓ |
+| Faction colors | Player cyan/white, enemies red neon / Player magenta, enemies cyan | Player cyan/white, enemies red ✓ |
+
+Claude's note: orange-yellow bullets collide with the orange fire, gold medals and amber bomb pickup, so CONTEXT D-40 requires retinting those and leaves the exact palette to Claude's discretion.
