@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Stage 1 Vertical Slice
 status: executing
-stopped_at: Completed 03-13-PLAN.md
-last_updated: "2026-10-18T18:17:06.729Z"
+stopped_at: Completed 03-14-PLAN.md
+last_updated: "2026-10-18T18:30:39.604Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 03 execution started
-state_head: bd6ed5835db379671c82422004e43ef952dde0c1
+state_head: 96fa129b211e3d99c80698b594d17ef88ea8517f
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 71
-  completed_plans: 56
+  completed_plans: 57
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
-Plan: 14 of 28
+Plan: 15 of 28
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 03 execution started
 
@@ -113,6 +113,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P11 | 25 min | 2 tasks | 21 files |
 | Phase 03 P12 | 12 min | 2 tasks | 19 files |
 | Phase 03 P13 | 25 min | 2 tasks | 19 files |
+| Phase 03 P14 | 15 min | 2 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -232,6 +233,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-13: the city and its road grid are children of the ground-layer group, streamed from the manifest through one fixed terrain window (8 aspects) with per-kind capacities; NDC identity with ground units is unit-tested at four aspects and terrain_ring.js is gone
 - [Phase 03]: 03-13: SIGN, TOWER, LOWRISE and RUNWAY_LIGHT glows are white and tinted per instance from PALETTE neon hues by variant; only boxes at least 0.2 thick are rounded to hold the high tier near 320k triangles
 - [Phase 03]: 03-13: the road grid scrolls by texture offset only (groundUv, wrapped to [0,1)); a looping stage whose length is not a multiple of the 80 pitch reports seamAligned false (the gallery's 9300) instead of throwing
+- [Phase 03]: 03-14: the BossController keeps the hull's logical position and writes it into the rows; rows are found by uid and a vanished row is skipped, so a boss always ends through the timeout
+- [Phase 03]: 03-14: phase thresholds compare as integer hit points so an exact fraction (0.6 of 500) triggers; settle order is parts, hull death, timeout, phase, so a kill on the timeout step counts as destroyed
+- [Phase 03]: 03-14: settle() returns the points to award (train kinds pay 0 in the pool); plan 03-17 must add the return value to the score and keep boss parts outside the hull circle so bolts reach them
 
 ### Pending Todos
 
@@ -255,6 +259,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T18:17:06.520Z
-Stopped at: Completed 03-13-PLAN.md
+Last session: 2026-10-18T18:30:33.912Z
+Stopped at: Completed 03-14-PLAN.md
 Resume file: None
