@@ -8,9 +8,13 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
+from scorched_core.patterns.bullet_patterns import fire_aimed
+from scorched_core.patterns.fire_pattern import FirePattern
+from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
     ENEMY_CAP,
     ENEMY_STRIDE,
+    EV_ENEMY_FIRE,
     EV_EXPLOSION,
     EV_HIT,
     PLAYFIELD_H,
@@ -18,7 +22,12 @@ from scorched_core.protocol import (
 )
 from scorched_core.tuning import (
     ENEMY_BLAST,
+    ENEMY_BULLET_SPEED,
     ENEMY_EXIT_MARGIN,
+    ENEMY_FIRE_DELAY,
+    ENEMY_FIRE_INTERVAL,
+    ENEMY_FIRE_MAX_Y,
+    ENEMY_FIRE_PATTERN,
     ENEMY_FLASH_TICKS,
     ENEMY_GROUND,
     ENEMY_HP,
@@ -70,6 +79,7 @@ class EnemyPool:
     uid: array = field(init=False)
     drop: array = field(init=False)
     age: array = field(init=False)
+    fire_timer: array = field(init=False)
     kill_x: array = field(init=False)
     kill_y: array = field(init=False)
     kill_kind: array = field(init=False)
@@ -98,6 +108,7 @@ class EnemyPool:
         self.uid = array("i", zeros)
         self.drop = array("i", zeros)
         self.age = array("i", zeros)
+        self.fire_timer = array("i", zeros)
         self.kill_x = array("f", zeros)
         self.kill_y = array("f", zeros)
         self.kill_kind = array("i", zeros)
@@ -137,6 +148,7 @@ class EnemyPool:
         self.uid[i] = self._next_uid
         self.drop[i] = drop
         self.age[i] = 0
+        self.fire_timer[i] = ENEMY_FIRE_DELAY
         self._next_uid += 1
         self.n = i + 1
         return True
@@ -190,6 +202,42 @@ class EnemyPool:
                 aux[i] = math.atan2(ship_x - x[i], ship_y - y[i])
             if flash[i] > 0:
                 flash[i] -= 1
+
+    def fire(self, bullets: BulletPool, ship_x: float, ship_y: float, events: EventRing) -> int:
+        """Count every enemy's fire timer down and shoot into ``bullets``; return bullets spawned.
+
+        A timer starts at ``ENEMY_FIRE_DELAY`` and counts one per call. An enemy whose timer ran
+        out fires its kind's pattern (``ENEMY_FIRE_PATTERN``) and reloads from
+        ``ENEMY_FIRE_INTERVAL``, but only inside the screen band, from the top edge down to
+        ``ENEMY_FIRE_MAX_Y``: outside it the timer stays at zero and the shot is held until the
+        enemy enters the band. A volley the pool cannot hold spawns what fits. Each volley that
+        spawned anything pushes one low-priority ENEMY_FIRE event (x, y, a = fire pattern).
+        """
+        x, y, kind, timer = self.x, self.y, self.kind, self.fire_timer
+        total = 0
+        for i in range(self.n):
+            if timer[i] > 0:
+                timer[i] -= 1
+                if timer[i] > 0:
+                    continue
+            if y[i] < 0.0 or y[i] > ENEMY_FIRE_MAX_Y:
+                continue
+            pattern = ENEMY_FIRE_PATTERN[kind[i]]
+            match pattern:
+                case FirePattern.NONE | FirePattern.RING:  # a ring arrives with the helicopters
+                    continue
+                case FirePattern.AIMED:
+                    spawned = fire_aimed(
+                        bullets, x[i], y[i], ship_x, ship_y, ENEMY_BULLET_SPEED[kind[i]]
+                    )
+                case unknown:
+                    msg = f"unknown fire pattern {unknown} on enemy slot {i}"
+                    raise ValueError(msg)
+            timer[i] = ENEMY_FIRE_INTERVAL[kind[i]]
+            if spawned:
+                events.push(EV_ENEMY_FIRE, x[i], y[i], pattern, low=True)
+                total += spawned
+        return total
 
     def index_of_uid(self, uid: int) -> int:
         """Return the live slot of the enemy with ``uid``, or -1 when it is gone.
@@ -270,4 +318,5 @@ class EnemyPool:
             self.uid[i] = self.uid[last]
             self.drop[i] = self.drop[last]
             self.age[i] = self.age[last]
+            self.fire_timer[i] = self.fire_timer[last]
         self.n = last

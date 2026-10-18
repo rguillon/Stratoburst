@@ -17,6 +17,7 @@ from scorched_core.events.event_ring import EventRing
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.input.button import Button
 from scorched_core.input.input_frame import InputFrame
+from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.pools.missile_pool import MissilePool
@@ -139,6 +140,8 @@ _EVENT_KINDS: dict[str, int] = {
     "SFX": EV_SFX,
 }
 
+_FIRE_PATTERNS: dict[str, int] = {pattern.name: pattern.value for pattern in FirePattern}
+
 _BLAST_CLASSES: dict[str, int] = {
     "SMALL": BLAST_SMALL,
     "MEDIUM": BLAST_MEDIUM,
@@ -256,6 +259,7 @@ class Game:
             "buttons": {b.name: b.value for b in Button},
             "events": dict(_EVENT_KINDS),
             "blast": dict(_BLAST_CLASSES),
+            "fire_patterns": dict(_FIRE_PATTERNS),
             "enemy_kinds": {kind.name: kind.value for kind in EnemyKind},
             "pickup_kinds": {kind.name: kind.value for kind in PickupKind},
             "weapons": {kind.name: kind.value for kind in WeaponKind},
@@ -391,6 +395,7 @@ class Game:
         self.ebullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.gallery.step(self.enemies)
         self.enemies.step(self.ship.x, self.ship.y)
+        self.enemies.fire(self.ebullets, self.ship.x, self.ship.y, self.events)
         self.missiles.steer(self.enemies)
         self.grid.rebuild(self.enemies.x, self.enemies.y, self.enemies.n)
         resolve_shots_vs_enemies(

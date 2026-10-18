@@ -6,6 +6,8 @@ import pytest
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
+from scorched_core.pools import enemy_pool
+from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import (
     BLAST_LARGE,
@@ -13,14 +15,17 @@ from scorched_core.protocol import (
     BLAST_SMALL,
     ENEMY_CAP,
     ENEMY_STRIDE,
+    EV_ENEMY_FIRE,
     EV_EXPLOSION,
     EV_HIT,
+    EVENT_SOFT_CAP,
     EVENT_STRIDE,
     PLAYFIELD_H,
     PLAYFIELD_W,
 )
 from scorched_core.tuning import (
     ENEMY_EXIT_MARGIN,
+    ENEMY_FIRE_DELAY,
     ENEMY_FLASH_TICKS,
     ENEMY_HP,
     ENEMY_MAX_ALIVE,
@@ -627,3 +632,112 @@ def test_index_of_uid_is_minus_one_for_an_unknown_uid_and_ignores_dead_slots() -
     assert pool.index_of_uid(999) == -1
     pool.uid[5] = 42  # a stale value past the live count is never found
     assert pool.index_of_uid(42) == -1
+
+
+def shooter(pool: EnemyPool, kind: EnemyKind, y: float = 100.0, x: float = 120.0) -> int:
+    assert pool.spawn(kind, x, y, MotionKind.GROUND, 0.0, 0.0)
+    return pool.n - 1
+
+
+def test_spawn_arms_the_fire_timer_with_the_spawn_delay() -> None:
+    pool = EnemyPool()
+    shooter(pool, EnemyKind.TURRET)
+    assert pool.fire_timer[0] == ENEMY_FIRE_DELAY == 45
+
+
+def test_a_turret_fires_its_first_shot_after_delay_then_every_interval() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TURRET)
+    fired_on = [call for call in range(1, 300) if pool.fire(bullets, SHIP_X, SHIP_Y, ring) == 1]
+    assert fired_on == [45, 135, 225]
+    assert bullets.n == 3
+
+
+def test_a_firing_turret_pushes_one_low_enemy_fire_event_per_volley() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TURRET, y=120.0, x=60.0)
+    for _ in range(ENEMY_FIRE_DELAY):
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    assert ring.n == 1
+    assert [float(v) for v in ring.buf[:EVENT_STRIDE]] == [
+        EV_ENEMY_FIRE,
+        60.0,
+        120.0,
+        1.0,
+        0.0,
+        0.0,
+    ]
+
+
+def test_the_enemy_fire_event_is_low_priority() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TURRET)
+    ring.n = EVENT_SOFT_CAP
+    for _ in range(ENEMY_FIRE_DELAY):
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    assert bullets.n == 1  # the shot flew
+    assert ring.n == EVENT_SOFT_CAP  # the low event was refused
+    assert ring.dropped == 1
+
+
+def test_an_aimed_shot_leaves_the_muzzle_towards_the_ship_at_the_kind_speed() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TANK, y=200.0, x=SHIP_X)
+    for _ in range(ENEMY_FIRE_DELAY):
+        pool.fire(bullets, SHIP_X, 100.0, ring)  # the ship is straight above the tank
+    assert (bullets.vx[0], bullets.vy[0]) == pytest.approx((0.0, -1.6))
+    assert (bullets.x[0], bullets.y[0]) == (SHIP_X, 200.0)
+
+
+def test_each_aimed_kind_shoots_at_its_own_interval_and_speed() -> None:
+    for kind, interval, speed in (
+        (EnemyKind.JET, 140, 2.0),
+        (EnemyKind.TANK, 120, 1.6),
+        (EnemyKind.TURRET, 90, 1.8),
+    ):
+        pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+        shooter(pool, kind, y=100.0, x=SHIP_X)
+        for _ in range(ENEMY_FIRE_DELAY):
+            pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+        assert bullets.n == 1
+        assert math.hypot(bullets.vx[0], bullets.vy[0]) == pytest.approx(speed)
+        assert pool.fire_timer[0] == interval
+
+
+def test_a_carrier_never_fires() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.CARRIER)
+    assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(1000)) == 0
+    assert bullets.n == 0
+    assert ring.n == 0
+
+
+def test_a_volley_into_a_full_pool_spawns_nothing_and_pushes_no_event() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(1), EventRing()
+    bullets.spawn(0.0, 0.0, 0.0, 0.0)
+    shooter(pool, EnemyKind.TURRET)
+    assert sum(pool.fire(bullets, SHIP_X, SHIP_Y, ring) for _ in range(ENEMY_FIRE_DELAY)) == 0
+    assert ring.n == 0
+    assert pool.fire_timer[0] == 90  # the volley still counted: the interval reloaded
+
+
+def test_the_fire_timer_follows_its_enemy_through_a_swap_remove() -> None:
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.CARRIER)
+    shooter(pool, EnemyKind.TURRET)
+    for _ in range(10):
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)
+    pool._remove_at(0)
+    assert pool.kind[0] == EnemyKind.TURRET
+    assert pool.fire_timer[0] == ENEMY_FIRE_DELAY - 10
+
+
+def test_a_corrupt_fire_pattern_fails_loudly_instead_of_standing_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(enemy_pool, "ENEMY_FIRE_PATTERN", (99, 99, 99, 99, 99))
+    pool, bullets, ring = EnemyPool(), BulletPool(50), EventRing()
+    shooter(pool, EnemyKind.TURRET)
+    pool.fire_timer[0] = 1
+    with pytest.raises(ValueError, match="unknown fire pattern 99"):
+        pool.fire(bullets, SHIP_X, SHIP_Y, ring)

@@ -18,6 +18,7 @@ from scorched_core.protocol import (
     EBULLET_STRIDE,
     ENEMY_CAP,
     ENEMY_STRIDE,
+    EV_ENEMY_FIRE,
     EV_EXPLOSION,
     EV_HIT,
     EV_PICKUP,
@@ -54,7 +55,9 @@ from scorched_core.protocol import (
     PICKUP_CAP,
     PICKUP_STRIDE,
 )
+from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.tuning import (
+    ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
     SHIP_SPEED,
@@ -1228,3 +1231,50 @@ def test_a_zero_step_tick_leaves_the_channel_alone_but_reports_both_counts() -> 
     assert all(v == 0.0 for v in game.buffers["ebullets"])
     assert header[H_EBULLET_N] == 3
     assert header[H_STORM_N] == 2
+
+
+def _turret_game() -> Game:
+    """A game whose gallery is one ground turret at the top of the screen and nothing else."""
+    game = Game()
+    script = ((0, EnemyKind.TURRET, 120.0, -16.0, MotionKind.GROUND, 0.0, 0.0, -1),)
+    game.gallery = GallerySpawner(script=script, loop_ticks=100_000)
+    return game
+
+
+def test_a_turret_fires_its_first_shot_after_delay_into_the_gameplay_pool() -> None:
+    game = _turret_game()
+    for _ in range(ENEMY_FIRE_DELAY - 1):
+        _tick(game)
+    assert game.ebullets.n == 0
+    _tick(game)
+    assert game.ebullets.n == 1
+    assert game.storm_pool.n == 0
+    assert game.buffers["header"][H_EBULLET_N] == 1
+    assert game.buffers["header"][H_STORM_N] == 0
+
+
+def test_the_first_enemy_shot_is_packed_after_the_storm_with_the_pink_kind() -> None:
+    game = Game(stress=600)
+    game.gallery = _turret_game().gallery
+    for _ in range(ENEMY_FIRE_DELAY):
+        _tick(game)
+    storm = game.storm_pool.n
+    assert game.ebullets.n == 1
+    assert game.buffers["header"][H_STORM_N] == storm == 600
+    assert game.buffers["ebullets"][storm * EBULLET_STRIDE + 3] == 1.0
+    assert game.buffers["ebullets"][storm * EBULLET_STRIDE] == pytest.approx(game.ebullets.x[0])
+
+
+def test_the_enemy_fire_event_reaches_the_event_ring_once() -> None:
+    game = _turret_game()
+    pushes = 0
+    for _ in range(ENEMY_FIRE_DELAY + 1):
+        _tick(game)
+        pushes += sum(
+            game.events.buf[i * EVENT_STRIDE] == EV_ENEMY_FIRE for i in range(game.events.n)
+        )
+    assert pushes == 1
+
+
+def test_the_manifest_publishes_the_fire_patterns_by_name() -> None:
+    assert Game().manifest()["fire_patterns"] == {"NONE": 0, "AIMED": 1, "RING": 2}

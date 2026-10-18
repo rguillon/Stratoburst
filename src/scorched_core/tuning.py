@@ -5,6 +5,7 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL, PLAYFIELD_H, PLAYFIELD_W
 
 # About 1.2 s to cross the playfield width at 60 steps per second (D-10).
@@ -88,6 +89,24 @@ ENEMY_RADIUS: Final = (9.0, 10.0, 14.0, 11.0, 10.0)
 ENEMY_HP: Final = (3, 6, 12, 8, 6)
 ENEMY_BLAST: Final = (BLAST_SMALL, BLAST_MEDIUM, BLAST_MEDIUM, BLAST_LARGE, BLAST_MEDIUM)
 ENEMY_GROUND: Final = (False, False, False, True, True)
+
+# Enemy fire (D-17), Raiden pacing and not bullet hell. Indexed by EnemyKind (JET, HELI, CARRIER,
+# TANK, TURRET): the pattern, the steps between volleys and the bullet speed in units per step.
+# Nothing fires until ENEMY_FIRE_DELAY steps after it spawned, nor above the top edge or below
+# ENEMY_FIRE_MAX_Y, so nothing shoots point-blank from under the ship. A ring has ENEMY_RING_COUNT
+# bullets and consecutive rings are rotated by half a ring step so they interleave.
+ENEMY_FIRE_DELAY: Final = 45
+ENEMY_FIRE_MAX_Y: Final = PLAYFIELD_H * 0.7
+ENEMY_FIRE_PATTERN: Final = (
+    FirePattern.AIMED,
+    FirePattern.RING,
+    FirePattern.NONE,
+    FirePattern.AIMED,
+    FirePattern.AIMED,
+)
+ENEMY_FIRE_INTERVAL: Final = (140, 150, 0, 120, 90)
+ENEMY_BULLET_SPEED: Final = (2.0, 1.3, 0.0, 1.6, 1.8)
+ENEMY_RING_COUNT: Final = 8
 
 # Helicopters (D-17): descend to HOVER_STOP_Y, hold there drifting side to side, then leave.
 HOVER_STOP_Y: Final = 96.0
