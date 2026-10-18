@@ -2,7 +2,7 @@
 
 Plan 02-33. Measurements come from real hardware against the real static host. WSL2 SwiftShader numbers do not count.
 
-**Status in one line: NO-GO under the plan's rule, for incompleteness only. Every bar measured on desktop and iPhone passes with margin, but no Android phone was available, so the "all three devices" condition of GO cannot be met. Main was NOT pushed.**
+**Status in one line: GO for desktop + iPhone, by an explicit USER WAIVER of the Android criterion. Android was NOT measured (the user has no Android device), the `tier=low`/`tier=high` runs were skipped, and the Android check is carried forward as a follow-up/UAT item. Android did not pass; it was not tested. Main was pushed after the waiver.**
 
 ## Header
 
@@ -152,10 +152,10 @@ Values are parsed from the report lines above. "Worst minute" uses full minutes 
 | iPhone | Worst single-minute fps | >= 29 | 60.0 | PASS |
 | iPhone | Final tier keeps bloom | high or mid | mid | PASS |
 | iPhone | Python tick average | recorded | 1.97 to 2.10 ms (mean about 2.03; p95 3.00 ms) | recorded (see Observations) |
-| Android | every phone bar | see Pass bars | none | NOT MEASURED (no device) |
-| Desktop / iPhone / Android | `tier=low` and `tier=high` 2 min runs | recorded | not provided | SKIPPED |
+| Android | every phone bar | see Pass bars | none | NOT MEASURED (no device); WAIVED by the user, carried forward as UAT |
+| Desktop / iPhone / Android | `tier=low` and `tier=high` 2 min runs | recorded | not provided | SKIPPED (carried forward) |
 | Desktop / iPhone | Feel checklist items 1 to 10 | all passed | "All passed", not itemised | PASS (as stated by the user) |
-| Android | Feel checklist items 1 to 10 | all passed | not run | NOT MEASURED |
+| Android | Feel checklist items 1 to 10 | all passed | not run | NOT MEASURED; WAIVED by the user, carried forward as UAT |
 
 ### Phase 1 baseline beside Phase 2 (iPhone 16 Pro, plugged in, FxiOS 158, auto tier, both ended on tier mid)
 
@@ -180,10 +180,16 @@ Phase 2 asks the phone to do far more per frame than Phase 1 (full effect stack 
 
 ## Verdict
 
-**NO-GO under the plan's rule ("GO when every bar passes on all three devices and no checklist item failed; otherwise NO-GO"), for incompleteness only. It is NOT a performance failure.**
+**GO for desktop + iPhone, recorded under an explicit user waiver of the Android criterion.**
 
+- Original computed result: **NO-GO under the plan's rule ("GO when every bar passes on all three devices and no checklist item failed; otherwise NO-GO"), for incompleteness only. It was NOT a performance failure.** The executor did not and could not waive the Android requirement itself.
+- **User waiver (2026-10-18):** the genuine user, who has no Android device, decided to waive the Android criterion for Phase 2 and ship (option 1 of the three offered: waive, get an Android run, or move to UAT). The verdict is therefore GO for the devices that were measured, with the waiver stated here rather than hidden.
 - Measured evidence: desktop and the iPhone pass every bar with large margin (60.0 fps against >= 58 and >= 29, p95 frame 16.7 and 17 to 18 ms against <= 20 and <= 40 ms, no weak minute, final tiers high and mid so bloom is kept, desktop tick 1.25 ms against <= 3 ms). The iPhone shows no frame-rate regression from Phase 1 to Phase 2, with a tick increase of about 0.5 ms. The feel checklist was reported as all passed on desktop and iPhone.
-- Why not GO: no Android phone was measured, so the Android half of ROADMAP Phase 2 criterion 4 ("both phones") and of the device half of criterion 5 has no evidence at all. The forced-tier comparison runs were also skipped. The plan's rule names three devices, so GO cannot be computed honestly.
-- No lever is recommended: nothing failed, so there is no bottleneck to classify. The tick figure on the phone (2 ms average, 3 ms p95) is the item to watch, not a failure.
-- To close it, one of: (a) the user accepts and records a waiver of the Android requirement for Phase 2 (they have no Android device) and the GO is then recorded for desktop + iPhone, after which `main` can be pushed fast-forward and the live checks run; (b) a friend with an Android phone runs the baseline and worst-case protocols and the table above is completed; (c) the criterion is moved to UAT for later. Because pushing `main` publishes the Phase 2 build to everyone with the link and the plan ties that step to the verdict, the push was held back pending that decision.
-- Main push status: **NOT pushed.** `origin/main` is still `6dcec36` (Phase 1 build); `make wait-deploy`, `make e2e-live` and the live build-hash check were not run. Local `main` is 141 commits ahead of `origin/main` before the commit that records this verdict (all of Phase 2, up to `a1beb19` and the docs-only `b7b9eee`) and fast-forwards cleanly because `6dcec36` is an ancestor.
+- **What the waiver covers (NOT measured, NOT passed):** every Android phone bar (ROADMAP Phase 2 criterion 4, "both phones", Android half; criterion 5 device half), the Android feel checklist, Chrome on Adreno/Mali/Xclipse behaviour, thermal throttling and the touch bomb button on Android. The `tier=low` and `tier=high` forced runs (assumption A11) were also skipped on every device.
+- **Carried forward (follow-up / UAT, not closed):**
+  1. Android baseline and worst-case runs (protocols above) when an Android phone is available; record in this file and in `01-DEVICE-REPORTS.md`.
+  2. Forced `tier=low` and `tier=high` 2-minute runs (A11).
+  3. Safari proper on iOS (reports came from Firefox for iOS) and an itemised audio checklist (ringer on/off, app switch).
+  4. Watch the iPhone p95 tick (3 ms) as Phase 3 adds load; lever if needed is tick-bound (lower gallery and bullet caps, then numpy).
+- No lever is recommended: nothing failed, so there is no bottleneck to classify.
+- Main push status: see the Ship record below (appended after the push and live checks).
