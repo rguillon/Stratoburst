@@ -38,6 +38,18 @@ test('kills raise SCORE and the HUD score and high score match the header', asyn
     .toBe(true);
   const high = await readSlot(page, 'HIGH_SCORE');
   expect(high).toBeGreaterThanOrEqual(score);
-  await expect(page.locator('#status-readout .hiscore')).toHaveText(String(high));
+  // Bullets still in flight can score after the read above, so compare the HUD with the live slot.
+  await expect
+    .poll(async () => {
+      const { shown, header } = await page.evaluate(() => {
+        const { header, slots } = globalThis.__scorched;
+        return {
+          shown: document.querySelector('#status-readout .hiscore').textContent,
+          header: header[slots.HIGH_SCORE],
+        };
+      });
+      return shown === String(header);
+    })
+    .toBe(true);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
