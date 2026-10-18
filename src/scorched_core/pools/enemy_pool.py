@@ -8,8 +8,8 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
-from scorched_core.patterns.bullet_patterns import fire_aimed, fire_ring
-from scorched_core.patterns.fire_pattern import FirePattern
+from scorched_core.patterns.bullet_patterns import run_pattern
+from scorched_core.patterns.pattern_library import PATTERN_TABLE, pattern_index
 from scorched_core.pools.bullet_pool import BulletPool
 from scorched_core.protocol import (
     ENEMY_CAP,
@@ -22,18 +22,15 @@ from scorched_core.protocol import (
 )
 from scorched_core.tuning import (
     ENEMY_BLAST,
-    ENEMY_BULLET_SPEED,
     ENEMY_EXIT_MARGIN,
     ENEMY_FIRE_DELAY,
-    ENEMY_FIRE_INTERVAL,
     ENEMY_FIRE_MAX_Y,
-    ENEMY_FIRE_PATTERN,
     ENEMY_FLASH_TICKS,
     ENEMY_GROUND,
     ENEMY_HP,
     ENEMY_MAX_ALIVE,
+    ENEMY_PATTERN,
     ENEMY_RADIUS,
-    ENEMY_RING_COUNT,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
     GROUND_SCROLL_RATIO,
@@ -45,7 +42,32 @@ from scorched_core.tuning import (
     SCROLL_SPEED,
 )
 
-_RING_HALF_STEP: Final = math.pi / ENEMY_RING_COUNT  # alternate rings sit between each other
+_KIND_PATTERN: Final = tuple(-1 if name is None else pattern_index(name) for name in ENEMY_PATTERN)
+# Every per-enemy array column that a swap-remove must move (everything but the kill buffer).
+# A test compares this tuple with the dataclass fields, so a new column cannot be forgotten.
+_COLUMNS: Final = (
+    "x",
+    "y",
+    "vx",
+    "vy",
+    "base_x",
+    "phase",
+    "angle",
+    "radius",
+    "aux",
+    "kind",
+    "motion",
+    "timer",
+    "hp",
+    "flash",
+    "uid",
+    "drop",
+    "age",
+    "fire_timer",
+    "pattern",
+    "volley",
+    "burst_left",
+)
 _PHASE_STEP: Final = math.tau / ENEMY_SWAY_PERIOD
 _HOVER_PHASE_STEP: Final = math.tau / HOVER_DRIFT_PERIOD
 _GROUND_SCROLL: Final = SCROLL_SPEED * GROUND_SCROLL_RATIO  # terrain-anchored: 0.752 per step
@@ -82,6 +104,9 @@ class EnemyPool:
     drop: array = field(init=False)
     age: array = field(init=False)
     fire_timer: array = field(init=False)
+    pattern: array = field(init=False)
+    volley: array = field(init=False)
+    burst_left: array = field(init=False)
     kill_x: array = field(init=False)
     kill_y: array = field(init=False)
     kill_kind: array = field(init=False)
@@ -111,6 +136,9 @@ class EnemyPool:
         self.drop = array("i", zeros)
         self.age = array("i", zeros)
         self.fire_timer = array("i", zeros)
+        self.pattern = array("i", zeros)
+        self.volley = array("i", zeros)
+        self.burst_left = array("i", zeros)
         self.kill_x = array("f", zeros)
         self.kill_y = array("f", zeros)
         self.kill_kind = array("i", zeros)
@@ -125,10 +153,14 @@ class EnemyPool:
         vx: float,
         vy: float,
         drop: int = -1,
+        *,
+        pattern: int | None = None,
     ) -> bool:
         """Add an enemy of ``kind``; return False when ``ENEMY_MAX_ALIVE`` are already alive.
 
         ``motion`` is a ``MotionKind``; a HOVER enemy starts with its full hold timer.
+        ``pattern`` is an index into ``PATTERN_TABLE``: None takes the kind's default and -1
+        never fires. The fire timer starts at the pattern's delay.
         """
         i = self.n
         if i >= ENEMY_MAX_ALIVE:
@@ -150,7 +182,11 @@ class EnemyPool:
         self.uid[i] = self._next_uid
         self.drop[i] = drop
         self.age[i] = 0
-        self.fire_timer[i] = ENEMY_FIRE_DELAY
+        chosen = _KIND_PATTERN[kind] if pattern is None else pattern
+        self.pattern[i] = chosen
+        self.volley[i] = 0
+        self.burst_left[i] = 0
+        self.fire_timer[i] = ENEMY_FIRE_DELAY if chosen < 0 else PATTERN_TABLE[chosen].delay
         self._next_uid += 1
         self.n = i + 1
         return True
@@ -210,46 +246,31 @@ class EnemyPool:
     def fire(self, bullets: BulletPool, ship_x: float, ship_y: float, events: EventRing) -> int:
         """Count every enemy's fire timer down and shoot into ``bullets``; return bullets spawned.
 
-        A timer starts at ``ENEMY_FIRE_DELAY`` and counts one per call. An enemy whose timer ran
-        out fires its kind's pattern (``ENEMY_FIRE_PATTERN``) and reloads from
-        ``ENEMY_FIRE_INTERVAL``, but only inside the screen band, from the top edge down to
-        ``ENEMY_FIRE_MAX_Y``: outside it the timer stays at zero and the shot is held until the
-        enemy enters the band. A volley the pool cannot hold spawns what fits. Each volley that
-        spawned anything pushes one low-priority ENEMY_FIRE event (x, y, a = fire pattern).
+        A timer starts at the pattern's delay and counts one per call. An enemy whose timer ran
+        out plays its pattern (``run_pattern``), but only inside the screen band, from the top
+        edge down to ``ENEMY_FIRE_MAX_Y``: outside it the timer stays at zero and the shot is held
+        until the enemy enters the band. An enemy with pattern -1 never fires. After a volley the
+        timer reloads ``burst_gap`` while a burst has shots left, else ``interval``. A volley the
+        pool cannot hold spawns what fits. Each volley that spawned anything pushes one
+        low-priority ENEMY_FIRE event (x, y, a = fire pattern shape).
         """
-        x, y, kind, timer = self.x, self.y, self.kind, self.fire_timer
+        x, y, timer, chosen = self.x, self.y, self.fire_timer, self.pattern
         total = 0
         for i in range(self.n):
             if timer[i] > 0:
                 timer[i] -= 1
                 if timer[i] > 0:
                     continue
-            if y[i] < 0.0 or y[i] > ENEMY_FIRE_MAX_Y:
+            if y[i] < 0.0 or y[i] > ENEMY_FIRE_MAX_Y or chosen[i] < 0:
                 continue
-            pattern = ENEMY_FIRE_PATTERN[kind[i]]
-            match pattern:
-                case FirePattern.NONE:
-                    continue
-                case FirePattern.AIMED:
-                    spawned = fire_aimed(
-                        bullets, x[i], y[i], ship_x, ship_y, ENEMY_BULLET_SPEED[kind[i]]
-                    )
-                case FirePattern.RING:
-                    volley = self.age[i] // ENEMY_FIRE_INTERVAL[kind[i]]
-                    spawned = fire_ring(
-                        bullets,
-                        x[i],
-                        y[i],
-                        ENEMY_RING_COUNT,
-                        ENEMY_BULLET_SPEED[kind[i]],
-                        volley % 2 * _RING_HALF_STEP,
-                    )
-                case unknown:
-                    msg = f"unknown fire pattern {unknown} on enemy slot {i}"
-                    raise ValueError(msg)
-            timer[i] = ENEMY_FIRE_INTERVAL[kind[i]]
+            spec = PATTERN_TABLE[chosen[i]]
+            spawned = run_pattern(spec, bullets, x[i], y[i], ship_x, ship_y, self.volley[i])
+            self.volley[i] += 1
+            left = self.burst_left[i] - 1 if self.burst_left[i] > 0 else spec.burst - 1
+            self.burst_left[i] = left
+            timer[i] = spec.burst_gap if left > 0 else spec.interval
             if spawned:
-                events.push(EV_ENEMY_FIRE, x[i], y[i], pattern, low=True)
+                events.push(EV_ENEMY_FIRE, x[i], y[i], spec.shape, low=True)
                 total += spawned
         return total
 
@@ -315,22 +336,7 @@ class EnemyPool:
     def _remove_at(self, i: int) -> None:
         last = self.n - 1
         if i != last:
-            self.x[i] = self.x[last]
-            self.y[i] = self.y[last]
-            self.vx[i] = self.vx[last]
-            self.vy[i] = self.vy[last]
-            self.base_x[i] = self.base_x[last]
-            self.phase[i] = self.phase[last]
-            self.angle[i] = self.angle[last]
-            self.radius[i] = self.radius[last]
-            self.aux[i] = self.aux[last]
-            self.kind[i] = self.kind[last]
-            self.motion[i] = self.motion[last]
-            self.timer[i] = self.timer[last]
-            self.hp[i] = self.hp[last]
-            self.flash[i] = self.flash[last]
-            self.uid[i] = self.uid[last]
-            self.drop[i] = self.drop[last]
-            self.age[i] = self.age[last]
-            self.fire_timer[i] = self.fire_timer[last]
+            for name in _COLUMNS:
+                column = getattr(self, name)
+                column[i] = column[last]
         self.n = last

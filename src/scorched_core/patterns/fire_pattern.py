@@ -9,3 +9,5 @@ class FirePattern(IntEnum):
     NONE = 0
     AIMED = 1
     RING = 2
+    SPREAD = 3
+    STREAM = 4
