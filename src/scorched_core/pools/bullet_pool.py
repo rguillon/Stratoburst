@@ -1,5 +1,6 @@
 """Struct-of-arrays bullet pool: preallocated columns, swap-remove, no per-bullet objects."""
 
+import math
 from array import array
 from dataclasses import dataclass, field
 
@@ -9,6 +10,8 @@ class BulletPool:
     """Fixed-capacity bullets stored as parallel ``array('f')`` columns.
 
     Removal swaps the last live bullet into the freed slot, so slot order carries no meaning.
+    ``angle`` is the flight direction at spawn, ``atan2(vx, -vy)`` (0 is straight up the screen,
+    positive is to the right); it is not updated when a velocity is later changed in place.
     """
 
     capacity: int
@@ -17,7 +20,7 @@ class BulletPool:
     y: array = field(init=False)
     vx: array = field(init=False)
     vy: array = field(init=False)
-    _zeros: array = field(init=False, repr=False)
+    angle: array = field(init=False)
     _kinds: array = field(init=False, repr=False)
     _kind: float = field(default=0.0, init=False, repr=False)
 
@@ -27,7 +30,7 @@ class BulletPool:
         self.y = array("f", zeros)
         self.vx = array("f", zeros)
         self.vy = array("f", zeros)
-        self._zeros = array("f", zeros)
+        self.angle = array("f", zeros)
         self._kinds = array("f", zeros)
 
     def spawn(self, x: float, y: float, vx: float, vy: float) -> bool:
@@ -39,6 +42,7 @@ class BulletPool:
         self.y[i] = y
         self.vx[i] = vx
         self.vy[i] = vy
+        self.angle[i] = math.atan2(vx, -vy)
         self.n = i + 1
         return True
 
@@ -57,6 +61,7 @@ class BulletPool:
             self.y[i] = self.y[last]
             self.vx[i] = self.vx[last]
             self.vy[i] = self.vy[last]
+            self.angle[i] = self.angle[last]
         self.n = last
 
     def cull_outside(self, min_x: float, min_y: float, max_x: float, max_y: float) -> None:
@@ -75,5 +80,5 @@ class BulletPool:
         end = n * 4
         out[0:end:4] = self.x[:n]
         out[1:end:4] = self.y[:n]
-        out[2:end:4] = self._zeros[:n]
+        out[2:end:4] = self.angle[:n]
         out[3:end:4] = self._kinds[:n]

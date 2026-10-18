@@ -1,3 +1,4 @@
+import math
 from array import array
 
 import pytest
@@ -72,15 +73,59 @@ def test_pack_into_writes_x_y_angle_kind_at_stride_four() -> None:
     pool = filled(2)
     out = array("f", [-7.0] * 16)
     pool.pack_into(out, 1.0)
-    assert list(out[:8]) == [0.0, 10.0, 0.0, 1.0, 1.0, 11.0, 0.0, 1.0]
+    angle = math.atan2(1.0, 2.0)  # filled() flies each bolt at (1, -2)
+    assert list(out[:8]) == pytest.approx([0.0, 10.0, angle, 1.0, 1.0, 11.0, angle, 1.0])
     assert list(out[8:]) == [-7.0] * 8
 
 
-def test_pack_into_clears_a_stale_angle_column() -> None:
-    pool = filled(1)
+def test_pack_into_overwrites_a_stale_slot_two() -> None:
+    pool = BulletPool(2)
+    pool.spawn(0.0, 10.0, 0.0, -4.0)
     out = array("f", [5.0] * 8)
     pool.pack_into(out, 2.0)
     assert list(out[:4]) == [0.0, 10.0, 0.0, 2.0]
+
+
+@pytest.mark.parametrize(
+    ("vx", "vy", "expected"),
+    [
+        (0.0, -4.0, 0.0),
+        (4.0, 0.0, math.pi / 2),
+        (-4.0, 0.0, -math.pi / 2),
+        (0.0, 4.0, math.pi),
+        (3.0, -3.0, math.pi / 4),
+        (-3.0, -3.0, -math.pi / 4),
+    ],
+)
+def test_spawn_stores_the_flight_angle(vx: float, vy: float, expected: float) -> None:
+    pool = BulletPool(2)
+    pool.spawn(0.0, 0.0, vx, vy)
+    assert pool.angle[0] == pytest.approx(expected, abs=1e-6)
+
+
+def test_pack_into_writes_the_flight_angle_in_slot_two() -> None:
+    pool = BulletPool(4)
+    pool.spawn(0.0, 0.0, 0.0, -4.0)
+    pool.spawn(1.0, 1.0, 4.0, 0.0)
+    pool.spawn(2.0, 2.0, -3.0, -3.0)
+    out = array("f", bytes(4 * 16))
+    pool.pack_into(out, 0.0)
+    assert out[2] == 0.0  # straight up still packs exactly 0
+    assert out[6] == pytest.approx(math.pi / 2, abs=1e-6)
+    assert out[10] == pytest.approx(-math.pi / 4, abs=1e-6)
+
+
+def test_remove_at_moves_the_angle_with_the_bullet() -> None:
+    pool = BulletPool(4)
+    pool.spawn(0.0, 0.0, 0.0, -4.0)
+    pool.spawn(1.0, 1.0, 4.0, 0.0)
+    pool.spawn(2.0, 2.0, 0.0, 4.0)
+    pool.remove_at(0)
+    assert pool.angle[0] == pytest.approx(math.pi, abs=1e-6)
+    assert pool.angle[1] == pytest.approx(math.pi / 2, abs=1e-6)
+    out = array("f", bytes(4 * 8))
+    pool.pack_into(out, 0.0)
+    assert (out[2], out[6]) == pytest.approx((math.pi, math.pi / 2), abs=1e-6)
 
 
 def test_pack_into_follows_a_changed_kind() -> None:
@@ -100,4 +145,4 @@ def test_pack_into_an_empty_pool_writes_nothing() -> None:
 @pytest.mark.parametrize("capacity", [1, 600])
 def test_columns_are_sized_to_capacity(capacity: int) -> None:
     pool = BulletPool(capacity)
-    assert {len(pool.x), len(pool.y), len(pool.vx), len(pool.vy)} == {capacity}
+    assert {len(pool.x), len(pool.y), len(pool.vx), len(pool.vy), len(pool.angle)} == {capacity}
