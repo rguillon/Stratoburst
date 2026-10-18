@@ -1,4 +1,5 @@
 import pytest
+from scorched_core.stages.ground_entry import GroundEntry
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -135,3 +136,32 @@ def test_a_city_feature_of_an_unsupported_kind_is_rejected_at_construction() -> 
     features = (CityFeature(SceneryKind.TOWER, 120.0, 0.0, 50.0, 10.0),)
     with pytest.raises(ValueError, match="TOWER"):
         StageData(number=1, length=100.0, waves=(), markers=(), features=features)
+
+
+def ground(at: float, kind: EnemyKind = EnemyKind.HOUSE) -> GroundEntry:
+    return GroundEntry(at=at, kind=kind, x=40.0)
+
+
+def test_a_stage_has_no_ground_entries_by_default() -> None:
+    assert StageData(number=1, length=10.0, waves=(), markers=()).ground == ()
+
+
+def test_sorted_ground_entries_inside_the_stage_are_valid() -> None:
+    entries = (ground(0.0), ground(10.0), ground(10.0), ground(100.0))
+    stage = StageData(number=1, length=100.0, waves=(), markers=(), ground=entries)
+    assert stage.ground == entries
+
+
+def test_ground_entries_out_of_order_are_rejected_naming_the_entry() -> None:
+    with pytest.raises(ValueError, match=r"ground entry 1 .*sorted"):
+        StageData(number=1, length=100.0, waves=(), markers=(), ground=(ground(20.0), ground(10.0)))
+
+
+def test_a_ground_entry_before_the_stage_is_rejected() -> None:
+    with pytest.raises(ValueError, match=r"ground entry 0 .*outside"):
+        StageData(number=1, length=100.0, waves=(), markers=(), ground=(ground(-1.0),))
+
+
+def test_a_ground_entry_past_the_stage_length_is_rejected() -> None:
+    with pytest.raises(ValueError, match=r"ground entry 1 .*outside"):
+        StageData(number=1, length=100.0, waves=(), markers=(), ground=(ground(5.0), ground(100.5)))

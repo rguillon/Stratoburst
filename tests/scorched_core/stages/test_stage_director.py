@@ -1,15 +1,22 @@
 import pytest
-from scorched_core.paths.path_library import path_index
+from scorched_core.stages.ground_entry import GroundEntry
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.paths.path_library import path_index
 from scorched_core.patterns.pattern_library import pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
+from scorched_core.protocol import PLAYFIELD_H
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.wave_entry import WaveEntry
-from scorched_core.tuning import ENEMY_MAX_ALIVE, SCROLL_SPEED
+from scorched_core.tuning import (
+    ENEMY_MAX_ALIVE,
+    GROUND_SCROLL_RATIO,
+    GROUND_Y0,
+    SCROLL_SPEED,
+)
 
 
 def stage_of(*waves: WaveEntry, length: float = 1000.0) -> StageData:
@@ -183,3 +190,111 @@ def test_a_wave_without_a_path_spawns_with_no_path() -> None:
     director.step(1.0, enemies)
     assert enemies.path[0] == -1
     assert enemies.flip[0] == 1
+
+
+# --- ground entries: terrain-anchored targets (plan 03-15) -------------------------------------
+
+
+def house(at: float, x: float = 40.0, drop: PickupKind | None = None) -> GroundEntry:
+    return GroundEntry(at=at, kind=EnemyKind.HOUSE, x=x, drop=drop)
+
+
+def ground_stage(*entries: GroundEntry, waves: tuple[WaveEntry, ...] = ()) -> StageData:
+    return StageData(number=1, length=2000.0, waves=waves, markers=(), ground=entries)
+
+
+def test_a_ground_entry_spawns_on_the_first_step_at_or_above_its_distance() -> None:
+    director, enemies = StageDirector(ground_stage(house(40.0))), EnemyPool()
+    assert run(director, enemies, [39.2, 39.99, 40.0, 40.8]) == [0, 0, 1, 1]
+
+
+def test_a_ground_entry_spawns_aligned_with_its_scenery_row() -> None:
+    director, enemies = StageDirector(ground_stage(house(40.0, x=72.0))), EnemyPool()
+    director.step(40.6, enemies)
+    assert (enemies.kind[0], enemies.x[0]) == (EnemyKind.HOUSE, 72.0)
+    assert enemies.y[0] == pytest.approx(GROUND_Y0 + GROUND_SCROLL_RATIO * 0.6)
+
+
+def test_a_late_ground_entry_spawns_further_down_by_the_distance_it_is_behind() -> None:
+    director, enemies = StageDirector(ground_stage(house(40.0))), EnemyPool()
+    director.step(140.0, enemies)
+    assert enemies.y[0] == pytest.approx(GROUND_Y0 + GROUND_SCROLL_RATIO * 100.0)
+
+
+def test_a_ground_row_is_terrain_anchored_with_no_velocity_and_carries_its_drop() -> None:
+    director, enemies = StageDirector(ground_stage(house(5.0, drop=PickupKind.MEDAL))), EnemyPool()
+    director.step(5.0, enemies)
+    assert enemies.motion[0] == MotionKind.GROUND
+    assert (enemies.vx[0], enemies.vy[0]) == (0.0, 0.0)
+    assert enemies.drop[0] == PickupKind.MEDAL
+    assert enemies.pattern[0] == -1  # a building never fires
+
+
+def test_a_ground_entry_without_a_drop_spawns_with_no_drop() -> None:
+    director, enemies = StageDirector(ground_stage(house(5.0))), EnemyPool()
+    director.step(5.0, enemies)
+    assert enemies.drop[0] == -1
+
+
+def test_step_counts_waves_and_ground_entries_together() -> None:
+    stage = ground_stage(house(5.0), house(6.0), waves=(jet(5.0),))
+    director, enemies = StageDirector(stage), EnemyPool()
+    assert director.step(9.0, enemies) == 3
+    assert enemies.n == 3
+
+
+def test_a_refused_ground_spawn_is_skipped_never_retried() -> None:
+    director, enemies = StageDirector(ground_stage(house(5.0))), EnemyPool()
+    for _ in range(ENEMY_MAX_ALIVE):
+        enemies.spawn(EnemyKind.JET, 0.0, 0.0, MotionKind.SWAY, 0.0, 0.0)
+    assert director.step(5.0, enemies) == 0
+    enemies.n = 0
+    assert director.step(9.0, enemies) == 0
+    assert enemies.n == 0
+
+
+def test_the_ground_cursor_advances_independently_of_the_wave_cursor() -> None:
+    director = StageDirector(ground_stage(house(50.0), waves=(jet(10.0), jet(20.0))))
+    director.step(30.0, EnemyPool())
+    assert (director.cursor, director.ground_cursor) == (2, 0)
+    director.step(60.0, EnemyPool())
+    assert (director.cursor, director.ground_cursor) == (2, 1)
+
+
+def test_reset_rewinds_both_cursors() -> None:
+    director = StageDirector(ground_stage(house(5.0), waves=(jet(5.0),)))
+    director.step(9.0, EnemyPool())
+    director.reset()
+    assert (director.cursor, director.ground_cursor) == (0, 0)
+
+
+def test_jump_moves_the_wave_cursor_past_the_distance() -> None:
+    director = StageDirector(ground_stage(waves=(jet(2.0), jet(5.0), jet(8.0))))
+    director.jump(5.0)
+    assert director.cursor == 2
+
+
+def test_jump_keeps_the_ground_entries_that_are_still_on_screen() -> None:
+    # An entry is on screen from y = GROUND_Y0 down to the bottom edge, so it is kept for as long
+    # as the scroll is less than this far past its distance.
+    visible = (PLAYFIELD_H - GROUND_Y0) / GROUND_SCROLL_RATIO
+    director = StageDirector(ground_stage(house(100.0), house(500.0), house(900.0)))
+    director.jump(500.0 + visible - 1.0)
+    assert director.ground_cursor == 1
+    enemies = EnemyPool()
+    assert director.step(500.0 + visible - 1.0, enemies) == 1
+    assert enemies.y[0] == pytest.approx(PLAYFIELD_H - GROUND_SCROLL_RATIO)
+
+
+def test_jump_skips_the_ground_entries_already_scrolled_off_the_bottom() -> None:
+    visible = (PLAYFIELD_H - GROUND_Y0) / GROUND_SCROLL_RATIO
+    director = StageDirector(ground_stage(house(100.0), house(500.0)))
+    director.jump(500.0 + visible + 1.0)
+    assert director.ground_cursor == 2
+
+
+def test_jump_to_the_start_rewinds_the_ground_cursor() -> None:
+    director = StageDirector(ground_stage(house(5.0)))
+    director.step(9.0, EnemyPool())
+    director.jump(0.0)
+    assert director.ground_cursor == 0

@@ -2,13 +2,22 @@ import dataclasses
 
 import pytest
 
+from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.stages.city_block import CityBlock
 from scorched_core.stages.city_style import CityStyle
 
 
-def block(**changes: int) -> CityBlock:
-    fields = {"d": 0.0, "col": 0, "cols": 2, "rows": 2, "style": CityStyle.SLUMS, "seed": 1}
-    return CityBlock(**{**fields, **changes})
+def block(**changes: object) -> CityBlock:
+    fields: dict[str, object] = {
+        "d": 0.0,
+        "col": 0,
+        "cols": 2,
+        "rows": 2,
+        "style": CityStyle.SLUMS,
+        "seed": 1,
+    }
+    return CityBlock(**{**fields, **changes})  # type: ignore[arg-type]
 
 
 def test_a_block_defaults_to_no_fires_and_no_signs() -> None:
@@ -52,3 +61,41 @@ def test_negative_fires_and_signs_are_rejected() -> None:
         block(fires=-1)
     with pytest.raises(ValueError, match="signs"):
         block(signs=-1)
+
+
+def test_a_block_defaults_to_no_targets() -> None:
+    assert block().targets == ()
+
+
+def test_a_block_carries_its_targets() -> None:
+    targets = ((0, EnemyKind.HOUSE, PickupKind.MEDAL), (3, EnemyKind.FUEL_TANK, None))
+    assert block(cols=2, rows=2, targets=targets).targets == targets
+
+
+@pytest.mark.parametrize(
+    "kind", [EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD]
+)
+def test_every_target_kind_is_valid(kind: EnemyKind) -> None:
+    assert block(targets=((0, kind, None),)).targets == ((0, kind, None),)
+
+
+@pytest.mark.parametrize("lot", [-1, 4])
+def test_a_target_lot_outside_the_grid_is_rejected(lot: int) -> None:
+    with pytest.raises(ValueError, match="lot"):
+        block(cols=2, rows=2, targets=((lot, EnemyKind.HOUSE, None),))
+
+
+def test_the_last_lot_of_the_grid_is_a_valid_target() -> None:
+    assert block(cols=2, rows=2, targets=((3, EnemyKind.HOUSE, None),)).targets
+
+
+def test_two_targets_on_one_lot_are_rejected() -> None:
+    targets = ((1, EnemyKind.HOUSE, None), (1, EnemyKind.DEPOT, None))
+    with pytest.raises(ValueError, match="twice"):
+        block(targets=targets)
+
+
+@pytest.mark.parametrize("kind", [EnemyKind.JET, EnemyKind.TANK, EnemyKind.TRAIN])
+def test_a_kind_that_is_not_a_target_is_rejected(kind: EnemyKind) -> None:
+    with pytest.raises(ValueError, match=kind.name):
+        block(targets=((0, kind, None),))

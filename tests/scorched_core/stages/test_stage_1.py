@@ -107,7 +107,8 @@ def test_at_least_three_aa_turrets_drop_a_bomb() -> None:
 
 def test_the_opening_uses_every_gallery_kind() -> None:
     boss_kinds = {EnemyKind.TRAIN, EnemyKind.TRAIN_TURRET, EnemyKind.TRAIN_STUMP}  # boss rows
-    assert {wave.kind for wave in STAGE_1.waves} == set(EnemyKind) - boss_kinds
+    target_kinds = {EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD}
+    assert {wave.kind for wave in STAGE_1.waves} == set(EnemyKind) - boss_kinds - target_kinds
 
 
 def test_jets_sweep_in_from_both_sides() -> None:

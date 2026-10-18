@@ -21,6 +21,7 @@ from scorched_core.input.button import Button
 from scorched_core.paths.path_library import PATHS
 from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.protocol import (
+    BLAST_MEDIUM,
     EBULLET_GAME_CAP,
     EBULLET_STRIDE,
     ENEMY_CAP,
@@ -97,7 +98,7 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
 )
 from scorched_core.stages.city_block import CityBlock
-from scorched_core.stages.city_builder import scenery_placements
+from scorched_core.stages.city_builder import scenery_placements, target_entries
 from scorched_core.stages.city_style import CityStyle
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
@@ -121,6 +122,7 @@ from scorched_core.tuning import (
     EXTEND_FIRST,
     GALLERY_LOOP_TICKS,
     GROUND_SCROLL_RATIO,
+    GROUND_Y0,
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
     INTRO_TICKS,
@@ -401,8 +403,9 @@ def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
         "hitbox_radius": 2.0,
         "ground_scroll_ratio": 0.94,
         "ground_y0": -40.0,
-        "enemy_ground": [0, 0, 0, 1, 1, 1, 1, 1],
-        "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0],
+        "enemy_ground": [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0],
+        "enemy_wreck": [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1],
         "bomb_radius_min": 20.0,
         "bomb_radius_max": 230.0,
         "bomb_grow_ticks": 30,
@@ -1246,8 +1249,21 @@ def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
 def test_the_manifest_exports_the_ground_scroll_ratio_and_per_kind_radii() -> None:
     tuning = Game().manifest()["tuning"]
     assert tuning["ground_scroll_ratio"] == 0.94
-    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1, 1, 1, 1]
-    assert tuning["enemy_radius"] == [9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0]
+    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    assert tuning["enemy_radius"] == [
+        9.0,
+        10.0,
+        14.0,
+        11.0,
+        10.0,
+        28.0,
+        11.0,
+        6.0,
+        12.0,
+        11.0,
+        14.0,
+        12.0,
+    ]
 
 
 def test_a_ground_tank_scrolls_with_the_terrain_through_the_game_step() -> None:
@@ -3755,3 +3771,88 @@ def test_a_restart_starts_the_chain_and_the_stage_count_over() -> None:
     game.restart()
     assert game.chain.collected == 0
     assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+
+
+# --- destructible city targets (plan 03-15) ----------------------------------------------------
+
+_HOUSE_X = 120.0  # the centre of the only lot of a one-lot block in column 1
+_HOUSE_AT = 40.0  # block row d=0: inset 8 plus half the 64-unit lot
+
+
+def _house_stage() -> StageData:
+    """A stage whose only city lot is a house that drops a medal."""
+    city = (
+        CityBlock(
+            d=0.0,
+            col=1,
+            cols=1,
+            rows=1,
+            style=CityStyle.SLUMS,
+            seed=3,
+            targets=((0, EnemyKind.HOUSE, PickupKind.MEDAL),),
+        ),
+    )
+    return StageData(
+        number=1, length=2000.0, waves=(), markers=(), city=city, ground=target_entries(city)
+    )
+
+
+def _tick_until_house(game: Game) -> None:
+    _tick_until(game, lambda g: g.enemies.n == 1)
+
+
+def _fire_until_a_kill(game: Game, limit: int = 900) -> None:
+    for _ in range(limit):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+        if game.buffers["header"][H_KILLS] > 0:
+            return
+    pytest.fail("nothing was killed")
+
+
+def test_a_flagged_house_spawns_on_its_block_aligned_with_the_scenery() -> None:
+    game = _stage_game(_house_stage(), god=True)
+    _tick_until_house(game)
+    enemies = game.enemies
+    assert enemies.kind[0] == EnemyKind.HOUSE
+    assert enemies.x[0] == pytest.approx(_HOUSE_X)
+    drawn = GROUND_Y0 + GROUND_SCROLL_RATIO * (game.terrain.distance - _HOUSE_AT)
+    assert enemies.y[0] == pytest.approx(drawn, abs=1.0)  # within the one step it just scrolled
+    assert game.enemies.motion[0] == MotionKind.GROUND
+    assert game.enemies.drop[0] == PickupKind.MEDAL
+
+
+def test_a_house_stays_glued_to_its_block_while_the_terrain_scrolls() -> None:
+    game = _stage_game(_house_stage(), god=True)
+    _tick_until_house(game)
+    offset = game.enemies.y[0] - (
+        GROUND_Y0 + GROUND_SCROLL_RATIO * (game.terrain.distance - _HOUSE_AT)
+    )
+    for _ in range(60):
+        _tick(game)
+        drawn = GROUND_Y0 + GROUND_SCROLL_RATIO * (game.terrain.distance - _HOUSE_AT)
+        assert game.enemies.y[0] - drawn == pytest.approx(offset, abs=1e-3)
+
+
+def test_destroying_a_house_pays_500_leaves_a_medal_and_explodes_as_a_ground_kill() -> None:
+    game = _stage_game(_house_stage(), weapon=WeaponKind.LASER, god=True)
+    _tick_until_house(game)
+    _fire_until_a_kill(game)
+    assert game.score.score == 500
+    assert game.buffers["header"][H_SCORE] == 500.0
+    assert game.pickups.n == 1
+    assert game.pickups.kind[0] == PickupKind.MEDAL
+    assert game.pickups.x[0] == pytest.approx(_HOUSE_X, abs=0.5)
+    events = game.buffers["events"]
+    slots = [i * EVENT_STRIDE for i in range(game.events.n)]
+    at = next(slot for slot in slots if events[slot] == EV_EXPLOSION)
+    assert (events[at + 3], events[at + 4], events[at + 5]) == (
+        float(BLAST_MEDIUM),
+        1.0,
+        float(EnemyKind.HOUSE),
+    )
+    assert events[at + 1] == pytest.approx(_HOUSE_X)
+    assert game.pickups.y[0] == pytest.approx(events[at + 2], abs=1.5)
+
+
+def test_the_manifest_lists_which_kinds_leave_a_wreck() -> None:
+    assert Game().manifest()["tuning"]["enemy_wreck"] == [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1]

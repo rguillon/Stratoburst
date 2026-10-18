@@ -1,8 +1,11 @@
 import pytest
+from scorched_core.stages.ground_entry import GroundEntry
 
+from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.protocol import CITY_STRIDE
 from scorched_core.stages.city_block import CityBlock
-from scorched_core.stages.city_builder import scenery_placements
+from scorched_core.stages.city_builder import scenery_placements, target_entries
 from scorched_core.stages.city_feature import CityFeature
 from scorched_core.stages.city_style import CityStyle
 from scorched_core.stages.scenery_kind import SceneryKind
@@ -235,3 +238,96 @@ def test_a_margin_building_in_a_feature_corridor_is_skipped_too() -> None:
     buildings = [rec for rec in records(flat) if int(rec[0]) != SceneryKind.MAGLEV]
     assert -120.0 not in {rec[1] for rec in buildings}
     assert len([rec for rec in buildings if rec[1] < 0.0 or rec[1] > 240.0]) == 3
+
+
+# --- destructible targets (plan 03-15) ---------------------------------------------------------
+
+
+def lot_centre(target: CityBlock, lot: int) -> tuple[float, float]:
+    """The (x, distance) centre of lot ``lot`` of ``target``, computed independently."""
+    cell = CITY_BLOCK / target.cols, CITY_BLOCK / target.rows
+    row, col = divmod(lot, target.cols)
+    inset = (CITY_PITCH - CITY_BLOCK) / 2
+    return (
+        CITY_PITCH * target.col + inset + (col + 0.5) * cell[0],
+        target.d + inset + (row + 0.5) * cell[1],
+    )
+
+
+def test_no_targets_give_no_entries() -> None:
+    assert target_entries(()) == ()
+    assert target_entries((block(),)) == ()
+
+
+def test_a_flagged_lot_becomes_one_ground_entry_at_the_lot_centre() -> None:
+    target = block(cols=3, rows=2, targets=((4, EnemyKind.FUEL_TANK, PickupKind.MEDAL),))
+    x, at = lot_centre(target, 4)
+    assert target_entries((target,)) == (GroundEntry(at, EnemyKind.FUEL_TANK, x, PickupKind.MEDAL),)
+
+
+def test_every_flagged_lot_gets_an_entry_sorted_by_distance_then_x() -> None:
+    late = block(d=400.0, cols=1, rows=1, targets=((0, EnemyKind.DEPOT, None),))
+    early = block(
+        d=80.0,
+        cols=2,
+        rows=1,
+        targets=((1, EnemyKind.HOUSE, None), (0, EnemyKind.BILLBOARD, PickupKind.MEDAL)),
+    )
+    entries = target_entries((late, early))
+    assert [(entry.kind, entry.x) for entry in entries] == [
+        (EnemyKind.BILLBOARD, lot_centre(early, 0)[0]),
+        (EnemyKind.HOUSE, lot_centre(early, 1)[0]),
+        (EnemyKind.DEPOT, lot_centre(late, 0)[0]),
+    ]
+    assert [entry.at for entry in entries] == sorted(entry.at for entry in entries)
+
+
+def test_a_target_lot_is_left_out_of_the_scenery() -> None:
+    plain = block(cols=2, rows=2)
+    flagged = block(cols=2, rows=2, targets=((2, EnemyKind.HOUSE, None),))
+    x, at = lot_centre(flagged, 2)
+
+    def standing(flat: tuple[float, ...]) -> list[Record]:
+        return [
+            rec for rec in own(flat, flagged) if abs(rec[1] - x) < 1e-6 and abs(rec[2] - at) < 1e-6
+        ]
+
+    assert standing(scenery_placements((plain,), (), 6))
+    assert not standing(scenery_placements((flagged,), (), 6))
+
+
+def test_flagging_a_lot_removes_exactly_that_lot_from_a_block_without_fires_or_signs() -> None:
+    flagged = block(cols=3, rows=3, targets=((0, EnemyKind.HOUSE, None),))
+    plain = scenery_placements((block(cols=3, rows=3),), (), 6)
+    fewer = scenery_placements((flagged,), (), 6)
+    assert (
+        len(of_kind(plain, SceneryKind.SLUM_HOUSE)) - len(of_kind(fewer, SceneryKind.SLUM_HOUSE))
+        == 1
+    )
+
+
+def fires_of(flat: tuple[float, ...], target: CityBlock) -> list[Record]:
+    return [rec for rec in own(flat, target) if int(rec[0]) == SceneryKind.FIRE]
+
+
+def test_a_fire_never_lands_on_a_target_lot() -> None:
+    every_lot_but_one = tuple((lot, EnemyKind.HOUSE, None) for lot in range(1, 4))
+    target = block(cols=2, rows=2, fires=1, targets=every_lot_but_one)
+    fires = fires_of(scenery_placements((target,), (), 6), target)
+    assert len(fires) == 1
+    assert (fires[0][1], fires[0][2]) == pytest.approx(lot_centre(target, 0))
+
+
+def test_more_fires_than_free_lots_burn_every_free_lot() -> None:
+    target = block(cols=2, rows=1, fires=2, targets=((1, EnemyKind.HOUSE, None),))
+    assert len(fires_of(scenery_placements((target,), (), 6), target)) == 1
+
+
+def test_a_sign_is_never_hung_on_a_target_lot() -> None:
+    target = block(
+        style=CityStyle.DOWNTOWN, cols=2, rows=1, signs=2, targets=((0, EnemyKind.BILLBOARD, None),)
+    )
+    target_x, free_x = lot_centre(target, 0)[0], lot_centre(target, 1)[0]
+    signs = of_kind(scenery_placements((target,), (), 6), SceneryKind.SIGN)
+    assert len(signs) == 1  # two were asked for but only the free lot can carry one
+    assert abs(signs[0][1] - free_x) < abs(signs[0][1] - target_x)
