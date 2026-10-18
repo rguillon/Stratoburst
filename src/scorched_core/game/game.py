@@ -115,6 +115,7 @@ from scorched_core.tuning import (
     GROUND_SCROLL_RATIO,
     HITBOX_RADIUS,
     HITSTOP_BOMB_TICKS,
+    HITSTOP_DEATH_TICKS,
     HOMING_DAMAGE,
     MAX_LEVEL,
     MISSILE_RADIUS,
@@ -510,6 +511,7 @@ class Game:
         was_dying = life.phase == PlayerPhase.DYING
         if life.step(self.ship, self.events):
             self._on_death()
+            self.hitstop.trigger(HITSTOP_DEATH_TICKS)  # only a confirmed death, never the grace
         if was_dying and life.phase == PlayerPhase.RESPAWN:
             self.bomb.stock = max(self.bomb.stock, BOMB_START_STOCK)  # D-10: a new life restocks
         if life.can_control:

@@ -69,8 +69,11 @@ export function createShake({ events, rng = mulberry32(SEED) }) {
     return out;
   }
 
+  // Only the two big events shake. Every other kind (hits, kills, shots, pickups, enemy fire) is
+  // deliberately ignored, so ordinary action stays smooth.
   function handle(type) {
     if (type === events.BOMB_DETONATE) trigger(SHAKE_BOMB.amplitude, SHAKE_BOMB.durationS);
+    else if (type === events.PLAYER_DEATH) trigger(SHAKE_DEATH.amplitude, SHAKE_DEATH.durationS);
   }
 
   return {
@@ -85,6 +88,14 @@ export function createShake({ events, rng = mulberry32(SEED) }) {
       return count;
     },
   };
+}
+
+// The seconds the effect clock (particles, trails, wreck smoke, beam flicker, rotors) advances this
+// frame. It stands still during hitstop and while paused, so nothing jitters in a freeze and effects
+// continue from where they stopped after a resume. `state` is `{ paused, hitstop }`; callers reuse one
+// object so the frame loop allocates nothing.
+export function effectClockDelta(dtMs, state) {
+  return state.paused || state.hitstop ? 0 : dtMs / 1000;
 }
 
 // Calls `render()` with the camera moved by `offset` ({ x, z }) and puts it back afterwards, even when

@@ -741,7 +741,7 @@ def jittered_dts(hz: int, seconds: float = 10.0, jitter_ms: float = 0.4) -> list
 def test_the_simulation_runs_six_hundred_steps_in_ten_seconds_at_any_refresh_rate_hz(
     hz: int,
 ) -> None:
-    game = Game()
+    game = Game(god=True)  # a death would freeze steps (hitstop): the runner is under test here
     steps = sum(game.tick(dt, 0, 0.0, 0.0, 0.0, 0.0) for dt in jittered_dts(hz))
     assert 599 <= steps <= 601
     assert game.tick_count == steps
@@ -938,7 +938,7 @@ def test_the_python_fault_waits_for_step_120_and_not_119_fault() -> None:
 
 @pytest.mark.parametrize("fault", [FaultMode.NONE, FaultMode.JS])
 def test_only_the_python_fault_mode_raises_in_the_simulation_fault(fault: FaultMode) -> None:
-    game = Game(fault=fault)
+    game = Game(fault=fault, god=True)  # a death would freeze steps (hitstop) and skip ticks
     _run_ticks(game, 300)
     assert game.tick_count == 300
 

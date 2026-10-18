@@ -25,7 +25,7 @@ import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
 import { createBeamMesh } from './fx/beam_mesh.js';
 import { createBombFx } from './fx/bomb_fx.js';
-import { createShake, withCameraOffset } from './fx/shake.js';
+import { createShake, effectClockDelta, withCameraOffset } from './fx/shake.js';
 import { createFxDispatcher } from './fx/fx_dispatcher.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
@@ -40,6 +40,8 @@ const LOAD_TIMEOUT_MS = 60_000;
 const JS_FAULT_FRAME = 120;
 // Filled by the shake each frame and read right before the render call: one object, no allocation.
 const shakeScratch = { x: 0, z: 0 };
+// What the effect clock and the shake check each frame: { paused, hitstop }, updated in place.
+const clockState = { paused: false, hitstop: false };
 
 const panel = installErrorPanel();
 
@@ -395,6 +397,8 @@ async function main() {
       // hold exactly. The effect clock also holds while the game is paused.
       const hitstop = header[slots.HITSTOP] > 0;
       const paused = (header[slots.FLAGS] & manifest.flags.PAUSED) !== 0;
+      clockState.hitstop = hitstop;
+      clockState.paused = paused;
       if (hitstop) hitstopFrames += 1;
       const alpha = hitstop ? 0 : header[slots.ALPHA];
       // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
@@ -436,7 +440,7 @@ async function main() {
       rig.terrain.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
-      if (!hitstop && !paused) fxTime += dt / 1000;
+      fxTime += effectClockDelta(dt, clockState);
       lightPool.update(dt / 1000);
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);

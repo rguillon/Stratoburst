@@ -20,6 +20,12 @@ test('a mortal idle ship dies, flies back in and blinks invulnerable', async ({ 
     )
     .toBe(false);
   expect(await readSlot(page, 'DEATHS')).toBeGreaterThanOrEqual(1);
+  // VISL-04, D-26: the death freezes the action for a few frames and shakes the screen. The hooks
+  // count both, so the poll above cannot have missed them. The ship was idle, so nothing else in
+  // the run is big enough to shake.
+  const fx = await page.evaluate(() => ({ ...globalThis.__scorched.fx }));
+  expect(fx.shakes).toBeGreaterThanOrEqual(1);
+  expect(fx.hitstopFrames).toBeGreaterThanOrEqual(1);
   await expect
     .poll(() => readSlot(page, 'PLAYER_PHASE'), { timeout: 20_000, intervals: [100] })
     .toBe(0);
