@@ -102,6 +102,7 @@ export function createDecalRing({
   const markSeed = new Float32Array(capacity);
   let next = 0;
   let stored = 0;
+  let limit = capacity;
   let live = 0;
 
   function add(x, y, size) {
@@ -121,10 +122,11 @@ export function createDecalRing({
     else if (a === blast.MEDIUM) add(x, y, MARK_SIZE.MEDIUM);
   }
 
-  // Draws the stored marks, newest first, skipping any that scrolled past the bottom.
+  // Draws the `limit` newest marks, newest first, skipping any that scrolled past the bottom.
   function update(scrollNow) {
+    const visible = Math.min(stored, limit);
     live = 0;
-    for (let i = 0; i < stored; i++) {
+    for (let i = 0; i < visible; i++) {
       const slot = (next - 1 - i + capacity) % capacity;
       const y = markY[slot] + ratio * (scrollNow - markScroll[slot]);
       if (y > playfieldH + markSize[slot] / 2) continue;
@@ -142,11 +144,17 @@ export function createDecalRing({
     attribute.needsUpdate = true;
   }
 
+  // The tier's cap on drawn marks. Stored marks are never deleted, so raising it shows them again.
+  function setLimit(n) {
+    limit = Math.max(0, Math.min(n, capacity));
+  }
+
   return {
     mesh,
     handle,
     add,
     update,
+    setLimit,
     get live() {
       return live;
     },

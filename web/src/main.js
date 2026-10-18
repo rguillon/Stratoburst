@@ -168,6 +168,10 @@ async function main() {
     getScroll: () => scrollNow,
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,
+    // Wrecks smoulder through the same particle layers, on the terrain where they lie.
+    layers: fxLayers,
+    getScale: () => TIERS[currentTier].particleScale,
+    toWorld: (x, y, out) => rig.groundLayer.toWorld(x, y, out),
   });
   rig.groundLayer.group.add(wrecks.group);
   // Scorch marks of ground kills lie on the terrain below the shadows and the dim mask.
@@ -180,6 +184,8 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.groundLayer.group.add(decals.mesh);
+  // The tier caps how many scorch marks are drawn; the ring keeps them all stored.
+  const applyDecalLimit = (tierName) => decals.setLimit(TIERS[tierName].maxDecals);
   const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals] });
   let fxTime = 0;
 
@@ -202,6 +208,7 @@ async function main() {
     currentTier = 'low';
     applyModelDetail('low');
   }
+  applyDecalLimit(currentTier);
   // Upload every detail level's geometry now, behind the loading screen, so a tier change
   // during play never uploads or compiles anything.
   for (const { modelDetail } of Object.values(TIERS)) {
@@ -274,6 +281,7 @@ async function main() {
       if (q.changed) {
         rig.applyTier(TIERS[q.tier]);
         applyModelDetail(q.tier);
+        applyDecalLimit(q.tier);
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }

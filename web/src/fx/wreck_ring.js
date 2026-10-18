@@ -6,6 +6,8 @@ import { mulberry32 } from './explosion_fx.js';
 // nothing (T-02-16). A wreck has no Python state. It is placed in plane coordinates inside the
 // ground layer, at the unit's kill position plus the ground scroll since the kill, which is the
 // same rate the living unit moved at, so nothing slides against the terrain it died on.
+// While a wreck is on screen it smoulders: a throttled trickle of dark smoke, and for its first
+// seconds small orange flames, goes through the particle layers (T-02-18), scaled by the tier.
 
 // Instance colour that scales the model's vertex colours down to burnt metal.
 const CHAR = [0.12, 0.11, 0.1];
@@ -14,6 +16,19 @@ const EXIT_MARGIN = 40;
 
 const TWO_PI = Math.PI * 2;
 
+// Smouldering, at particleScale 1: a smoke puff every SMOKE_INTERVAL s for as long as the wreck is
+// on screen, a flame every FLAME_INTERVAL s during its first FLAME_WINDOW s.
+const SMOKE_INTERVAL = 0.18;
+const FLAME_INTERVAL = 0.3;
+const FLAME_WINDOW = 6;
+// A frame longer than this (a tab returning from the background) counts as this long, so a wreck
+// never bursts out a backlog of puffs.
+const MAX_DT = 0.25;
+// Emitter looks, as in the explosion recipes: HDR flame, dark smoke that rises (negative gravity).
+const SMOKE_COLOR = [0.14, 0.13, 0.12];
+const FLAME_COLOR = [3.4, 1.6, 0.4];
+const SMOKE_GRAVITY = -0.15;
+
 // Module-level scratch objects: update() runs every frame and must not allocate.
 const matrix = new THREE.Matrix4();
 const position = new THREE.Vector3();
@@ -21,10 +36,13 @@ const quaternion = new THREE.Quaternion();
 const scale = new THREE.Vector3(1, 1, 1);
 const color = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
+const spot = new THREE.Vector3();
 
 // `kinds` maps the ground kind names to their channel values; `geometryFor(kindName, detail)`
 // returns the model whose `body` is the wreck's shape. `getScroll()` is the terrain scroll at the
 // moment an event is handled, and `ratio` is the ground scroll ratio of the living units.
+// `layers` ({ additive, normal } particle layers), `getScale()` (the tier's particleScale) and
+// `toWorld(x, y, out)` (the ground layer's) drive the smoulder; without `layers` there is none.
 export function createWreckRing({
   capacity = 12,
   kinds,
@@ -34,6 +52,9 @@ export function createWreckRing({
   getScroll,
   playfieldW,
   playfieldH,
+  layers = null,
+  getScale = () => 1,
+  toWorld = null,
   rng = mulberry32(0x77ec4),
 }) {
   const group = new THREE.Group();
@@ -63,10 +84,14 @@ export function createWreckRing({
   const wreckScroll = new Float32Array(capacity);
   const wreckKind = new Int32Array(capacity).fill(-1);
   const wreckYaw = new Float32Array(capacity);
+  const wreckBorn = new Float32Array(capacity); // effect clock at the kill
+  const smokeDue = new Float32Array(capacity); // scaled time accumulated toward the next puff
+  const flameDue = new Float32Array(capacity);
   const written = new Int32Array(meshByKind.length);
   let next = 0;
   let spawned = 0;
   let live = 0;
+  let clock = 0; // the effect clock of the latest update
 
   // Only a ground-anchored kill (EXPLOSION with b == 1) leaves a wreck; air kills add nothing.
   function handle(type, x, y, a, b, c) {
@@ -76,13 +101,75 @@ export function createWreckRing({
     wreckScroll[next] = getScroll();
     wreckKind[next] = c;
     wreckYaw[next] = rng() * TWO_PI;
+    wreckBorn[next] = clock;
+    smokeDue[next] = 0;
+    flameDue[next] = 0;
     next = (next + 1) % capacity;
     spawned += 1;
   }
 
-  // `scrollNow` is the terrain scroll this frame. A wreck past the bottom edge is not drawn again.
-  // `timeS` (the effect clock) is reserved for the smouldering trickle that plan 02-14 adds.
+  function puffSmoke(x, y, z) {
+    const angle = rng() * TWO_PI;
+    const drift = 2 + rng() * 4;
+    layers.normal.emit(
+      x,
+      y,
+      z,
+      Math.cos(angle) * drift,
+      6 + rng() * 6,
+      Math.sin(angle) * drift,
+      1.2 + rng() * 0.6,
+      3,
+      10,
+      SMOKE_COLOR[0],
+      SMOKE_COLOR[1],
+      SMOKE_COLOR[2],
+      SMOKE_GRAVITY,
+    );
+  }
+
+  function flicker(x, y, z) {
+    const angle = rng() * TWO_PI;
+    const drift = 3 + rng() * 5;
+    layers.additive.emit(
+      x,
+      y,
+      z,
+      Math.cos(angle) * drift,
+      10 + rng() * 12,
+      Math.sin(angle) * drift,
+      0.3 + rng() * 0.2,
+      3.5,
+      1,
+      FLAME_COLOR[0],
+      FLAME_COLOR[1],
+      FLAME_COLOR[2],
+      0,
+    );
+  }
+
+  // One wreck's share of the trickle for a frame of `dt` seconds at `scale` quality.
+  function smoulder(i, x, y, dt, scale, timeS) {
+    toWorld(x, y, spot);
+    smokeDue[i] += dt * scale;
+    while (smokeDue[i] >= SMOKE_INTERVAL) {
+      smokeDue[i] -= SMOKE_INTERVAL;
+      puffSmoke(spot.x, spot.y, spot.z);
+    }
+    if (timeS - wreckBorn[i] >= FLAME_WINDOW) return;
+    flameDue[i] += dt * scale;
+    while (flameDue[i] >= FLAME_INTERVAL) {
+      flameDue[i] -= FLAME_INTERVAL;
+      flicker(spot.x, spot.y, spot.z);
+    }
+  }
+
+  // `scrollNow` is the terrain scroll this frame and `timeS` the effect clock. A wreck past the
+  // bottom edge is not drawn again, and only a wreck inside the playfield smoulders.
   function update(scrollNow, timeS = 0) {
+    const dt = Math.min(Math.max(timeS - clock, 0), MAX_DT);
+    clock = timeS;
+    const scale = layers === null ? 0 : getScale();
     written.fill(0);
     live = 0;
     for (let i = 0; i < capacity; i++) {
@@ -90,6 +177,7 @@ export function createWreckRing({
       if (kind < 0) continue;
       const y = wreckY[i] + ratio * (scrollNow - wreckScroll[i]);
       if (y > playfieldH + EXIT_MARGIN) continue;
+      if (layers !== null && y >= 0 && y <= playfieldH) smoulder(i, wreckX[i], y, dt, scale, timeS);
       position.set(wreckX[i] - halfW, 0, y - halfH);
       quaternion.setFromAxisAngle(UP, wreckYaw[i]);
       matrix.compose(position, quaternion, scale);
