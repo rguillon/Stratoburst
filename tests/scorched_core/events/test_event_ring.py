@@ -1,5 +1,5 @@
 from scorched_core.events.event_ring import EventRing
-from scorched_core.protocol import EV_EXPLOSION, EVENT_CAP, EVENT_STRIDE
+from scorched_core.protocol import EV_EXPLOSION, EV_HIT, EVENT_CAP, EVENT_SOFT_CAP, EVENT_STRIDE
 
 
 def test_a_new_ring_is_empty_and_preallocated() -> None:
@@ -39,3 +39,28 @@ def test_the_ring_never_grows_past_its_capacity() -> None:
     assert ring.n == EVENT_CAP
     assert ring.dropped == 5
     assert len(ring.buf) == EVENT_STRIDE * EVENT_CAP
+
+
+def test_soft_cap_refuses_low_priority_events_but_still_accepts_high_priority_ones() -> None:
+    ring = EventRing()
+    for _ in range(EVENT_SOFT_CAP):
+        assert ring.push(EV_HIT, 0.0, 0.0, low=True) is True
+    assert ring.push(EV_HIT, 1.0, 1.0, low=True) is False
+    assert (ring.n, ring.dropped) == (EVENT_SOFT_CAP, 1)
+    for _ in range(EVENT_CAP - EVENT_SOFT_CAP):
+        assert ring.push(EV_EXPLOSION, 2.0, 2.0) is True
+    assert ring.n == EVENT_CAP
+    assert ring.push(EV_EXPLOSION, 3.0, 3.0) is False
+    assert ring.dropped == 2
+
+
+def test_soft_cap_drops_stay_cumulative_across_clears() -> None:
+    ring = EventRing()
+    for _ in range(EVENT_SOFT_CAP + 2):
+        ring.push(EV_HIT, 0.0, 0.0, low=True)
+    ring.clear()
+    assert ring.dropped == 2
+    assert ring.push(EV_HIT, 0.0, 0.0, low=True) is True
+    for _ in range(EVENT_SOFT_CAP):
+        ring.push(EV_HIT, 0.0, 0.0, low=True)
+    assert ring.dropped == 3

@@ -13,6 +13,7 @@ from scorched_core.protocol import (
     DRONE_STRIDE,
     EBULLET_STRIDE,
     EV_EXPLOSION,
+    EV_HIT,
     EVENT_CAP,
     EVENT_STRIDE,
     FLAG_FIRING,
@@ -677,3 +678,49 @@ def test_a_kill_publishes_one_explosion_through_the_events_channel() -> None:
     assert events[2] == pytest.approx(game.ship.y - 40.0, abs=2.0)
     assert events[3] == 0.0  # BLAST_SMALL
     assert game.buffers["header"][H_EVENT_DROPPED] == 0
+
+
+def test_event_n_resets_on_a_zero_step_tick_after_an_event_tick() -> None:
+    game = Game()
+    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.tick(0.0, 0, 0.0, 0.0, 0.0, 0.0) == 0
+    assert game.buffers["header"][H_EVENT_N] == 0
+
+
+def test_event_n_resets_on_a_paused_tick_after_an_event_tick() -> None:
+    game = Game()
+    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_N] == 1
+    game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
+    assert game.paused
+    assert game.buffers["header"][H_EVENT_N] == 0
+
+
+def test_event_n_resets_on_a_following_step_tick_with_no_new_event() -> None:
+    game = Game()
+    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_N] == 0
+
+
+def test_event_dropped_is_cumulative_across_ticks() -> None:
+    game = Game()
+    game.events.dropped = 5
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_DROPPED] == 5
+
+
+def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
+    game = Game()
+    swarm = game.swarm
+    swarm.x[0] = swarm.base_x[0] = game.ship.x
+    swarm.y[0], swarm.hp[0], swarm.n = game.ship.y - 40.0, 3, 1
+    game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.buffers["events"][0] == EV_HIT

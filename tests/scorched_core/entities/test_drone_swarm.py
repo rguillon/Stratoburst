@@ -11,6 +11,8 @@ from scorched_core.protocol import (
     DRONE_CAP,
     DRONE_STRIDE,
     EV_EXPLOSION,
+    EV_HIT,
+    EVENT_SOFT_CAP,
     EVENT_STRIDE,
     PLAYFIELD_H,
     PLAYFIELD_W,
@@ -275,3 +277,50 @@ def test_a_drone_that_leaves_the_bottom_alive_pushes_no_event() -> None:
 def test_a_swarm_built_without_a_ring_owns_a_private_one() -> None:
     swarm = make_swarm()
     assert swarm.events.n == 0
+
+
+def _swarm_with_ring() -> tuple[DroneSwarm, EventRing]:
+    ring = EventRing()
+    swarm = DroneSwarm(random.Random(1), events=ring)  # noqa: S311
+    swarm.n = 1
+    swarm.x[0], swarm.y[0], swarm.hp[0] = 60.0, 90.0, DRONE_HP
+    return swarm, ring
+
+
+def test_a_bolt_on_a_resting_drone_pushes_one_low_priority_hit() -> None:
+    swarm, ring = _swarm_with_ring()
+    swarm.apply_hit(0)
+    assert ring.n == 1
+    assert list(ring.buf[:EVENT_STRIDE]) == [EV_HIT, 60.0, 90.0, 0.0, 0.0, 0.0]
+    assert swarm.flash[0] == DRONE_FLASH_TICKS
+    assert swarm.hp[0] == DRONE_HP - 1
+
+
+def test_bolts_that_land_while_the_drone_flashes_push_no_extra_hit() -> None:
+    swarm, ring = _swarm_with_ring()
+    swarm.apply_hit(0)
+    swarm.apply_hit(0)
+    swarm.apply_hit(0)
+    assert ring.n == 1
+    assert swarm.hp[0] == DRONE_HP - 3
+
+
+def test_a_drone_that_finished_flashing_pushes_a_fresh_hit() -> None:
+    swarm, ring = _swarm_with_ring()
+    swarm.apply_hit(0)
+    swarm.flash[0] = 0
+    swarm.apply_hit(0)
+    assert ring.n == 2
+
+
+def test_a_hit_is_refused_past_the_soft_cap_while_the_explosion_still_fits() -> None:
+    swarm, ring = _swarm_with_ring()
+    for _ in range(EVENT_SOFT_CAP + 1):
+        ring.push(EV_EXPLOSION, 0.0, 0.0)
+    swarm.hp[0] = 1
+    swarm.apply_hit(0)
+    assert ring.dropped == 1
+    assert ring.n == EVENT_SOFT_CAP + 1
+    swarm.remove_dead()
+    assert ring.n == EVENT_SOFT_CAP + 2
+    assert ring.dropped == 1
