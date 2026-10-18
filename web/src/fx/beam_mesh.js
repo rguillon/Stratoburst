@@ -48,7 +48,7 @@ void main() {
   float d = length(vUv - 0.5) * 2.0;
   float spot = pow(max(1.0 - d, 0.0), 2.0);
   float flicker = 1.0 + 0.15 * sin(uTime * 73.0);
-  gl_FragColor = vec4(uColor * 1.6 * flicker, spot);
+  gl_FragColor = vec4(uColor * 0.9 * flicker, spot);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -81,8 +81,8 @@ export function createBeamMesh({ playfieldW, playfieldH, muzzleAhead = MUZZLE_AH
     additiveMaterial(BEAM_FRAGMENT, {
       uColor: { value: new THREE.Vector3(...PALETTE.LASER_CORE.rgb) },
       uTime: time,
-      uPower: { value: 0.7 },
-      uGain: { value: 1.4 },
+      uPower: { value: 1.2 },
+      uGain: { value: 0.42 },
     }),
   );
   const glow = new THREE.Mesh(
@@ -90,8 +90,8 @@ export function createBeamMesh({ playfieldW, playfieldH, muzzleAhead = MUZZLE_AH
     additiveMaterial(BEAM_FRAGMENT, {
       uColor: { value: new THREE.Vector3(...PALETTE.LASER_GLOW.rgb) },
       uTime: time,
-      uPower: { value: 2.0 },
-      uGain: { value: 1.0 },
+      uPower: { value: 1.6 },
+      uGain: { value: 0.5 },
     }),
   );
   const flare = new THREE.Mesh(
