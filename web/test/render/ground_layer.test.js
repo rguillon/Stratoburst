@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { CAMERA_FOV_DEG, altitudeScale, applyCameraFit, fitCamera } from '../../src/render/camera_fit.js';
-import { createGroundLayer } from '../../src/render/ground_layer.js';
-import { TERRAIN_DEPTH } from '../../src/render/terrain_ring.js';
+import { TERRAIN_DEPTH, createGroundLayer } from '../../src/render/ground_layer.js';
 
 const W = 240;
 const H = 320;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/fx/palette.js';
 import { createShadowInstances } from '../../src/fx/shadow_instances.js';
-import { TERRAIN_DEPTH } from '../../src/render/terrain_ring.js';
+import { TERRAIN_DEPTH } from '../../src/render/ground_layer.js';
 
 const STRIDE = 8;
 const KINDS = { JET: 0, HELI: 1, CARRIER: 2, TANK: 3, TURRET: 4 };
