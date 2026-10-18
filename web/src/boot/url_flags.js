@@ -1,5 +1,6 @@
 // URL flag grammar (D-15). Only these parameters are read; everything else is ignored:
-//   debug, stress, tier, crash (Phase 1) and the weapon test flags weapon and level.
+//   debug, stress, tier, crash (Phase 1), the weapon test flags weapon and level, and god
+// (presence only; the ship ignores hits so automated runs are never disturbed).
 // weapon is an allow-listed lowercase name (else null, the default); level is truncated and
 // clamped to 1..5 (null when absent or not a number). Python validates both again.
 
@@ -41,5 +42,6 @@ export function parseUrlFlags(search) {
     crash: pick(params, 'crash', CRASHES),
     weapon: pick(params, 'weapon', WEAPONS),
     level: parseLevel(params),
+    god: params.has('god'),
   });
 }

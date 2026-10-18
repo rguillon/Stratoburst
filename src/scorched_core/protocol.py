@@ -26,13 +26,17 @@ H_EVENT_N: Final = 12
 H_EVENT_DROPPED: Final = 13
 # Slots 14-29 are reserved by later Phase 2 plans (numbering table in 02-01-PLAN.md) and
 # slots 30-47 by Phase 3. Plan 02-08 takes the weapon slots; plan 02-10 takes PICKUP_N and
-# MAX_BONUS; plan 02-13 takes MISSILE_N; plan 02-16 takes STORM_N.
+# MAX_BONUS; plan 02-13 takes MISSILE_N; plan 02-16 takes STORM_N; plan 02-20 takes
+# PLAYER_PHASE, INVULN and DEATHS.
 H_PICKUP_N: Final = 15
 H_WEAPON: Final = 16
 H_LEVEL: Final = 17
 H_MISSILE_N: Final = 19
 H_MAX_BONUS: Final = 20
 H_STORM_N: Final = 21
+H_PLAYER_PHASE: Final = 22
+H_INVULN: Final = 23
+H_DEATHS: Final = 24
 
 FLAG_PAUSED: Final = 1
 FLAG_FIRING: Final = 2

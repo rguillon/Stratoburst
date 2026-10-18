@@ -112,3 +112,15 @@ def test_the_level_option_is_truncated_and_clamped_and_junk_means_one(
 def test_weapon_and_level_reach_the_game_together() -> None:
     game = create_game({"weapon": "homing", "level": "4"})._game
     assert (game.loadout.kind, game.loadout.level) == (WeaponKind.HOMING, 4)
+
+
+@pytest.mark.parametrize(
+    ("god", "expected"),
+    [(True, True), (False, False), (1, False), ("yes", False), ("true", False), (None, False)],
+)
+def test_the_god_option_is_a_real_boolean_true_or_nothing(god: object, expected: bool) -> None:
+    assert create_game({"god": god})._game.god is expected
+
+
+def test_no_god_option_means_a_mortal_ship() -> None:
+    assert create_game({"seed": 1})._game.god is False

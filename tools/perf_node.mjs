@@ -54,7 +54,7 @@ for (const file of pythonSources(srcRoot)) {
 pyodide.pyimport('sys').path.insert(0, '/lib');
 
 const entry = pyodide.pyimport('scorched_web.entrypoint');
-const game = entry.create_game(pyodide.toPy({ seed: 1, stress: options.stress }));
+const game = entry.create_game(pyodide.toPy({ seed: 1, stress: options.stress, god: true }));
 const manifestProxy = game.manifest();
 const manifest = manifestProxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false });
 manifestProxy.destroy();

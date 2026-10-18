@@ -10,6 +10,7 @@ describe('parseUrlFlags', () => {
       crash: null,
       weapon: null,
       level: null,
+      god: false,
     });
   });
 
@@ -71,6 +72,12 @@ describe('parseUrlFlags', () => {
     expect(parseUrlFlags(query).level).toBe(expected);
   });
 
+  it('detects god as a bare flag', () => {
+    expect(parseUrlFlags('?god').god).toBe(true);
+    expect(parseUrlFlags('?debug&god=1').god).toBe(true);
+    expect(parseUrlFlags('?debug').god).toBe(false);
+  });
+
   it('ignores unknown parameters', () => {
     expect(parseUrlFlags('?evil=1&debug')).toEqual({
       debug: true,
@@ -79,6 +86,7 @@ describe('parseUrlFlags', () => {
       crash: null,
       weapon: null,
       level: null,
+      god: false,
     });
   });
 

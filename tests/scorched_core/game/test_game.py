@@ -10,6 +10,7 @@ from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
@@ -22,23 +23,29 @@ from scorched_core.protocol import (
     EV_EXPLOSION,
     EV_HIT,
     EV_PICKUP,
+    EV_PLAYER_DEATH,
+    EV_PLAYER_HIT,
+    EV_RESPAWN,
     EV_SHOT,
     EVENT_CAP,
     EVENT_STRIDE,
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
+    H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_INVULN,
     H_KILLS,
     H_LEVEL,
     H_MAX_BONUS,
     H_MISSILE_N,
     H_PBULLET_N,
     H_PICKUP_N,
+    H_PLAYER_PHASE,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
@@ -57,9 +64,11 @@ from scorched_core.protocol import (
 )
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.tuning import (
+    DEATHBOMB_TICKS,
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
     GALLERY_LOOP_TICKS,
+    INVULN_RESPAWN_TICKS,
     SHIP_SPEED,
     SHIP_START_X,
     SHIP_START_Y,
@@ -87,7 +96,10 @@ def test_manifest_contract() -> None:
     assert header["slots"]["MAX_BONUS"] == 20 == H_MAX_BONUS
     assert header["slots"]["MISSILE_N"] == 19 == H_MISSILE_N
     assert header["slots"]["STORM_N"] == 21 == H_STORM_N
-    assert len(header["slots"]) == 20
+    assert header["slots"]["PLAYER_PHASE"] == 22 == H_PLAYER_PHASE
+    assert header["slots"]["INVULN"] == 23 == H_INVULN
+    assert header["slots"]["DEATHS"] == 24 == H_DEATHS
+    assert len(header["slots"]) == 23
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
@@ -1305,3 +1317,120 @@ def test_a_helicopter_in_the_gallery_fires_a_ring_of_eight() -> None:
         _tick(game)
         first_ring = first_ring or game.ebullets.n
     assert first_ring == 8
+
+
+def _empty_game(**kwargs: object) -> Game:
+    """A game with no gallery at all, so only what the test places can hurt the ship."""
+    game = Game(**kwargs)
+    game.gallery = GallerySpawner(script=(), loop_ticks=100_000)
+    return game
+
+
+def _put_bullet_on_ship(game: Game) -> None:
+    game.ebullets.spawn(game.ship.x, game.ship.y, 0.0, 0.0)
+
+
+def _header(game: Game, slot: int) -> int:
+    return int(game.buffers["header"][slot])
+
+
+def _event_kinds(game: Game) -> list[int]:
+    return [int(game.events.buf[i * EVENT_STRIDE]) for i in range(game.events.n)]
+
+
+def _tick_until(game: Game, done: Callable[[Game], bool], limit: int = 600) -> int:
+    """Tick until ``done`` holds and return how many ticks it took."""
+    for count in range(1, limit + 1):
+        _tick(game)
+        if done(game):
+            return count
+    pytest.fail("the condition never held")
+
+
+def test_manifest_maps_the_player_phases() -> None:
+    assert Game().manifest()["phases"] == {"ALIVE": 0, "GRACE": 1, "DYING": 2, "RESPAWN": 3}
+
+
+def test_an_enemy_bullet_on_the_hitbox_starts_the_grace_window_grace() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    assert _header(game, H_DEATHS) == 0
+    assert _event_kinds(game) == [EV_PLAYER_HIT]
+    assert game.ebullets.n == 0  # the bullet that hit is spent
+
+
+def test_the_ship_is_destroyed_eight_steps_after_the_hit_grace() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick(game)
+    for _ in range(DEATHBOMB_TICKS - 1):
+        _tick(game)
+        assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.DYING
+    assert _header(game, H_DEATHS) == 1
+    assert _event_kinds(game) == [EV_PLAYER_DEATH]
+
+
+def test_a_destroyed_ship_flies_back_in_blinking_invulnerable_grace() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick(game)
+    kinds: list[int] = []
+
+    def alive_again(g: Game) -> bool:
+        kinds.extend(_event_kinds(g))
+        return _header(g, H_PLAYER_PHASE) == PlayerPhase.ALIVE and g.life.deaths == 1
+
+    _tick_until(game, alive_again)
+    assert kinds == [EV_PLAYER_DEATH, EV_RESPAWN]
+    assert _header(game, H_INVULN) == INVULN_RESPAWN_TICKS
+    assert _header(game, H_DEATHS) == 1
+    assert game.ship.y == SHIP_START_Y
+    _tick(game)
+    assert _header(game, H_INVULN) == INVULN_RESPAWN_TICKS - 1
+
+
+def test_a_second_bullet_after_the_invulnerable_blink_kills_again_grace() -> None:
+    game = _empty_game()
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.deaths == 1)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    for _ in range(INVULN_RESPAWN_TICKS):
+        _tick(game)
+    assert game.life.vulnerable
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+
+
+def test_storm_bullets_on_the_hitbox_never_start_a_grace_window_storm() -> None:
+    game = _empty_game(stress=1)
+    game.storm_pool.x[0] = game.ship.x
+    game.storm_pool.y[0] = game.ship.y
+    game.storm_pool.vx[0] = 0.0
+    game.storm_pool.vy[0] = 0.0
+    for _ in range(30):
+        _tick(game)
+    assert game.storm_hits == 30
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_DEATHS) == 0
+
+
+def test_a_god_ship_ignores_gameplay_bullets_god() -> None:
+    game = _empty_game(god=True)
+    for _ in range(30):
+        _put_bullet_on_ship(game)
+        _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_DEATHS) == 0
+    assert EV_PLAYER_HIT not in _event_kinds(game)
+
+
+def test_a_god_ship_ignores_a_ramming_jet_god() -> None:
+    game = _empty_game(god=True)
+    game.enemies.spawn(EnemyKind.JET, game.ship.x, game.ship.y, MotionKind.SWAY, 0.0, 0.0)
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE

@@ -8,10 +8,16 @@ from typing import Final
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.clock.refresh_estimator import RefreshEstimator
 from scorched_core.collision.circle_hits import resolve_shots_vs_enemies
-from scorched_core.collision.ship_hits import resolve_pickups_vs_ship
+from scorched_core.collision.ship_hits import (
+    resolve_bodies_vs_ship,
+    resolve_bullets_vs_ship,
+    resolve_pickups_vs_ship,
+)
 from scorched_core.collision.uniform_grid import UniformGrid
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.entities.player_life import PlayerLife
+from scorched_core.entities.player_phase import PlayerPhase
 from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.events.event_ring import EventRing
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
@@ -49,17 +55,20 @@ from scorched_core.protocol import (
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
+    H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_INVULN,
     H_KILLS,
     H_LEVEL,
     H_MAX_BONUS,
     H_MISSILE_N,
     H_PBULLET_N,
     H_PICKUP_N,
+    H_PLAYER_PHASE,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
@@ -123,6 +132,9 @@ _HEADER_SLOTS: dict[str, int] = {
     "MAX_BONUS": H_MAX_BONUS,
     "MISSILE_N": H_MISSILE_N,
     "STORM_N": H_STORM_N,
+    "PLAYER_PHASE": H_PLAYER_PHASE,
+    "INVULN": H_INVULN,
+    "DEATHS": H_DEATHS,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -167,9 +179,11 @@ class Game:
         "events",
         "fault",
         "gallery",
+        "god",
         "grid",
         "homing",
         "input",
+        "life",
         "loadout",
         "max_bonus",
         "missiles",
@@ -188,7 +202,7 @@ class Game:
         "vulcan",
     )
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - keyword-only options, one per URL test flag
         self,
         *,
         seed: int = 1,
@@ -196,13 +210,16 @@ class Game:
         fault: FaultMode = FaultMode.NONE,
         weapon: WeaponKind = WeaponKind.VULCAN,
         level: int = 1,
+        god: bool = False,
     ) -> None:
         self.fault = fault
+        self.god = god  # test flag: hits are ignored so automated runs are never disturbed
         self.rng = random.Random(seed)  # noqa: S311 - gameplay randomness, not security
         self.stress = min(max(stress, 0), EBULLET_MAX_CAP)
         self.ebullet_cap = min(EBULLET_MAX_CAP, max(EBULLET_MIN_CAP, self.stress))  # storm only
         self._ebullet_channel_cap = self.ebullet_cap + EBULLET_GAME_CAP  # storm, then gameplay
         self.ship = PlayerShip()
+        self.life = PlayerLife()
         self.storm_pool = BulletPool(self.ebullet_cap)  # harmless stress load, never lethal
         self.ebullets = BulletPool(EBULLET_GAME_CAP)  # gameplay enemy bullets
         self.pbullets = BulletPool(PBULLET_CAP)
@@ -264,6 +281,7 @@ class Game:
             "pickup_kinds": {kind.name: kind.value for kind in PickupKind},
             "weapons": {kind.name: kind.value for kind in WeaponKind},
             "outcomes": {outcome.name: outcome.value for outcome in PickupOutcome},
+            "phases": {phase.name: phase.value for phase in PlayerPhase},
             "tuning": {
                 "scroll_speed": SCROLL_SPEED,
                 "hitbox_radius": HITBOX_RADIUS,
@@ -350,6 +368,9 @@ class Game:
         header[H_WEAPON] = int(self.loadout.kind)
         header[H_LEVEL] = self.loadout.level
         header[H_MAX_BONUS] = self.max_bonus
+        header[H_PLAYER_PHASE] = int(self.life.phase)
+        header[H_INVULN] = self.life.invuln
+        header[H_DEATHS] = self.life.deaths
 
     def _drop_crystals(self) -> None:
         """Spawn a crystal at the position of every enemy killed this step that drops one."""
@@ -369,11 +390,28 @@ class Game:
             self.max_bonus += 1  # D-06: recorded now, the points are awarded in Phase 3
         self.events.push(EV_PICKUP, x, y, kind, outcome, color)
 
+    def _lethal_contact(self) -> bool:
+        """Return whether a gameplay enemy bullet or an air enemy body touches the hitbox core.
+
+        Storm bullets are never checked here: the ``?stress`` load is harmless by design.
+        """
+        ship = self.ship
+        return resolve_bullets_vs_ship(
+            self.ebullets, ship.x, ship.y, HITBOX_RADIUS
+        ) or resolve_bodies_vs_ship(self.enemies, ship.x, ship.y, HITBOX_RADIUS)
+
     def _step(self) -> None:
         self.terrain.step()
-        self.ship.step(self._move_x, self._move_y)
+        life = self.life
+        life.step(self.ship, self.events)
+        if life.can_control:
+            self.ship.step(self._move_x, self._move_y)
+        else:
+            self.ship.pending_x = 0.0  # drag owed while dying must not lurch the new ship
+            self.ship.pending_y = 0.0
+        firing = self._firing and life.can_fire
         self.vulcan.step(
-            self._firing and self.loadout.kind is WeaponKind.VULCAN,
+            firing and self.loadout.kind is WeaponKind.VULCAN,
             self.ship.x,
             self.ship.y,
             self.loadout.level,
@@ -381,7 +419,7 @@ class Game:
             self.events,
         )
         self.homing.step(
-            self._firing and self.loadout.kind is WeaponKind.HOMING,
+            firing and self.loadout.kind is WeaponKind.HOMING,
             self.ship.x,
             self.ship.y,
             self.loadout.level,
@@ -413,7 +451,10 @@ class Game:
         self.enemies.remove_dead(self.events)
         self._drop_crystals()
         self.pickups.step()
-        resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)
+        if life.can_control:
+            resolve_pickups_vs_ship(self.pickups, self.ship.x, self.ship.y, self._on_pickup)
+        if life.vulnerable and not self.god and self._lethal_contact():
+            life.hit(self.ship.x, self.ship.y, self.events)
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1

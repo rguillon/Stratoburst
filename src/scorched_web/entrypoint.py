@@ -24,6 +24,7 @@ def create_game(options: Any = None) -> WebGame:  # noqa: ANN401 - dict or JsPro
         fault=_fault_mode(opts.get("crash")),
         weapon=_weapon(opts.get("weapon")),
         level=_level(opts.get("level")),
+        god=_flag(opts.get("god")),
     )
     return WebGame(game, RenderSink(game.buffers))
 
@@ -54,3 +55,8 @@ def _level(value: object) -> int:
     if not math.isfinite(number):
         return 1
     return min(max(int(number), 1), MAX_LEVEL)
+
+
+def _flag(value: object) -> bool:
+    """A boolean test flag; only a real ``True`` counts (the URL is untrusted input)."""
+    return value is True
