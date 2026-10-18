@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-30-PLAN.md
-last_updated: "2026-10-18T08:01:10.044Z"
+stopped_at: Completed 02-31-PLAN.md
+last_updated: "2026-10-18T08:20:54.704Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 6841290a5c1cfa3da806fa4753ce4d285d1b31b2
+state_head: e4150ea1031808525877ed412c68884182fbfbea
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 40
+  completed_plans: 41
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 31 of 33
+Plan: 32 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -96,6 +96,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P28 | 18 min | 2 tasks | 11 files |
 | Phase 02 P29 | 17 min | 2 tasks | 13 files |
 | Phase 02 P30 | 10 min | 2 tasks | 7 files |
+| Phase 02 P31 | 18 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -181,6 +182,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-28: a shake never exceeds 3.0 units or 0.5 s, update(0) holds age and jitter so a paused game stays still, and a new shake replaces the current one only when it is at least as strong as the strength left now
 - [Phase 02]: 02-29: the touch bomb button tracks pointer ids and a press latch, carries data-no-steer so touch_input ignores pointers that start on it, and is laid out in the letterbox margin or over the playfield corner from the projected corners
 - [Phase 02]: 02-30: the SFX router runs at the end of every live step over only that step's events (frozen hitstop steps route nothing); VULCAN, MISSILE, HIT and ENEMY_FIRE are pushed low priority and a laser shot is silent because the hum follows BEAM_W
+- [Phase 02]: 02-31: zzfx 1.4.0 is vendored as a pure generator (no package, lockfile unchanged); samples render at load and AudioBuffers are made on the gate's AudioContext after the tap; every voice runs source -> gain -> bus -> compressor -> destination
 
 ### Pending Todos
 
@@ -203,6 +205,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T08:01:09.940Z
-Stopped at: Completed 02-30-PLAN.md
+Last session: 2026-10-18T08:20:54.567Z
+Stopped at: Completed 02-31-PLAN.md
 Resume file: None
