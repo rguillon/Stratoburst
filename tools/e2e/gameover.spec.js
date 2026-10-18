@@ -34,3 +34,13 @@ test('the last ship lost shows GAME OVER with the score, and a key press starts 
   await expect(page.locator('#game-over')).toBeHidden();
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+test('a click on the GAME OVER screen restarts too, after a short pause', async ({ page }) => {
+  await reachGameOver(page);
+  await expect(page.locator('#game-over')).toBeVisible();
+  await page.waitForTimeout(1000);
+  await page.locator('#game-over').click();
+  await expect.poll(() => GAME_OVER(page), { timeout: 10_000, intervals: [100] }).toBe(false);
+  await expect(page.locator('#game-over')).toBeHidden();
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

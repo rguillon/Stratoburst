@@ -36,6 +36,8 @@ export function createGameOverOverlay({
   let restarted = false;
   let shownFinal = -1;
   let shownBest = -1;
+  // Pointers whose press began on the overlay after it armed; only their release counts as a tap.
+  const pressed = new Set();
 
   // Input counts only while the overlay is up, its delay has passed and the run has not restarted yet.
   const armed = () => shown && !restarted && now - shownAt >= delayMs;
@@ -45,11 +47,20 @@ export function createGameOverOverlay({
     onRestart();
   }
 
+  // A key held down since before the overlay appeared only produces repeat events; the press that
+  // counts is a fresh one.
   win.addEventListener('keydown', (event) => {
-    if (armed() && KEY_BINDINGS.get(event.code) === 'fire') restart();
+    if (!event.repeat && armed() && KEY_BINDINGS.get(event.code) === 'fire') restart();
   });
-  el.addEventListener('pointerup', () => {
-    if (armed()) restart();
+  el.addEventListener('pointerdown', (event) => {
+    if (armed()) pressed.add(event.pointerId);
+  });
+  el.addEventListener('pointercancel', (event) => {
+    pressed.delete(event.pointerId);
+  });
+  el.addEventListener('pointerup', (event) => {
+    const counts = pressed.delete(event.pointerId);
+    if (counts && armed()) restart();
   });
 
   return {
@@ -59,6 +70,7 @@ export function createGameOverOverlay({
       if (header[slots.FLOW] !== flowStates.GAME_OVER) {
         if (shown) {
           shown = false;
+          pressed.clear();
           el.hidden = true;
         }
         return;
