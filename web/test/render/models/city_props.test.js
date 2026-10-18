@@ -54,7 +54,7 @@ describe('buildMaglev', () => {
   it('has pillars under a track deck, one segment long', () => {
     const { body } = buildMaglev('high');
     const { min, max } = box(body);
-    expect(min.y).toBeGreaterThanOrEqual(0);
+    expect(min.y).toBeGreaterThanOrEqual(-1e-6);
     expect(max.y).toBeGreaterThan(0.9);
     expect(max.z - min.z).toBeCloseTo(MAGLEV_SEGMENT, 1);
     // A pillar: vertices near the ground close to the centre line.

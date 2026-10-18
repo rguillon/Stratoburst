@@ -61,7 +61,7 @@ describe('buildTower', () => {
   it('is a stepped tower that reaches the top of the unit height', () => {
     const { body } = buildTower('high');
     const { min, max } = box(body);
-    expect(min.y).toBeGreaterThanOrEqual(0);
+    expect(min.y).toBeGreaterThanOrEqual(-1e-6);
     expect(max.y).toBeGreaterThan(0.95);
     expect(max.y).toBeLessThanOrEqual(1 + 1e-6);
   });

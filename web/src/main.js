@@ -19,6 +19,8 @@ import { createEnemyInstances } from './render/enemy_instances.js';
 import { createMissileInstances } from './render/missile_instances.js';
 import { createPickupInstances } from './render/pickup_instances.js';
 import { createCityLayer } from './render/city_layer.js';
+import { createCityGround } from './render/city_ground.js';
+import { warmScenery } from './render/models/scenery_models.js';
 import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
@@ -115,6 +117,20 @@ async function main() {
     detail: TIERS[tier0].modelDetail,
   });
   rig.scene.add(ship);
+  // Every (kind, detail) scenery model is generated now, behind the loading screen.
+  warmScenery(Object.keys(manifest.scenery_kinds));
+  // The road grid under the blocks: one plane in the same group, scrolled by the same mapping.
+  const cityGround = createCityGround({
+    ratio: manifest.tuning.ground_scroll_ratio,
+    y0: manifest.tuning.ground_y0,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+    pitch: manifest.stage.block_pitch,
+    block: manifest.stage.block_size,
+    length: manifest.stage.length,
+    loop: manifest.stage.loop,
+  });
+  rig.groundLayer.group.add(cityGround.group);
   // The city (D-34): the layout Python shipped in the manifest, drawn in the ground layer so it
   // shares one frame with the ground units, wrecks and scorch marks (RESEARCH Pattern 5).
   const city = createCityLayer({
@@ -554,6 +570,7 @@ async function main() {
       ship.visible = shipVisible;
       if (shipVisible) ship.userData.setHullVisible(hullVisibleFor(header[slots.INVULN]));
       shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);
+      cityGround.update(scrollNow);
       city.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);

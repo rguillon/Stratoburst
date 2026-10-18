@@ -7,6 +7,7 @@ import {
 } from './camera_fit.js';
 import { TERRAIN_DEPTH } from './ground_layer.js';
 import { normalizeDetail, tint } from './models/model_kit.js';
+import { sceneryModel, sceneryTint } from './models/scenery_models.js';
 
 // The city layer (D-34, RESEARCH Pattern 5). Python authors the city as a flat list of records
 // (kind, x, distance, width, height, variant) shipped once in the manifest; this module only draws
@@ -112,8 +113,9 @@ export function windowCapacity(distances, span, loop, length) {
 const BOX_COLOUR = [0.18, 0.17, 0.22];
 const boxModels = new Map();
 
-// The stand-in geometry seam: a dark unit box standing on y = 0 for any kind, no glow. Scenery
-// models (scenery_models.js) replace it through the same `geometryFor(kindName, detail)` call.
+// A stand-in for `geometryFor`: a dark unit box standing on y = 0 for any kind, no glow. The real
+// scenery models (scenery_models.js) are the default through the same `geometryFor(kindName,
+// detail)` call; this one keeps the layer testable on its own.
 export function unitBoxModel(kindName) {
   let model = boxModels.get(kindName);
   if (model === undefined) {
@@ -129,11 +131,15 @@ const matrix = new THREE.Matrix4();
 const position = new THREE.Vector3();
 const scale = new THREE.Vector3();
 const NO_TURN = new THREE.Quaternion();
+const tintColor = new THREE.Color();
+const UNTINTED = new THREE.Color(1, 1, 1);
 
 // `layout` is the manifest's flat record list (stride `stride`, sorted by distance), `kinds` the
 // manifest's scenery name -> value map. The returned group holds at most two InstancedMeshes per
 // kind that has a placement (body and glow) and is added by the caller to the ground layer's
-// group. `update(scroll)` writes only the placements inside the visible window.
+// group. `update(scroll)` writes only the placements inside the visible window. `tintFor(kindName,
+// variant)` gives the instance colour of a kind's glow (an rgb array) or null when the kind has
+// none; the glow geometry of such a kind is white, so the instance colour sets its hue.
 export function createCityLayer({
   layout,
   stride = 6,
@@ -145,7 +151,8 @@ export function createCityLayer({
   loop = false,
   length = 0,
   detail = 'high',
-  geometryFor = unitBoxModel,
+  geometryFor = sceneryModel,
+  tintFor = sceneryTint,
 }) {
   if (loop && !(length > 0)) throw new Error('a looping city needs a positive stage length');
   const data = Float32Array.from(layout);
@@ -201,10 +208,17 @@ export function createCityLayer({
       name,
       capacity,
       written: 0,
+      tinted: false,
       body: instanced(model.body, bodyMaterial, `city-${lower}`, capacity),
       glow:
         model.glow === null ? null : instanced(model.glow, glowMaterial, `city-${lower}-glow`, capacity),
     };
+    if (entry.glow !== null && tintFor(name, 0) !== null) {
+      // Allocate instanceColor up front so the first update never reshapes the buffers.
+      entry.tinted = true;
+      entry.glow.setColorAt(0, UNTINTED);
+      entry.glow.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    }
     byValue[value] = entry;
     entries.push(entry);
     capacities[name] = capacity;
@@ -260,6 +274,10 @@ export function createCityLayer({
       matrix.compose(position, NO_TURN, scale);
       entry.body.setMatrixAt(entry.written, matrix);
       if (entry.glow !== null) entry.glow.setMatrixAt(entry.written, matrix);
+      if (entry.tinted) {
+        const rgb = tintFor(entry.name, data[base + VARIANT]);
+        entry.glow.setColorAt(entry.written, tintColor.setRGB(rgb[0], rgb[1], rgb[2]));
+      }
       entry.written += 1;
     }
   }
@@ -288,6 +306,7 @@ export function createCityLayer({
       if (written === 0) continue; // nothing was written, so nothing to upload
       entry.body.instanceMatrix.needsUpdate = true;
       if (entry.glow !== null) entry.glow.instanceMatrix.needsUpdate = true;
+      if (entry.tinted) entry.glow.instanceColor.needsUpdate = true;
     }
   }
 

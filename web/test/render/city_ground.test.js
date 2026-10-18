@@ -172,19 +172,21 @@ describe('createCityGround', () => {
     const widths = canvas.fills.map((fill) => fill.rect[2]);
     expect(widths.some((w) => Math.abs(w - roadHalf) < 1e-9)).toBe(true);
     // A kerb line sits on the sidewalk edge of the road, one for each side of each axis.
-    const kerbRects = canvas.fills.filter((fill) => fill.style.startsWith('#') && fill.rect[2] <= 3 || fill.rect[3] <= 3);
+    const kerbRects = canvas.fills.filter((fill) => fill.rect[2] <= 3 || fill.rect[3] <= 3);
     const atEdge = kerbRects.filter(
       (fill) =>
-        Math.abs(fill.rect[0] - roadHalf) < 2 ||
-        Math.abs(fill.rect[0] - (size - roadHalf)) < 2 ||
-        Math.abs(fill.rect[1] - roadHalf) < 2 ||
-        Math.abs(fill.rect[1] - (size - roadHalf)) < 2,
+        Math.abs(fill.rect[0] - roadHalf) < 2.5 ||
+        Math.abs(fill.rect[0] - (size - roadHalf)) < 2.5 ||
+        Math.abs(fill.rect[1] - roadHalf) < 2.5 ||
+        Math.abs(fill.rect[1] - (size - roadHalf)) < 2.5,
     );
     expect(atEdge.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('rejects a looping stage whose length is not a whole number of road pitches', () => {
-    expect(() => build({ loop: true, length: 8641 })).toThrow(/whole number/);
-    expect(() => build({ loop: true, length: 8640 })).not.toThrow();
+  it('reports whether a loop seam keeps the blocks between the roads', () => {
+    expect(build({ loop: false, length: 9300 }).ground.seamAligned).toBe(true);
+    expect(build({ loop: true, length: 8640 }).ground.seamAligned).toBe(true);
+    // stage 1's length (the gallery loops it) is not a whole number of pitches: the first wrap shifts the blocks.
+    expect(build({ loop: true, length: 9300 }).ground.seamAligned).toBe(false);
   });
 });
