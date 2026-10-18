@@ -29,6 +29,7 @@ from scorched_core.protocol import (
     EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
+    EV_EXTEND,
     EV_HIT,
     EV_PICKUP,
     EV_PLAYER_DEATH,
@@ -115,6 +116,7 @@ from scorched_core.tuning import (
     LIVES_START,
     MAX_BONUS_POINTS,
     PICKUP_RADIUS,
+    SCORE_CAP,
     SCROLL_ACCEL,
     SCROLL_SPEED,
     SHIP_HALF_H,
@@ -3044,3 +3046,34 @@ def test_a_maxed_catch_pays_the_flat_bonus_and_still_counts_scoring() -> None:
     _tick(game)
     assert game.max_bonus == 1
     assert game.buffers["header"][H_SCORE] == float(2000 + MAX_BONUS_POINTS)
+
+
+def test_a_kill_that_reaches_two_hundred_thousand_adds_a_ship_and_one_extend_event_extend() -> None:
+    game = Game()
+    game.score.score = 199_800
+    _shoot_down(game, EnemyKind.JET)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_LIVES]) == (200_100.0, 4.0)
+    events = game.buffers["events"]
+    extends = [i for i in range(int(header[H_EVENT_N])) if events[i * EVENT_STRIDE] == EV_EXTEND]
+    assert len(extends) == 1
+    assert events[extends[0] * EVENT_STRIDE + 3] == 4.0  # the lives after the extend
+
+
+def test_a_maxed_catch_can_earn_an_extend_extend() -> None:
+    game = Game(level=5)
+    game.score.score = 195_000
+    _drop_and_stand_on_it(game)
+    _tick(game)
+    assert game.score.score == 195_000 + 2000 + MAX_BONUS_POINTS
+    assert game.buffers["header"][H_LIVES] == 4.0
+
+
+def test_the_header_reads_back_the_capped_score_exactly_cap() -> None:
+    game = Game()
+    game.score.score = SCORE_CAP - 100
+    _shoot_down(game, EnemyKind.CARRIER)
+    _tick(game)
+    assert game.buffers["header"][H_SCORE] == 9_999_999.0
+    assert int(game.buffers["header"][H_SCORE]) == game.score.score

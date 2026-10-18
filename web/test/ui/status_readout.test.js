@@ -44,19 +44,22 @@ function build() {
   level.className = 'level';
   const bombs = doc.createElement('span');
   bombs.className = 'bombs';
-  bl.append(weapon, level, bombs);
+  const lives = doc.createElement('span');
+  lives.className = 'lives';
+  bl.append(lives, weapon, level, bombs);
   el.append(top, bl);
   const flash = doc.createElement('div');
   flash.id = 'max-flash';
   flash.hidden = true;
   doc.body.append(el, flash);
-  const writes = { weapon: 0, level: 0, bombs: 0, score: 0, hiscore: 0 };
+  const writes = { weapon: 0, level: 0, bombs: 0, score: 0, hiscore: 0, lives: 0 };
   for (const [key, node] of [
     ['weapon', weapon],
     ['level', level],
     ['bombs', bombs],
     ['score', score],
     ['hiscore', hiscore],
+    ['lives', lives],
   ]) {
     let text = '';
     Object.defineProperty(node, 'textContent', {
@@ -67,7 +70,7 @@ function build() {
       },
     });
   }
-  return { doc, el, weapon, level, bombs, score, hiscore, flash, writes };
+  return { doc, el, weapon, level, bombs, score, hiscore, lives, flash, writes };
 }
 
 describe('createStatusReadout', () => {
@@ -96,13 +99,13 @@ describe('createStatusReadout', () => {
     readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
     readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
     readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
-    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1, score: 1, hiscore: 1 });
+    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1, score: 1, hiscore: 1, lives: 1 });
     readout.update(...frame({ weapon: 0, level: 2, bombs: 3 }));
-    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1, score: 1, hiscore: 1 });
+    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1, score: 1, hiscore: 1, lives: 1 });
     readout.update(...frame({ weapon: 2, level: 2, bombs: 3 }));
-    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1, score: 1, hiscore: 1 });
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1, score: 1, hiscore: 1, lives: 1 });
     readout.update(...frame({ weapon: 2, level: 2, bombs: 2 }));
-    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2, score: 1, hiscore: 1 });
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2, score: 1, hiscore: 1, lives: 1 });
   });
 
   it.each([0, 1, 3, 7])('shows %i bombs as that many pips', (stock) => {
@@ -206,6 +209,43 @@ describe('the score and high score', () => {
     const { doc, score } = build();
     createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: Number.NaN }));
     expect(score.textContent).toBe('0');
+  });
+});
+
+describe('the lives', () => {
+  const SHIP = '\u25b2';
+
+  it.each([1, 3, 5, 9])('shows %i lives as that many ship icons', (lives) => {
+    const { doc, lives: el } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ lives }));
+    expect(el.textContent).toBe(SHIP.repeat(lives));
+  });
+
+  it.each([
+    [12, 9],
+    [0, 0],
+    [-3, 0],
+    [2.9, 2],
+    [Number.NaN, 0],
+  ])('treats %s lives as %i icons', (lives, icons) => {
+    const { doc, lives: el } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ lives }));
+    expect(el.textContent).toBe(SHIP.repeat(icons));
+  });
+
+  it('writes the lives only when they change', () => {
+    const { doc, writes } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    for (let i = 0; i < 5; i++) readout.update(...frame({ lives: 3 }));
+    expect(writes.lives).toBe(1);
+    readout.update(...frame({ lives: 4 }));
+    expect(writes.lives).toBe(2);
+  });
+
+  it('keeps the icon in the player trim colour set by the stylesheet, never inline', () => {
+    const { doc, lives } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ lives: 3 }));
+    expect(lives.style.color).toBeUndefined();
   });
 });
 
