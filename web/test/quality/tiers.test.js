@@ -14,6 +14,7 @@ describe('TIERS', () => {
       dprCap: 2,
       maxPixels: 2_800_000,
       bloom: 'full',
+      bloomStrength: 0.6,
       particleScale: 1,
       modelDetail: 'high',
       maxDecals: 48,
@@ -24,6 +25,7 @@ describe('TIERS', () => {
       dprCap: 1.5,
       maxPixels: 1_200_000,
       bloom: 'half',
+      bloomStrength: 0.5,
       particleScale: 0.6,
       modelDetail: 'mid',
       maxDecals: 32,
@@ -34,11 +36,13 @@ describe('TIERS', () => {
       dprCap: 1,
       maxPixels: 600_000,
       bloom: 'off',
+      bloomStrength: 0.5,
       particleScale: 0.35,
       modelDetail: 'low',
       maxDecals: 16,
       lights: 0,
     });
+    for (const tier of Object.values(TIERS)) expect(Object.isFrozen(tier)).toBe(true);
     expect(Object.isFrozen(TIERS)).toBe(true);
     expect(TIER_ORDER).toEqual(['low', 'mid', 'high']);
   });

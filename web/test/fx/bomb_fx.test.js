@@ -31,7 +31,7 @@ function recordingLayer() {
 
 function build(extra = {}) {
   const layers = { additive: recordingLayer(), normal: recordingLayer() };
-  const bloomPass = { strength: BASE_STRENGTH };
+  const bloomPass = { strength: BASE_STRENGTH, baseStrength: BASE_STRENGTH };
   const added = [];
   const flashes = [];
   const fx = createBombFx({
@@ -268,6 +268,34 @@ describe('createBombFx', () => {
       expect(bloomPass.strength).toBe(BASE_STRENGTH);
       fx.handle(EVENTS.BOMB_DETONATE, 100, 140, 0, 0, 0);
       expect(bloomPass.strength).toBeCloseTo(BASE_STRENGTH * 2.2, 6);
+    });
+
+    it('peaks at 2.2x a base set after load, not the one seen at creation', () => {
+      const { fx, bloomPass } = build();
+      bloomPass.strength = 0.6;
+      bloomPass.baseStrength = 0.6;
+      fx.handle(EVENTS.BOMB_DETONATE, 100, 140, 0, 0, 0);
+      expect(bloomPass.strength).toBeCloseTo(0.6 * 2.2, 6);
+    });
+
+    it('ends at the live tier strength when the tier drops during the pulse', () => {
+      const { fx, bloomPass } = build();
+      bloomPass.strength = 0.6;
+      bloomPass.baseStrength = 0.6;
+      fx.handle(EVENTS.BOMB_DETONATE, 100, 140, 0, 0, 0);
+      fx.update(PHASES.BLAST, 100, 140, 0.05, 0.05, 0);
+      bloomPass.baseStrength = 0.5; // pipeline.setTier(TIERS.mid) while the pulse runs
+      fx.update(PHASES.BLAST, 100, 140, 0.2, 1, 0.05);
+      expect(bloomPass.strength).toBe(0.5);
+    });
+
+    it('falls back to the current strength when no base was ever published', () => {
+      const { fx, bloomPass } = build();
+      delete bloomPass.baseStrength;
+      fx.handle(EVENTS.BOMB_DETONATE, 100, 140, 0, 0, 0);
+      expect(bloomPass.strength).toBeCloseTo(BASE_STRENGTH * 2.2, 6);
+      fx.update(PHASES.BLAST, 100, 140, 0.2, 1, 0);
+      expect(bloomPass.strength).toBe(BASE_STRENGTH);
     });
 
     it('leaves the strength alone when nothing detonated', () => {
