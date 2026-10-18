@@ -311,6 +311,32 @@
       #banner[hidden] {
         display: none;
       }
+      /* The boss WARNING (D-13): the same banner in red neon, pulsing at 2 Hz (a 0.5 s period, so never more
+         than 3 flashes per second, the photosensitivity guideline). The pulse dips to a dim level instead of
+         switching fully off, and prefers-reduced-motion turns it off and holds the text steady. */
+      #banner.warning {
+        color: rgb(255, 40, 70);
+        text-shadow:
+          0 0 10px rgba(255, 40, 70, 0.9),
+          0 0 28px rgba(255, 40, 70, 0.6),
+          0 0 56px rgba(255, 40, 70, 0.35),
+          0 2px 0 #3a0610;
+        animation: banner-warning-flash 0.5s ease-in-out infinite;
+      }
+      @keyframes banner-warning-flash {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.2;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #banner.warning {
+          animation: none;
+        }
+      }
       /* The touch bomb button (INPT-03): the bomb pickup's acid green, never orange-yellow. data-no-steer keeps
          touch_input from treating a press on it as a drag. */
       #bomb-button {

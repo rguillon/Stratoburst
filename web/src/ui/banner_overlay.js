@@ -1,7 +1,10 @@
-// The stage banner (D-26): "STAGE n" over the playfield while the header FLOW is INTRO. It is
-// state-driven from header FLOW, STAGE and FLOW_T, never event-driven, so a missed event cannot
-// leave it stuck. The text is a constant prefix plus the integer stage slot, written through
-// textContent only and only when it changes. Later plans add WARNING and STAGE CLEAR here.
+// The stage banner (D-26): "STAGE n" over the playfield while the header FLOW is INTRO, and
+// "WARNING" while it is WARNING (D-13, the boss entrance). It is state-driven from header FLOW,
+// STAGE and FLOW_T, never event-driven, so a missed event cannot leave it stuck. The text is a
+// constant prefix plus the integer stage slot, written through textContent only and only when it
+// changes. The WARNING carries the `warning` class: index.html draws it in red neon and flashes it
+// at 2 Hz (never more than 3 flashes per second, and not at all under prefers-reduced-motion).
+// Later plans add STAGE CLEAR here.
 
 // The banner stays fully opaque for this fraction of the intro, then fades to nothing.
 export const FADE_START = 0.7;
@@ -22,26 +25,43 @@ export function createBannerOverlay({ doc = document, flowStates }) {
 
   let shownText = '';
   let shownOpacity = '';
+  let shownClass = '';
+
+  function show(text, className, opacity) {
+    if (text !== shownText) {
+      shownText = text;
+      el.textContent = text;
+    }
+    if (className !== shownClass) {
+      shownClass = className;
+      el.className = className;
+    }
+    if (opacity !== shownOpacity) {
+      shownOpacity = opacity;
+      el.style.opacity = opacity;
+    }
+    el.hidden = false;
+  }
 
   return {
     el,
     update(header, slots) {
+      const flow = header[slots.FLOW];
+      if (flow === flowStates.WARNING) {
+        // The flash is a CSS animation of opacity, so the inline opacity of the intro fade is reset.
+        show('WARNING', 'warning', '1');
+        return;
+      }
       const stage = wholeNumber(header[slots.STAGE]);
-      if (header[slots.FLOW] !== flowStates.INTRO || stage < 1) {
+      if (flow !== flowStates.INTRO || stage < 1) {
+        if (shownClass !== '') {
+          shownClass = '';
+          el.className = '';
+        }
         el.hidden = true;
         return;
       }
-      const text = `STAGE ${stage}`;
-      if (text !== shownText) {
-        shownText = text;
-        el.textContent = text;
-      }
-      const opacity = String(opacityAt(header[slots.FLOW_T]));
-      if (opacity !== shownOpacity) {
-        shownOpacity = opacity;
-        el.style.opacity = opacity;
-      }
-      el.hidden = false;
+      show(`STAGE ${stage}`, '', String(opacityAt(header[slots.FLOW_T])));
     },
   };
 }

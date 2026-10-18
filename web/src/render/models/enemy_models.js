@@ -5,6 +5,13 @@ import { buildCarrier } from './carrier.js';
 import { buildTank } from './tank.js';
 import { buildTurret } from './turret.js';
 import { buildTrain, buildTrainStump, buildTrainTurret } from './train.js';
+import {
+  buildBomber,
+  buildBomberEngine,
+  buildBomberOpen,
+  buildBomberStump,
+  buildBomberTurret,
+} from './bomber.js';
 import { buildBillboard, buildDepot, buildFuelTank, buildHouse } from './city_targets.js';
 
 // The enemy model registry (VISL-01, D-25). Each builder takes a detail level and returns
@@ -24,6 +31,13 @@ export const BUILDERS = {
   TRAIN: buildTrain,
   TRAIN_TURRET: buildTrainTurret,
   TRAIN_STUMP: buildTrainStump,
+  // The stage 1 boss (D-09): the giant bomber's closed and open airframes, its wing turret that
+  // tracks the player, its engine pods and the stump either part leaves behind.
+  BOMBER: buildBomber,
+  BOMBER_TURRET: buildBomberTurret,
+  BOMBER_ENGINE: buildBomberEngine,
+  BOMBER_STUMP: buildBomberStump,
+  BOMBER_OPEN: buildBomberOpen,
   // The destructible city targets (D-34), drawn in the ground layer like the other ground kinds.
   HOUSE: buildHouse,
   FUEL_TANK: buildFuelTank,
