@@ -53,6 +53,7 @@ from scorched_core.protocol import (
     H_FLAGS,
     H_KILLS,
     H_LEVEL,
+    H_MAX_BONUS,
     H_PBULLET_N,
     H_PICKUP_N,
     H_SCROLL_Y,
@@ -109,6 +110,7 @@ _HEADER_SLOTS: dict[str, int] = {
     "WEAPON": H_WEAPON,
     "PICKUP_N": H_PICKUP_N,
     "LEVEL": H_LEVEL,
+    "MAX_BONUS": H_MAX_BONUS,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -153,6 +155,7 @@ class Game:
         "grid",
         "input",
         "loadout",
+        "max_bonus",
         "paused",
         "pbullets",
         "pickups",
@@ -188,6 +191,7 @@ class Game:
         self.events = EventRing()
         self.enemies = EnemyPool()
         self.pickups = PickupPool()
+        self.max_bonus = 0  # same-colour catches at the top level; scored in Phase 3 (D-06)
         self._on_pickup = self._collect_pickup  # bound once: no closure is built per step
         self.gallery = GallerySpawner()
         self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, ENEMY_CAP)
@@ -314,6 +318,7 @@ class Game:
         header[H_EVENT_DROPPED] = self.events.dropped
         header[H_WEAPON] = int(self.loadout.kind)
         header[H_LEVEL] = self.loadout.level
+        header[H_MAX_BONUS] = self.max_bonus
 
     def _drop_crystals(self) -> None:
         """Spawn a crystal at the position of every enemy killed this step that drops one."""
@@ -329,6 +334,8 @@ class Game:
         pickup is ever spawned.
         """
         outcome = self.loadout.collect(WeaponKind(color))
+        if outcome is PickupOutcome.MAXED:
+            self.max_bonus += 1  # D-06: recorded now, the points are awarded in Phase 3
         self.events.push(EV_PICKUP, x, y, kind, outcome, color)
 
     def _step(self) -> None:

@@ -4,14 +4,27 @@ from array import array
 from dataclasses import dataclass, field
 
 from scorched_core.entities.pickup_kind import PickupKind
-from scorched_core.protocol import PICKUP_CAP, PICKUP_STRIDE
-from scorched_core.tuning import CRYSTAL_CYCLE_TICKS, CRYSTAL_SPEED
+from scorched_core.protocol import PICKUP_CAP, PICKUP_STRIDE, PLAYFIELD_H, PLAYFIELD_W
+from scorched_core.tuning import (
+    CRYSTAL_CYCLE_TICKS,
+    CRYSTAL_SPEED,
+    PICKUP_EXIT_SPEED,
+    PICKUP_LIFE_TICKS,
+    PICKUP_RADIUS,
+)
 
 # A crystal cycles through the three weapon colours: red, blue, purple.
 _COLORS = 3
 # The crystal is launched up and sideways along a 3-4-5 direction at CRYSTAL_SPEED.
 _LAUNCH_X = 0.8 * CRYSTAL_SPEED
 _LAUNCH_Y = -0.6 * CRYSTAL_SPEED
+# A bouncing pickup reflects when its edge reaches the playfield edge; a drifting one is gone
+# once it is this far below the playfield.
+_MIN_X = PICKUP_RADIUS
+_MAX_X = PLAYFIELD_W - PICKUP_RADIUS
+_MIN_Y = PICKUP_RADIUS
+_MAX_Y = PLAYFIELD_H - PICKUP_RADIUS
+_EXIT_BOTTOM = PLAYFIELD_H + 16.0
 
 
 @dataclass(slots=True)
@@ -62,11 +75,34 @@ class PickupPool:
         return self.spawn(PickupKind.CRYSTAL, x, y, side * _LAUNCH_X, _LAUNCH_Y)
 
     def step(self) -> None:
-        """Advance one 60 Hz step: move every pickup and age it."""
+        """Advance one 60 Hz step.
+
+        For ``PICKUP_LIFE_TICKS`` steps a pickup moves by its velocity and reflects off all four
+        playfield edges. After that it stops bouncing, drifts straight down at
+        ``PICKUP_EXIT_SPEED`` and is removed once it is below the playfield.
+        """
         x, y, vx, vy, age = self.x, self.y, self.vx, self.vy, self.age
-        for i in range(self.n):
-            x[i] += vx[i]
-            y[i] += vy[i]
+        for i in range(self.n - 1, -1, -1):
+            if age[i] < PICKUP_LIFE_TICKS:
+                x[i] += vx[i]
+                y[i] += vy[i]
+                if x[i] < _MIN_X:
+                    x[i] = _MIN_X
+                    vx[i] = abs(vx[i])
+                elif x[i] > _MAX_X:
+                    x[i] = _MAX_X
+                    vx[i] = -abs(vx[i])
+                if y[i] < _MIN_Y:
+                    y[i] = _MIN_Y
+                    vy[i] = abs(vy[i])
+                elif y[i] > _MAX_Y:
+                    y[i] = _MAX_Y
+                    vy[i] = -abs(vy[i])
+            else:
+                y[i] += PICKUP_EXIT_SPEED
+                if y[i] > _EXIT_BOTTOM:
+                    self.remove_at(i)
+                    continue
             age[i] += 1
 
     def color_at(self, i: int) -> int:

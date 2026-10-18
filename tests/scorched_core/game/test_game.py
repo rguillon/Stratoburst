@@ -33,6 +33,7 @@ from scorched_core.protocol import (
     H_FLAGS,
     H_KILLS,
     H_LEVEL,
+    H_MAX_BONUS,
     H_PBULLET_N,
     H_PICKUP_N,
     H_SCROLL_Y,
@@ -75,7 +76,8 @@ def test_manifest_contract() -> None:
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
     assert header["slots"]["PICKUP_N"] == 15 == H_PICKUP_N
-    assert len(header["slots"]) == 17
+    assert header["slots"]["MAX_BONUS"] == 20 == H_MAX_BONUS
+    assert len(header["slots"]) == 18
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
@@ -288,7 +290,9 @@ def test_same_seed_is_deterministic_and_another_seed_differs() -> None:
 
 def test_tick_does_not_grow_allocated_blocks() -> None:
     game = Game(stress=500)
-    for _ in range(300):  # warm up pools and caches
+    # Warm up pools and caches through two gallery loops, so a crystal has been dropped, has
+    # bounced, expired and drifted away before the measured window starts.
+    for _ in range(2 * GALLERY_LOOP_TICKS):
         game.tick(STEP_MS, 0b1, 0.0, 0.0, 0.0, 0.0)
     before = sys.getallocatedblocks()
     for _ in range(600):
@@ -1012,3 +1016,49 @@ def test_a_crystal_far_from_the_ship_is_not_caught() -> None:
     assert game.pickups.n == 1
     assert game.buffers["header"][H_EVENT_N] == 0
     assert game.loadout.level == 1
+
+
+def test_a_fifth_same_colour_catch_is_counted_as_a_max_bonus() -> None:
+    game = Game(level=5)
+    _drop_and_stand_on_it(game)
+    _tick(game)
+    assert game.max_bonus == 1
+    assert game.buffers["header"][H_MAX_BONUS] == 1
+    assert game.loadout.level == 5
+    events = game.buffers["events"]
+    assert (events[3], events[4]) == (float(PickupKind.CRYSTAL), 2.0)  # outcome MAXED
+
+
+def test_raised_and_switched_catches_are_not_max_bonuses_max_bonus() -> None:
+    raised = Game(level=4)
+    _drop_and_stand_on_it(raised)
+    _tick(raised)
+    assert raised.loadout.level == 5
+    switched = Game(level=5)
+    _drop_and_stand_on_it(switched)
+    switched.pickups.age[0] = 100
+    _tick(switched)
+    assert switched.loadout.kind is WeaponKind.LASER
+    assert (raised.max_bonus, switched.max_bonus) == (0, 0)
+    assert switched.buffers["header"][H_MAX_BONUS] == 0
+
+
+def test_max_bonus_accumulates_across_catches_max_bonus() -> None:
+    game = Game(level=5)
+    for _ in range(3):
+        _drop_and_stand_on_it(game)
+        _tick(game)
+    assert game.max_bonus == 3
+    _tick(game)
+    assert game.buffers["header"][H_MAX_BONUS] == 3
+
+
+def test_a_flood_of_crystals_never_grows_the_pool_past_its_cap() -> None:
+    game = Game()
+    for _ in range(PICKUP_CAP + 5):
+        game.pickups.spawn_crystal(20.0, 20.0)
+    for _ in range(40):
+        game.enemies.n = 0
+        _kill_carrier(game, 120.0, 80.0)
+        _tick(game)
+    assert game.pickups.n == PICKUP_CAP
