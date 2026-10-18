@@ -56,6 +56,11 @@ from scorched_core.protocol import (
     FLAG_PAUSED,
     H_ALPHA,
     H_BEAM_W,
+    H_BOMB_PHASE,
+    H_BOMB_T,
+    H_BOMB_X,
+    H_BOMB_Y,
+    H_BOMBS,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
@@ -93,6 +98,13 @@ from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import (
+    BOMB_BLAST_TICKS,
+    BOMB_GROW_TICKS,
+    BOMB_INVULN_TAIL_TICKS,
+    BOMB_LAUNCH_TICKS,
+    BOMB_RADIUS_MAX,
+    BOMB_RADIUS_MIN,
+    BOMB_START_STOCK,
     ENEMY_GROUND,
     ENEMY_RADIUS,
     GRID_CELL,
@@ -103,6 +115,8 @@ from scorched_core.tuning import (
     MISSILE_RADIUS,
     SCROLL_SPEED,
 )
+from scorched_core.weapons.bomb import Bomb
+from scorched_core.weapons.bomb_phase import BombPhase
 from scorched_core.weapons.homing_launcher import HomingLauncher
 from scorched_core.weapons.laser_beam import LaserBeam
 from scorched_core.weapons.pickup_outcome import PickupOutcome
@@ -138,6 +152,11 @@ _HEADER_SLOTS: dict[str, int] = {
     "PLAYER_PHASE": H_PLAYER_PHASE,
     "INVULN": H_INVULN,
     "DEATHS": H_DEATHS,
+    "BOMBS": H_BOMBS,
+    "BOMB_PHASE": H_BOMB_PHASE,
+    "BOMB_X": H_BOMB_X,
+    "BOMB_Y": H_BOMB_Y,
+    "BOMB_T": H_BOMB_T,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -168,6 +187,7 @@ class Game:
     """Pure simulation core; knows nothing about JS."""
 
     __slots__ = (
+        "_bomb_requested",
         "_ebullet_channel_cap",
         "_firing",
         "_move_x",
@@ -175,6 +195,7 @@ class Game:
         "_on_pickup",
         "_runner",
         "_scratch",
+        "bomb",
         "buffers",
         "ebullet_cap",
         "ebullets",
@@ -231,6 +252,8 @@ class Game:
         self.vulcan = Vulcan()
         self.homing = HomingLauncher()
         self.laser = LaserBeam()
+        self.bomb = Bomb(stock=BOMB_START_STOCK)
+        self._bomb_requested = False  # a press latched until a live step consumes it
         self.missiles = MissilePool()
         self.events = EventRing()
         self.enemies = EnemyPool()
@@ -287,12 +310,17 @@ class Game:
             "weapons": {kind.name: kind.value for kind in WeaponKind},
             "outcomes": {outcome.name: outcome.value for outcome in PickupOutcome},
             "phases": {phase.name: phase.value for phase in PlayerPhase},
+            "bomb_phases": {phase.name: phase.value for phase in BombPhase},
             "tuning": {
                 "scroll_speed": SCROLL_SPEED,
                 "hitbox_radius": HITBOX_RADIUS,
                 "ground_scroll_ratio": GROUND_SCROLL_RATIO,
                 "enemy_ground": [int(ground) for ground in ENEMY_GROUND],
                 "enemy_radius": list(ENEMY_RADIUS),
+                "bomb_radius_min": BOMB_RADIUS_MIN,
+                "bomb_radius_max": BOMB_RADIUS_MAX,
+                "bomb_grow_ticks": BOMB_GROW_TICKS,
+                "bomb_blast_ticks": BOMB_BLAST_TICKS,
             },
         }
 
@@ -323,7 +351,10 @@ class Game:
         self.input.update(buttons)
         if self.input.pressed(Button.PAUSE):
             self.set_paused(not self.paused)
-        # BOMB is accepted and unused in Phase 1 (D-11 reserves the key).
+        # The press edge is latched, not acted on: a frame that runs no step, or a paused one,
+        # must not lose it (RESEARCH Pitfall 1). The next live step consumes it.
+        if self.input.pressed(Button.BOMB):
+            self._bomb_requested = True
         self._firing = bool(buttons & Button.FIRE)
         if self.paused:
             # Time, drag and the refresh history stay untouched until the player resumes.
@@ -377,6 +408,12 @@ class Game:
         header[H_PLAYER_PHASE] = int(self.life.phase)
         header[H_INVULN] = self.life.invuln
         header[H_DEATHS] = self.life.deaths
+        bomb = self.bomb
+        header[H_BOMBS] = bomb.stock
+        header[H_BOMB_PHASE] = int(bomb.phase)
+        header[H_BOMB_X] = bomb.x
+        header[H_BOMB_Y] = bomb.y
+        header[H_BOMB_T] = bomb.progress
 
     def _drop_crystals(self) -> None:
         """Spawn a crystal at the position of every enemy killed this step that drops one."""
@@ -409,6 +446,11 @@ class Game:
     def _step(self) -> None:
         self.terrain.step()
         life = self.life
+        if self._bomb_requested:
+            self._bomb_requested = False  # consumed whether or not it launches
+            if life.can_control and self.bomb.try_launch(self.ship.x, self.ship.y):
+                self.events.push(EV_BOMB_LAUNCH, self.ship.x, self.ship.y)
+                life.grant_invuln(BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS)
         life.step(self.ship, self.events)
         if life.can_control:
             self.ship.step(self._move_x, self._move_y)
@@ -450,6 +492,7 @@ class Game:
             self.enemies,
             self.events,
         )
+        self.bomb.step(self.enemies, self.ebullets, self.events)
         resolve_shots_vs_enemies(
             self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events
         )

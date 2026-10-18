@@ -19,6 +19,8 @@ from scorched_core.protocol import (
     EBULLET_STRIDE,
     ENEMY_CAP,
     ENEMY_STRIDE,
+    EV_BOMB_DETONATE,
+    EV_BOMB_LAUNCH,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
     EV_HIT,
@@ -33,6 +35,11 @@ from scorched_core.protocol import (
     FLAG_PAUSED,
     H_ALPHA,
     H_BEAM_W,
+    H_BOMB_PHASE,
+    H_BOMB_T,
+    H_BOMB_X,
+    H_BOMB_Y,
+    H_BOMBS,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
@@ -65,6 +72,10 @@ from scorched_core.protocol import (
 )
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.tuning import (
+    BOMB_BLAST_TICKS,
+    BOMB_DAMAGE,
+    BOMB_INVULN_TAIL_TICKS,
+    BOMB_LAUNCH_TICKS,
     DEATHBOMB_TICKS,
     DYING_TICKS,
     ENEMY_FIRE_DELAY,
@@ -75,6 +86,7 @@ from scorched_core.tuning import (
     SHIP_START_X,
     SHIP_START_Y,
 )
+from scorched_core.weapons.bomb_phase import BombPhase
 from scorched_core.weapons.weapon_kind import WeaponKind
 
 
@@ -102,7 +114,12 @@ def test_manifest_contract() -> None:
     assert header["slots"]["PLAYER_PHASE"] == 22 == H_PLAYER_PHASE
     assert header["slots"]["INVULN"] == 23 == H_INVULN
     assert header["slots"]["DEATHS"] == 24 == H_DEATHS
-    assert len(header["slots"]) == 24
+    assert header["slots"]["BOMBS"] == 25 == H_BOMBS
+    assert header["slots"]["BOMB_PHASE"] == 26 == H_BOMB_PHASE
+    assert header["slots"]["BOMB_X"] == 27 == H_BOMB_X
+    assert header["slots"]["BOMB_Y"] == 28 == H_BOMB_Y
+    assert header["slots"]["BOMB_T"] == 29 == H_BOMB_T
+    assert len(header["slots"]) == 29
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
@@ -155,7 +172,7 @@ def test_firing_flag_is_set_on_a_zero_step_tick_too() -> None:
     assert int(game.buffers["header"][H_FLAGS]) == FLAG_FIRING
 
 
-def test_the_bomb_bit_has_no_gameplay_effect_in_phase_one() -> None:
+def test_the_bomb_bit_is_not_a_flag_and_does_not_move_the_ship() -> None:
     game = Game()
     game.tick(STEP_MS, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
     assert int(game.buffers["header"][H_FLAGS]) == 0
@@ -169,6 +186,10 @@ def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
         "ground_scroll_ratio": 0.94,
         "enemy_ground": [0, 0, 0, 1, 1],
         "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0],
+        "bomb_radius_min": 20.0,
+        "bomb_radius_max": 230.0,
+        "bomb_grow_ticks": 30,
+        "bomb_blast_ticks": 90,
     }
 
 
@@ -1681,3 +1702,158 @@ def test_the_laser_stays_deterministic_for_one_seed_and_inputs() -> None:
         return bytes(snapshots)
 
     assert run() == run()
+
+
+def _press_bomb(game: Game) -> None:
+    """One tick with the bomb button down, the press edge."""
+    game.tick(STEP_MS, Button.BOMB, 0.0, 0.0, 0.0, 0.0)
+
+
+def _bomb_game(**kwargs: object) -> Game:
+    """A mortal ship with no gallery, so only what a test places can touch the bomb or the ship."""
+    return _empty_game(**kwargs)
+
+
+def _tick_n(game: Game, count: int) -> None:
+    for _ in range(count):
+        _tick(game)
+
+
+def _detonate(game: Game) -> None:
+    """Press the bomb and run until the missile has just detonated."""
+    _press_bomb(game)
+    while game.bomb.phase != BombPhase.BLAST:
+        _tick(game)
+
+
+def test_manifest_maps_the_bomb_phases() -> None:
+    assert Game().manifest()["bomb_phases"] == {"NONE": 0, "LAUNCH": 1, "BLAST": 2}
+
+
+def test_a_game_starts_with_three_bombs_and_no_bomb_in_the_air_bomb() -> None:
+    game = _bomb_game()
+    _tick(game)
+    assert _header(game, H_BOMBS) == 3
+    assert _header(game, H_BOMB_PHASE) == BombPhase.NONE
+    assert float(game.buffers["header"][H_BOMB_T]) == 0.0
+
+
+def test_a_bomb_press_launches_a_missile_spends_one_bomb_and_pushes_the_event_bomb() -> None:
+    game = _bomb_game()
+    _press_bomb(game)
+    assert _header(game, H_BOMBS) == 2
+    assert _header(game, H_BOMB_PHASE) == BombPhase.LAUNCH
+    assert _event_kinds(game) == [EV_BOMB_LAUNCH]
+    assert game.events.buf[1] == pytest.approx(SHIP_START_X)
+    assert game.events.buf[2] == pytest.approx(SHIP_START_Y)
+
+
+def test_the_header_follows_the_missile_and_then_the_blast_bomb() -> None:
+    game = _bomb_game()
+    _press_bomb(game)
+    header = game.buffers["header"]
+    target_y = SHIP_START_Y - 110.0
+    assert header[H_BOMB_X] == pytest.approx(SHIP_START_X)
+    assert header[H_BOMB_Y] == pytest.approx(SHIP_START_Y - 110.0 / BOMB_LAUNCH_TICKS)
+    assert header[H_BOMB_T] == pytest.approx(1 / BOMB_LAUNCH_TICKS)
+    _tick_n(game, BOMB_LAUNCH_TICKS - 1)
+    assert _header(game, H_BOMB_PHASE) == BombPhase.BLAST
+    assert EV_BOMB_DETONATE in _event_kinds(game)
+    assert header[H_BOMB_Y] == pytest.approx(target_y)
+    assert header[H_BOMB_T] == 0.0
+    _tick_n(game, 44)
+    assert header[H_BOMB_T] == pytest.approx(44 / BOMB_BLAST_TICKS)
+    _tick_n(game, BOMB_BLAST_TICKS - 44)
+    assert _header(game, H_BOMB_PHASE) == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 2
+
+
+def test_the_bomb_at_the_top_of_the_screen_never_rises_above_y_90_bomb() -> None:
+    game = _bomb_game()
+    game.ship.y = 120.0
+    _detonate(game)
+    assert game.bomb.y == 90.0
+    assert game.buffers["header"][H_BOMB_Y] == pytest.approx(90.0)
+
+
+def test_the_detonation_clears_every_gameplay_enemy_bullet_at_once_bomb() -> None:
+    game = _bomb_game()
+    for i in range(40):
+        game.ebullets.spawn(10.0 + 5.0 * i, 20.0, 0.0, 0.0)
+    _press_bomb(game)
+    assert game.ebullets.n == 40
+    _tick_n(game, BOMB_LAUNCH_TICKS - 1)
+    assert game.ebullets.n == 0
+    assert _header(game, H_EBULLET_N) == 0
+
+
+def test_the_storm_is_never_touched_by_a_bomb_storm() -> None:
+    game = _bomb_game(stress=300)
+    _tick(game)
+    assert _header(game, H_STORM_N) == 300
+    _detonate(game)
+    _tick_n(game, BOMB_BLAST_TICKS)
+    assert _header(game, H_STORM_N) == 300
+    assert game.storm_pool.n == 300
+
+
+def test_the_fireball_burns_air_and_ground_enemies_and_the_kills_join_the_kill_pass_bomb() -> None:
+    game = _bomb_game(god=True)
+    jet = _place(game, EnemyKind.JET, SHIP_START_X, SHIP_START_Y - 110.0)
+    tank = _place(game, EnemyKind.TANK, SHIP_START_X + 5.0, SHIP_START_Y - 110.0)
+    doomed = _place(game, EnemyKind.JET, SHIP_START_X - 5.0, SHIP_START_Y - 110.0, hp=BOMB_DAMAGE)
+    _detonate(game)
+    kills = game.enemies.kills
+    _tick(game)  # the first blast step damages everything inside the radius
+    assert game.enemies.kills == kills + 1  # the doomed jet was removed in the same step
+    assert EV_EXPLOSION in _event_kinds(game)
+    # Slots were swap-removed, so find the survivors by position.
+    hp_by_x = {round(game.enemies.x[i]): game.enemies.hp[i] for i in range(game.enemies.n)}
+    assert hp_by_x[round(SHIP_START_X)] == 10_000 - BOMB_DAMAGE
+    assert hp_by_x[round(SHIP_START_X + 5.0)] == 10_000 - BOMB_DAMAGE
+    assert (jet, tank, doomed) == (0, 1, 2)
+
+
+def test_the_ship_is_invulnerable_through_the_launch_the_blast_and_a_30_step_tail_bomb() -> None:
+    game = _bomb_game()
+    total = BOMB_LAUNCH_TICKS + BOMB_BLAST_TICKS + BOMB_INVULN_TAIL_TICKS
+    _press_bomb(game)
+    # The grant lands just before the same step's decrement, so the launch step already used one.
+    assert _header(game, H_INVULN) == total - 1
+    for _ in range(total - 2):
+        _put_bullet_on_ship(game)
+        _tick(game)
+        assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_INVULN) == 1
+    _tick(game)
+    assert _header(game, H_INVULN) == 0
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+
+
+def test_a_bomb_does_not_shorten_a_longer_remaining_invulnerability_bomb() -> None:
+    game = _bomb_game()
+    game.life.invuln = 500
+    _press_bomb(game)
+    assert _header(game, H_INVULN) == 499
+
+
+def test_a_bomb_can_be_launched_during_the_respawn_blink_bomb() -> None:
+    game = _bomb_game()
+    game.life.grant_invuln(100)
+    _press_bomb(game)
+    assert game.bomb.phase == BombPhase.LAUNCH
+
+
+def test_the_stock_counts_down_and_a_press_with_none_left_does_nothing_stock() -> None:
+    game = _bomb_game()
+    for expected in (2, 1, 0):
+        _detonate(game)
+        assert _header(game, H_BOMBS) == expected
+        _tick_n(game, BOMB_BLAST_TICKS)
+    _press_bomb(game)
+    _tick_n(game, 5)
+    assert game.bomb.phase == BombPhase.NONE
+    assert _header(game, H_BOMBS) == 0
+    assert EV_BOMB_LAUNCH not in _event_kinds(game)

@@ -64,6 +64,10 @@ class BulletPool:
             self.angle[i] = self.angle[last]
         self.n = last
 
+    def clear(self) -> None:
+        """Remove every bullet at once."""
+        self.n = 0
+
     def cull_outside(self, min_x: float, min_y: float, max_x: float, max_y: float) -> None:
         """Remove every bullet whose centre lies outside the box (edges are inside)."""
         x, y = self.x, self.y

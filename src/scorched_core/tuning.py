@@ -85,6 +85,25 @@ LASER_HALF_WIDTH: Final = (2.0, 3.0, 4.0, 5.5, 7.0)
 LASER_DAMAGE: Final = (1, 2, 3, 4, 5)
 LASER_HIT_INTERVAL: Final = 3
 
+# Bomb (PLYR-07, D-08, D-09, D-10): the Raiden nuke. A missile rises for ``BOMB_LAUNCH_TICKS`` steps
+# toward a point ``BOMB_RISE`` units ahead of the ship (never above ``BOMB_MIN_Y``), then detonates
+# into a fireball whose radius grows from ``BOMB_RADIUS_MIN`` to ``BOMB_RADIUS_MAX`` over
+# ``BOMB_GROW_TICKS`` steps and lasts ``BOMB_BLAST_TICKS`` steps. It clears enemy bullets, deals
+# ``BOMB_DAMAGE`` to every enemy inside it every ``BOMB_DAMAGE_INTERVAL`` steps, and the ship stays
+# invulnerable for the launch, the blast and a further ``BOMB_INVULN_TAIL_TICKS``.
+BOMB_START_STOCK: Final = 3
+BOMB_MAX_STOCK: Final = 7
+BOMB_LAUNCH_TICKS: Final = 24
+BOMB_BLAST_TICKS: Final = 90
+BOMB_DAMAGE: Final = 4
+BOMB_DAMAGE_INTERVAL: Final = 6
+BOMB_RADIUS_MIN: Final = 20.0
+BOMB_RADIUS_MAX: Final = 230.0
+BOMB_GROW_TICKS: Final = 30
+BOMB_INVULN_TAIL_TICKS: Final = 30
+BOMB_RISE: Final = 110.0
+BOMB_MIN_Y: Final = 90.0
+
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames

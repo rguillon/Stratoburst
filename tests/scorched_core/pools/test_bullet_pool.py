@@ -165,3 +165,17 @@ def test_pack_into_an_empty_pool_writes_nothing() -> None:
 def test_columns_are_sized_to_capacity(capacity: int) -> None:
     pool = BulletPool(capacity)
     assert {len(pool.x), len(pool.y), len(pool.vx), len(pool.vy), len(pool.angle)} == {capacity}
+
+
+def test_clear_empties_the_pool_and_it_can_be_refilled() -> None:
+    pool = filled(5)
+    pool.clear()
+    assert pool.n == 0
+    assert pool.spawn(1.0, 2.0, 0.0, 0.0)
+    assert (pool.n, pool.x[0], pool.y[0]) == (1, 1.0, 2.0)
+
+
+def test_clearing_an_empty_pool_is_a_no_op() -> None:
+    pool = BulletPool(2)
+    pool.clear()
+    assert pool.n == 0
