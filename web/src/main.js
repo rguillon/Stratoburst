@@ -101,7 +101,8 @@ async function main() {
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,
   });
-  rig.scene.add(ebullets.mesh);
+  // Enemy bullets are drawn after bloom, in their own scene.
+  rig.bulletScene.add(ebullets.mesh);
   // Player bolts: HDR cyan so they cross the bloom threshold.
   const pbullets = createBulletInstances({
     data: bridge.channels.pbullets,
@@ -366,6 +367,13 @@ async function main() {
       flags,
       tierLog,
       ...debug.hooks,
+      // The composer's pass order and which path draws the enemy bullets (e2e reads both).
+      get passes() {
+        return rig.pipeline.passNames();
+      },
+      get bulletPath() {
+        return rig.pipeline.enabled ? 'composer' : 'direct';
+      },
       // The four playfield corners in CSS pixels (e2e checks the letterboxing with it).
       projectPlayfield: () =>
         projectCorners(rig.camera, canvas.clientWidth, canvas.clientHeight, PLAYFIELD_W / 2, PLAYFIELD_H / 2),

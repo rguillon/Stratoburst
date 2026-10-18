@@ -38,8 +38,12 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, 1, 10, 4000);
   scene.add(createPlayfieldMask({ halfW: playfieldW / 2, halfH: playfieldH / 2 }));
 
+  // Enemy bullets live in their own scene, drawn after bloom (composer) or after the main scene with
+  // a depth clear (low tier), so fire and bloom never wash over them (D-23).
+  const bulletScene = new THREE.Scene();
+
   // Bloom pipeline; the quality tier scales or bypasses it through rig.applyTier.
-  const pipeline = createPostPipeline(renderer, scene, camera);
+  const pipeline = createPostPipeline(renderer, scene, camera, { bulletScene });
 
   function toWorld(x, y, out) {
     return out.set(x - playfieldW / 2, 0, y - playfieldH / 2);
@@ -48,6 +52,8 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   const rig = {
     renderer,
     scene,
+    bulletScene,
+    sun,
     camera,
     pipeline,
     terrain,
@@ -103,9 +109,18 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
     });
   }
 
+  // The direct path draws the bullet scene over the main one: depth is cleared, colour is kept.
+  function renderDirect() {
+    renderer.render(scene, camera);
+    renderer.autoClear = false;
+    renderer.clearDepth();
+    renderer.render(bulletScene, camera);
+    renderer.autoClear = true;
+  }
+
   function render() {
     if (pipeline.enabled) pipeline.render();
-    else renderer.render(scene, camera);
+    else renderDirect();
   }
 
   // Compiles shaders and pushes one frame through both render paths at load, so a tier
@@ -113,7 +128,8 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   // chain cannot work: report it and let the caller degrade to the low tier (Assumption A12).
   function prewarm() {
     renderer.compile(scene, camera);
-    renderer.render(scene, camera);
+    renderer.compile(bulletScene, camera);
+    renderDirect();
     try {
       const halfFloat =
         renderer.extensions.has('EXT_color_buffer_float') ||

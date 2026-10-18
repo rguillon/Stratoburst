@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../src/fx/palette.js';
 import { createBulletInstances } from '../../src/render/bullet_instances.js';
 
 const STRIDE = 4;
@@ -48,7 +49,7 @@ describe('createBulletInstances', () => {
   });
 
   it('gives the bullet quad the requested size, flat on the ground plane', () => {
-    const { geometry } = build({ size: 6 });
+    const { geometry } = build({ size: 6, name: 'pbullets' });
     const position = geometry.getAttribute('position');
     const box = new THREE.Box3().setFromBufferAttribute(position);
     expect(box.max.x - box.min.x).toBeCloseTo(6);
@@ -56,11 +57,60 @@ describe('createBulletInstances', () => {
     expect(box.max.y - box.min.y).toBeCloseTo(0);
   });
 
-  it('uses an HDR colour by default so bullets cross the bloom threshold, and accepts an override', () => {
-    expect(build().mesh.material.uniforms.uColor.value.toArray()).toEqual([4.0, 1.6, 0.4]);
-    expect(build({ color: [1, 2, 3] }).mesh.material.uniforms.uColor.value.toArray()).toEqual([
-      1, 2, 3,
-    ]);
+  it('keeps the flat style an HDR colour so bullets cross the bloom threshold, with an override', () => {
+    const flat = build({ name: 'pbullets' }).mesh.material;
+    expect(flat.uniforms.uColor.value.toArray()).toEqual([4.0, 1.6, 0.4]);
+    expect(
+      build({ name: 'pbullets', color: [1, 2, 3] }).mesh.material.uniforms.uColor.value.toArray(),
+    ).toEqual([1, 2, 3]);
+  });
+
+  it('rejects an unknown style', () => {
+    expect(() => build({ style: 'comet' })).toThrow(/unknown bullet style: comet/);
+  });
+
+  describe("style 'orb'", () => {
+    it('is the default for ebullets and flat for any other channel', () => {
+      expect(build().mesh.material.uniforms.uCore).toBeDefined();
+      expect(build({ name: 'pbullets' }).mesh.material.uniforms.uCore).toBeUndefined();
+      expect(build({ name: 'pbullets', style: 'orb' }).mesh.material.uniforms.uCore).toBeDefined();
+    });
+
+    it('is drawn on top of everything without touching depth', () => {
+      const { mesh } = build();
+      expect(mesh.material.depthTest).toBe(false);
+      expect(mesh.material.depthWrite).toBe(false);
+      expect(mesh.material.transparent).toBe(true);
+      expect(mesh.renderOrder).toBe(30);
+    });
+
+    it('takes its core, halo and rim from the palette', () => {
+      const { uniforms } = build().mesh.material;
+      expect(uniforms.uCore.value.toArray()).toEqual([...PALETTE.ENEMY_BULLET_CORE.rgb]);
+      expect(uniforms.uHalo.value.toArray()).toEqual([...PALETTE.ENEMY_BULLET_HALO.rgb]);
+      expect(uniforms.uRim.value.toArray()).toEqual([...PALETTE.ENEMY_BULLET_RIM.rgb]);
+    });
+
+    it('is LDR: no channel above 0.98, since bullets are drawn after bloom', () => {
+      const { uniforms } = build().mesh.material;
+      for (const key of ['uCore', 'uHalo', 'uRim']) {
+        expect(Math.max(...uniforms[key].value.toArray())).toBeLessThanOrEqual(0.98);
+      }
+    });
+
+    it('defaults to a quad of size 6 and scales the disc to it', () => {
+      const { geometry, mesh } = build();
+      const box = new THREE.Box3().setFromBufferAttribute(geometry.getAttribute('position'));
+      expect(box.max.x - box.min.x).toBeCloseTo(6);
+      expect(mesh.material.uniforms.uInvHalf.value).toBeCloseTo(1 / 3);
+    });
+
+    it('draws a disc with a white core, a pink halo and a dark rim, discarding outside it', () => {
+      const { fragmentShader } = build().mesh.material;
+      expect(fragmentShader).toContain('if (r > 1.0) discard;');
+      expect(fragmentShader).toContain('smoothstep(0.26, 0.38, r)');
+      expect(fragmentShader).toContain('uRim');
+    });
   });
 
   describe('update', () => {
