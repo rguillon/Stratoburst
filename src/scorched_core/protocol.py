@@ -25,7 +25,9 @@ H_KILLS: Final = 11
 H_EVENT_N: Final = 12
 H_EVENT_DROPPED: Final = 13
 # Slots 14-29 are reserved by later Phase 2 plans (numbering table in 02-01-PLAN.md) and
-# slots 30-47 by Phase 3.
+# slots 30-47 by Phase 3. Plan 02-08 takes the weapon slots.
+H_WEAPON: Final = 16
+H_LEVEL: Final = 17
 
 FLAG_PAUSED: Final = 1
 FLAG_FIRING: Final = 2

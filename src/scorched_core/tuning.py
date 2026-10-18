@@ -26,12 +26,32 @@ SCROLL_SPEED: Final = 0.8
 # Touch drag catch-up: the most finger movement (in units) the ship may still owe (INPT-02).
 TOUCH_LAG_CAP: Final = 40.0
 
-# Twin shot (PLYR-03): one volley every 5 steps, bolts travelling 8 units per step.
-FIRE_INTERVAL_TICKS: Final = 5
+# Player bolts (PLYR-03): travelling 8 units per step, leaving the muzzle 10 units ahead.
 PBULLET_SPEED: Final = 8.0
 PBULLET_RADIUS: Final = 2.0
-TWIN_OFFSET: Final = 5.0
 MUZZLE_AHEAD: Final = 10.0
+
+# Weapon levels (PLYR-05, D-01): the vulcan fan is data. ``VULCAN_STREAMS[level - 1]`` lists
+# one (x offset in units, angle in degrees) pair per bolt of a volley; Lv1 is the Phase 1 twin
+# shot (two parallel bolts 5 units either side) and Lv5 is a seven-stream fan.
+MAX_LEVEL: Final = 5
+VULCAN_STREAMS: Final = (
+    ((-5.0, 0.0), (5.0, 0.0)),
+    ((0.0, 0.0), (-4.0, -7.0), (4.0, 7.0)),
+    ((0.0, 0.0), (-3.0, -6.0), (3.0, 6.0), (-6.0, -12.0), (6.0, 12.0)),
+    ((0.0, 0.0), (-3.0, -8.0), (3.0, 8.0), (-6.0, -16.0), (6.0, 16.0)),
+    (
+        (0.0, 0.0),
+        (-2.0, -7.0),
+        (2.0, 7.0),
+        (-4.0, -14.0),
+        (4.0, 14.0),
+        (-6.0, -21.0),
+        (6.0, 21.0),
+    ),
+)
+# Steps between volleys, per level.
+VULCAN_INTERVAL: Final = (5, 5, 5, 4, 4)
 
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
 # indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).

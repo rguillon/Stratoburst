@@ -49,6 +49,7 @@ from scorched_core.protocol import (
     H_EVENT_N,
     H_FLAGS,
     H_KILLS,
+    H_LEVEL,
     H_PBULLET_N,
     H_SCROLL_Y,
     H_SHIP_X,
@@ -56,6 +57,7 @@ from scorched_core.protocol import (
     H_STEPS,
     H_STORM_HITS,
     H_TICK_COUNT,
+    H_WEAPON,
     HEADER_LEN,
     PBULLET_CAP,
     PBULLET_STRIDE,
@@ -72,9 +74,12 @@ from scorched_core.tuning import (
     GRID_CELL,
     GROUND_SCROLL_RATIO,
     HITBOX_RADIUS,
+    MAX_LEVEL,
     SCROLL_SPEED,
 )
-from scorched_core.weapons.twin_shot import TwinShot
+from scorched_core.weapons.vulcan import Vulcan
+from scorched_core.weapons.weapon_kind import WeaponKind
+from scorched_core.weapons.weapon_loadout import WeaponLoadout
 
 # Bolts are culled once they are this far outside the playfield.
 _MARGIN: Final = 16.0
@@ -94,6 +99,8 @@ _HEADER_SLOTS: dict[str, int] = {
     "KILLS": H_KILLS,
     "EVENT_N": H_EVENT_N,
     "EVENT_DROPPED": H_EVENT_DROPPED,
+    "WEAPON": H_WEAPON,
+    "LEVEL": H_LEVEL,
 }
 
 _EVENT_KINDS: dict[str, int] = {
@@ -136,6 +143,7 @@ class Game:
         "gallery",
         "grid",
         "input",
+        "loadout",
         "paused",
         "pbullets",
         "refresh",
@@ -146,11 +154,17 @@ class Game:
         "stress",
         "terrain",
         "tick_count",
-        "twin",
+        "vulcan",
     )
 
     def __init__(
-        self, *, seed: int = 1, stress: int = 0, fault: FaultMode = FaultMode.NONE
+        self,
+        *,
+        seed: int = 1,
+        stress: int = 0,
+        fault: FaultMode = FaultMode.NONE,
+        weapon: WeaponKind = WeaponKind.VULCAN,
+        level: int = 1,
     ) -> None:
         self.fault = fault
         self.rng = random.Random(seed)  # noqa: S311 - gameplay randomness, not security
@@ -159,7 +173,8 @@ class Game:
         self.ship = PlayerShip()
         self.ebullets = BulletPool(self.ebullet_cap)
         self.pbullets = BulletPool(PBULLET_CAP)
-        self.twin = TwinShot()
+        self.loadout = WeaponLoadout(kind=weapon, level=min(max(level, 1), MAX_LEVEL))
+        self.vulcan = Vulcan()
         self.events = EventRing()
         self.enemies = EnemyPool()
         self.gallery = GallerySpawner()
@@ -278,11 +293,20 @@ class Game:
         header[H_STORM_HITS] = self.storm_hits
         header[H_EVENT_N] = self.events.n
         header[H_EVENT_DROPPED] = self.events.dropped
+        header[H_WEAPON] = int(self.loadout.kind)
+        header[H_LEVEL] = self.loadout.level
 
     def _step(self) -> None:
         self.terrain.step()
         self.ship.step(self._move_x, self._move_y)
-        self.twin.step(self._firing, self.ship.x, self.ship.y, self.pbullets)
+        self.vulcan.step(
+            self._firing and self.loadout.kind is WeaponKind.VULCAN,
+            self.ship.x,
+            self.ship.y,
+            self.loadout.level,
+            self.pbullets,
+            self.events,
+        )
         self.pbullets.integrate()
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.gallery.step(self.enemies)

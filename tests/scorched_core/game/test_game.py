@@ -18,6 +18,7 @@ from scorched_core.protocol import (
     ENEMY_STRIDE,
     EV_EXPLOSION,
     EV_HIT,
+    EV_SHOT,
     EVENT_CAP,
     EVENT_STRIDE,
     FLAG_FIRING,
@@ -29,6 +30,7 @@ from scorched_core.protocol import (
     H_EVENT_N,
     H_FLAGS,
     H_KILLS,
+    H_LEVEL,
     H_PBULLET_N,
     H_SCROLL_Y,
     H_SHIP_X,
@@ -36,6 +38,7 @@ from scorched_core.protocol import (
     H_STEPS,
     H_STORM_HITS,
     H_TICK_COUNT,
+    H_WEAPON,
     HEADER_LEN,
     PBULLET_CAP,
     PBULLET_STRIDE,
@@ -47,6 +50,7 @@ from scorched_core.tuning import (
     SHIP_START_X,
     SHIP_START_Y,
 )
+from scorched_core.weapons.weapon_kind import WeaponKind
 
 
 def test_manifest_contract() -> None:
@@ -63,7 +67,9 @@ def test_manifest_contract() -> None:
     assert header["slots"]["EVENT_N"] == 12
     assert header["slots"]["EVENT_DROPPED"] == 13
     assert header["len"] == 48
-    assert len(header["slots"]) == 14
+    assert header["slots"]["WEAPON"] == 16 == H_WEAPON
+    assert header["slots"]["LEVEL"] == 17 == H_LEVEL
+    assert len(header["slots"]) == 16
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
@@ -326,6 +332,72 @@ def test_holding_fire_adds_a_volley_every_five_steps() -> None:
     _hold_fire(game, 30)  # volleys at steps 0, 5, ..., 25; none has left the screen yet
     assert game.pbullets.n == 12
     assert game.buffers["header"][H_PBULLET_N] == 12
+
+
+def test_a_new_game_starts_with_the_vulcan_at_level_one() -> None:
+    game = Game()
+    assert game.loadout.kind is WeaponKind.VULCAN
+    assert game.loadout.level == 1
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_WEAPON] == 0
+    assert game.buffers["header"][H_LEVEL] == 1
+
+
+@pytest.mark.parametrize(("asked", "expected"), [(0, 1), (-3, 1), (1, 1), (5, 5), (9, 5)])
+def test_the_starting_level_is_clamped_to_one_to_five(asked: int, expected: int) -> None:
+    assert Game(level=asked).loadout.level == expected
+
+
+def test_a_level_five_game_fires_the_seven_stream_fan() -> None:
+    game = Game(level=5)
+    _hold_fire(game, 1)
+    assert game.pbullets.n == 7
+    assert game.buffers["header"][H_LEVEL] == 5
+
+
+def test_a_level_five_game_fires_every_four_steps() -> None:
+    game = Game(level=5)
+    _hold_fire(game, 12)  # volleys at steps 0, 4 and 8
+    assert game.pbullets.n == 21
+
+
+def test_a_firing_vulcan_pushes_one_shot_event_per_volley() -> None:
+    game = Game()
+    _hold_fire(game, 1)
+    assert game.events.n == 1
+    assert game.events.buf[0] == EV_SHOT
+    assert game.events.buf[3] == WeaponKind.VULCAN
+
+
+def test_a_laser_or_homing_loadout_fires_no_bolts_yet() -> None:
+    for weapon in (WeaponKind.LASER, WeaponKind.HOMING):
+        game = Game(weapon=weapon, level=3)
+        _hold_fire(game, 30)
+        assert game.pbullets.n == 0
+        assert game.buffers["header"][H_WEAPON] == weapon
+        assert game.buffers["header"][H_LEVEL] == 3
+
+
+def test_the_header_follows_the_loadout_when_it_changes() -> None:
+    game = Game()
+    game.loadout.kind = WeaponKind.HOMING
+    game.loadout.level = 4
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_WEAPON] == WeaponKind.HOMING
+    assert game.buffers["header"][H_LEVEL] == 4
+
+
+def test_switching_away_from_the_vulcan_stops_the_bolts_while_its_cooldown_keeps_counting() -> None:
+    game = Game()
+    _hold_fire(game, 1)  # volley at step 0: cooldown 4 left
+    assert game.vulcan.cooldown == 4
+    game.loadout.kind = WeaponKind.LASER
+    _hold_fire(game, 4)
+    assert game.vulcan.cooldown == 0
+    assert game.events.n == 0
+    bolts = game.pbullets.n
+    _hold_fire(game, 5)
+    assert game.pbullets.n <= bolts  # nothing new was spawned
 
 
 def test_the_first_tick_with_fire_spawns_the_pair_and_moves_it_one_step() -> None:
