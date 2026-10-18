@@ -246,3 +246,13 @@ def test_removing_a_drifted_pickup_mid_step_keeps_the_others_stepping() -> None:
     pool.step()
     assert pool.n == 1
     assert (pool.kind[0], pool.x[0]) == (PickupKind.RED, 100.5)
+
+
+def test_clear_empties_the_pool() -> None:
+    pool = PickupPool()
+    pool.spawn(PickupKind.BOMB, 10.0, 20.0, 0.0, 1.0)
+    pool.spawn_crystal(50.0, 60.0)
+    pool.clear()
+    assert pool.n == 0
+    assert pool.spawn(PickupKind.BOMB, 1.0, 2.0, 0.0, 0.0)
+    assert pool.n == 1

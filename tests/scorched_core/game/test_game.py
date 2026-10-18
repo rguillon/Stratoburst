@@ -30,6 +30,7 @@ from scorched_core.protocol import (
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
     EV_EXTEND,
+    EV_GAME_OVER,
     EV_HIT,
     EV_PICKUP,
     EV_PLAYER_DEATH,
@@ -108,11 +109,13 @@ from scorched_core.tuning import (
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
     ENEMY_POINTS,
+    EXTEND_FIRST,
     GALLERY_LOOP_TICKS,
     GROUND_SCROLL_RATIO,
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
     INVULN_RESPAWN_TICKS,
+    LIVES_CAP,
     LIVES_START,
     MAX_BONUS_POINTS,
     PICKUP_RADIUS,
@@ -1566,7 +1569,13 @@ def _tick_until(game: Game, done: Callable[[Game], bool], limit: int = 600) -> i
 
 
 def test_manifest_maps_the_player_phases() -> None:
-    assert Game().manifest()["phases"] == {"ALIVE": 0, "GRACE": 1, "DYING": 2, "RESPAWN": 3}
+    assert Game().manifest()["phases"] == {
+        "ALIVE": 0,
+        "GRACE": 1,
+        "DYING": 2,
+        "RESPAWN": 3,
+        "OUT": 4,
+    }
 
 
 def test_an_enemy_bullet_on_the_hitbox_starts_the_grace_window_grace() -> None:
@@ -3077,3 +3086,359 @@ def test_the_header_reads_back_the_capped_score_exactly_cap() -> None:
     _tick(game)
     assert game.buffers["header"][H_SCORE] == 9_999_999.0
     assert int(game.buffers["header"][H_SCORE]) == game.score.score
+
+
+# --- lives, game over and restart (plan 03-08) -------------------------------------------------
+
+_QUIET_STAGE = StageData(number=1, length=100_000.0, waves=(), markers=())
+_RESTART_STAGE = StageData(
+    number=1,
+    length=100_000.0,
+    waves=(WaveEntry(at=2.0, kind=EnemyKind.JET, x=10.0),),
+    markers=(),
+)
+
+
+def _stage_game(stage: StageData = _QUIET_STAGE, **kwargs: object) -> Game:
+    """A mortal stage game; the quiet stage spawns nothing, so only what a test places can hurt."""
+    return Game(stage=stage, **kwargs)
+
+
+def _run_until_out(game: Game) -> list[int]:
+    """Hit the ship, tick until PlayerLife is OUT, and return every event kind seen on the way."""
+    kinds: list[int] = []
+    _put_bullet_on_ship(game)
+
+    def out(g: Game) -> bool:
+        kinds.extend(_event_kinds(g))
+        return g.life.phase is PlayerPhase.OUT
+
+    _tick_until(game, out)
+    return kinds
+
+
+def _count_game_over_events(game: Game, steps: int) -> int:
+    count = 0
+    for _ in range(steps):
+        _tick(game)
+        count += _event_kinds(game).count(EV_GAME_OVER)
+    return count
+
+
+@pytest.mark.parametrize(
+    ("asked", "expected"), [(-3, 1), (0, 1), (1, 1), (5, 5), (9, 9), (10, 9), (99, 9)]
+)
+def test_the_starting_lives_are_clamped_to_one_to_nine_lives(asked: int, expected: int) -> None:
+    assert Game(lives=asked).score.lives == expected
+
+
+def test_a_new_game_starts_with_the_default_lives_lives() -> None:
+    assert Game().score.lives == LIVES_START
+    assert LIVES_CAP == 9
+
+
+def test_the_last_ship_lost_ends_the_run_in_game_over_lives() -> None:
+    game = Game(stage=STAGE_1, lives=1)
+    kinds = _run_until_out(game)
+    assert kinds.count(EV_PLAYER_DEATH) == 1
+    assert EV_RESPAWN not in kinds
+    assert kinds.count(EV_GAME_OVER) == 1
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.OUT
+    assert _header(game, H_FLOW) == FlowState.GAME_OVER
+    assert _header(game, H_LIVES) == 0
+    assert _header(game, H_DEATHS) == 1
+
+
+def test_the_game_over_event_carries_the_final_score_and_the_record_flag_lives() -> None:
+    game = _stage_game(lives=1, high_score=100)
+    game.score.score = 700
+    game.score.high_score = 700
+    _put_bullet_on_ship(game)
+    seen: list[tuple[float, float]] = []
+
+    def out(g: Game) -> bool:
+        for i in range(g.events.n):
+            base = i * EVENT_STRIDE
+            if g.events.buf[base] == EV_GAME_OVER:
+                seen.append((float(g.events.buf[base + 3]), float(g.events.buf[base + 4])))
+        return g.life.phase is PlayerPhase.OUT
+
+    _tick_until(game, out)
+    assert seen == [(700.0, 1.0)]
+
+
+def test_with_two_lives_the_ship_flies_back_in_and_one_life_is_left_lives() -> None:
+    game = Game(stage=STAGE_1, lives=2)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _header(game, H_LIVES) == 1
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _count_game_over_events(game, 300) == 0
+    assert game.life.phase is PlayerPhase.ALIVE
+
+
+def test_a_life_is_taken_on_the_confirmed_death_and_not_on_the_hit_lives() -> None:
+    game = _stage_game(lives=3)
+    _put_bullet_on_ship(game)
+    _tick(game)  # the hit
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    assert _header(game, H_LIVES) == 3
+    _tick_n(game, DEATHBOMB_TICKS - 1)
+    assert _header(game, H_LIVES) == 3
+    _tick(game)  # the grace window expires: the ship is destroyed
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.DYING
+    assert _header(game, H_LIVES) == 2
+
+
+def test_a_deathbomb_save_costs_no_life_and_no_game_over_follows_lives() -> None:
+    game = _stage_game(lives=1)
+    _put_bullet_on_ship(game)
+    _tick(game)
+    _press_bomb(game)  # during GRACE
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert _header(game, H_LIVES) == 1
+    assert _count_game_over_events(game, 600) == 0
+    assert game.life.phase is not PlayerPhase.OUT
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _header(game, H_LIVES) == 1
+
+
+def test_the_gallery_has_infinite_lives_and_never_ends_lives() -> None:
+    game = _empty_game()
+    for _ in range(4):  # more deaths than the starting lives
+        _put_bullet_on_ship(game)
+        _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+        _tick_until(game, lambda g: g.life.vulnerable)
+    assert game.life.deaths == 4
+    assert _header(game, H_LIVES) == LIVES_START
+    assert _header(game, H_FLOW) == -1
+    assert game.life.phase is not PlayerPhase.OUT
+    assert game.flow is None
+
+
+def test_an_extend_on_the_step_the_death_is_confirmed_leads_to_a_respawn_lives() -> None:
+    game = _stage_game(lives=1)
+    game.score.score = EXTEND_FIRST - ENEMY_POINTS[EnemyKind.JET]
+    _put_bullet_on_ship(game)
+    _tick(game)  # the hit
+    _tick_n(game, DEATHBOMB_TICKS - 2)
+    _shoot_down(game, EnemyKind.JET)  # its kill lands on the step that confirms the death
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.DYING
+    assert EV_EXTEND in _event_kinds(game)
+    assert _header(game, H_LIVES) == 1  # 1 -> 0 -> 1 within the step
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _count_game_over_events(game, 300) == 0
+    assert game.life.phase is PlayerPhase.ALIVE
+
+
+def test_an_extend_while_the_ship_is_dying_leads_to_a_respawn_lives() -> None:
+    game = _stage_game(lives=1)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    _thaw(game)
+    _tick_n(game, 10)
+    assert _header(game, H_LIVES) == 0
+    game.score.award(EXTEND_FIRST, game.events, 0.0, 0.0)
+    assert game.score.lives == 1
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _count_game_over_events(game, 300) == 0
+    assert game.life.phase is PlayerPhase.ALIVE
+
+
+def test_the_game_over_event_is_pushed_exactly_once_over_six_hundred_steps_once() -> None:
+    game = _stage_game(lives=1)
+    kinds = _run_until_out(game)
+    assert kinds.count(EV_GAME_OVER) == 1
+    assert _count_game_over_events(game, 600) == 0
+    assert _header(game, H_FLOW) == FlowState.GAME_OVER
+
+
+def test_game_over_reaches_out_before_the_flow_changes_and_in_one_step_once() -> None:
+    game = _stage_game(lives=1)
+    _put_bullet_on_ship(game)
+    previous = game.flow.state
+    for _ in range(600):
+        _tick(game)
+        if game.life.phase is PlayerPhase.OUT:
+            break
+        assert game.flow.state is previous  # still PLAY until the step OUT is reached
+    assert game.flow.state is FlowState.GAME_OVER  # the same step that reached OUT
+    assert _event_kinds(game).count(EV_GAME_OVER) == 1
+
+
+def test_nothing_new_spawns_in_game_over_and_a_save_is_requested_once() -> None:
+    late = StageData(
+        number=1,
+        length=100_000.0,
+        waves=(WaveEntry(at=200.0, kind=EnemyKind.JET, x=10.0),),
+        markers=(),
+    )
+    game = _stage_game(late, lives=1)
+    assert game.save_requested is False
+    _run_until_out(game)
+    assert game.save_requested is True
+    _tick_n(game, 600)  # the terrain passes the wave's distance
+    assert game.terrain.distance > 200.0
+    assert game.enemies.n == 0
+    game.clear_save_request()
+    assert game.save_requested is False
+    _tick_n(game, 30)
+    assert game.save_requested is False  # not raised again
+
+
+def test_the_gallery_never_requests_a_save_lives() -> None:
+    game = Game()
+    assert game.save_requested is False
+    game.clear_save_request()
+    assert game.save_requested is False
+
+
+def test_restart_in_the_gallery_raises_lives() -> None:
+    with pytest.raises(ValueError, match="gallery"):
+        Game().restart()
+
+
+def _populate(game: Game) -> None:
+    """Leave something in every pool and some state in every part a restart must wipe."""
+    game.enemies.spawn(EnemyKind.TANK, 50.0, 60.0, MotionKind.SWAY, 0.0, 0.0)
+    game.pbullets.spawn(10.0, 20.0, 0.0, -8.0)
+    game.ebullets.spawn(30.0, 40.0, 0.0, 1.0)
+    game.missiles.spawn(70.0, 80.0, 0.0, 1)
+    game.pickups.spawn_crystal(90.0, 100.0)
+    game.max_bonus = 2
+    game.enemies.kills = 7
+
+
+def test_restart_starts_a_fresh_run_and_keeps_the_high_score_restart() -> None:
+    game = _stage_game(
+        _RESTART_STAGE,
+        lives=2,
+        weapon=WeaponKind.LASER,
+        level=3,
+        bombs=5,
+        high_score=1000,
+    )
+    game.score.award(4000, game.events, 0.0, 0.0)
+    game.bomb.stock = 0
+    game.life.deaths = 0
+    game.score.lives = 0
+    _run_until_out(game)
+    _populate(game)
+    game.terrain.set_target(0.25)
+    assert game.flow.state is FlowState.GAME_OVER
+    game.restart()
+    header = game.buffers["header"]
+    assert header[H_SCORE] == 0.0
+    assert header[H_LIVES] == 2.0
+    assert header[H_DEATHS] == 0.0
+    assert header[H_HIGH_SCORE] == 4000.0
+    assert header[H_NEW_RECORD] == 0.0
+    assert header[H_WEAPON] == float(WeaponKind.LASER)
+    assert header[H_LEVEL] == 3.0
+    assert header[H_BOMBS] == 5.0
+    assert header[H_PLAYER_PHASE] == float(PlayerPhase.ALIVE)
+    assert header[H_FLOW] == float(FlowState.PLAY)
+    assert header[H_INVULN] == 0.0
+    assert header[H_KILLS] == 0.0
+    assert header[H_MAX_BONUS] == 0.0
+    assert header[H_HITSTOP] == 0.0
+    assert header[H_ENEMY_N] == header[H_PBULLET_N] == header[H_MISSILE_N] == 0.0
+    assert header[H_PICKUP_N] == header[H_EBULLET_N] == 0.0
+    assert header[H_SCROLL_Y] == 0.0
+    assert header[H_SCROLL_RATE] == pytest.approx(SCROLL_SPEED)
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert game.events.n == 0
+    assert game.save_requested is False
+    assert game.bomb.phase is BombPhase.NONE
+    assert game.life.phase is PlayerPhase.ALIVE
+
+
+def test_after_a_restart_the_run_plays_again_and_can_end_again_restart() -> None:
+    game = _stage_game(_RESTART_STAGE, lives=1)
+    _tick_n(game, 4)
+    assert game.enemies.n == 1  # the wave at 2.0 spawned
+    _run_until_out(game)
+    game.restart()
+    assert game.enemies.n == 0
+    _tick_n(game, 4)
+    assert game.enemies.n == 1  # the director starts from the top of the timeline again
+    assert game.flow.state is FlowState.PLAY
+    kinds = _run_until_out(game)
+    assert kinds.count(EV_GAME_OVER) == 1
+    assert game.save_requested is True
+
+
+def test_restart_forgets_a_pending_hitstop_and_a_latched_bomb_press_restart() -> None:
+    game = _stage_game(lives=3)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    assert game.hitstop.ticks > 0
+    game.tick(0.0, Button.BOMB, 0.0, 0.0, 0.0, 0.0)  # latched: no step ran
+    game.restart()
+    assert game.hitstop.ticks == 0
+    _tick_n(game, 5)
+    assert game.bomb.phase is BombPhase.NONE
+    assert game.bomb.stock == BOMB_START_STOCK
+
+
+def test_restart_resets_the_scroll_speed_and_its_target_restart() -> None:
+    game = _stage_game()
+    game.terrain.set_target(0.25)
+    _tick_n(game, 400)
+    assert game.terrain.speed < SCROLL_SPEED
+    game.restart()
+    assert (game.terrain.distance, game.terrain.speed, game.terrain.target) == (
+        0.0,
+        SCROLL_SPEED,
+        SCROLL_SPEED,
+    )
+
+
+def test_restart_resets_the_weapon_cooldowns_and_the_laser_beam_restart() -> None:
+    game = _stage_game(weapon=WeaponKind.LASER, level=2)
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert game.laser.half_width > 0.0
+    game.vulcan.cooldown = 4
+    game.homing.cooldown = 4
+    game.restart()
+    assert (game.laser.half_width, game.laser.timer) == (0.0, 0)
+    assert (game.vulcan.cooldown, game.homing.cooldown) == (0, 0)
+
+
+def test_restart_returns_a_moved_ship_to_its_start_and_drops_owed_drag_restart() -> None:
+    game = _stage_game()
+    game.ship.x, game.ship.y = 10.0, 20.0
+    game.ship.add_drag(5.0, 5.0)
+    game.restart()
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert (game.ship.pending_x, game.ship.pending_y) == (0.0, 0.0)
+
+
+def test_restart_replays_the_at_marker_jump_restart() -> None:
+    game = Game(stage=STAGE_1, at="boss", lives=2)
+    start = STAGE_1.marker("boss") - AT_LEAD
+    _tick_n(game, 50)
+    assert game.terrain.distance > start
+    game.restart()
+    assert game.terrain.distance == start
+    assert game.director is not None
+    assert game.director.cursor > 0
+    assert game.director.step(game.terrain.distance, game.enemies) == 0  # skipped rows stay skipped
+
+
+def test_restart_without_a_marker_starts_at_the_top_of_the_stage_restart() -> None:
+    game = Game(stage=STAGE_1)
+    _tick_n(game, 50)
+    game.restart()
+    assert game.terrain.distance == 0.0
+    assert game.director is not None
+    assert game.director.cursor == 0
+
+
+def test_restart_while_paused_leaves_the_game_paused_restart() -> None:
+    game = _stage_game()
+    game.set_paused(True)
+    game.restart()
+    assert game.paused is True
+    assert game.buffers["header"][H_FLAGS] == float(FLAG_PAUSED)

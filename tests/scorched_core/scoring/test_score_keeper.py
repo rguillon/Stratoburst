@@ -165,3 +165,17 @@ def test_extends_use_the_exact_int_score_even_where_float32_would_round_cap() ->
     keeper.award(1, EventRing(), 0.0, 0.0)
     assert keeper.score == SCORE_CAP
     assert keeper.lives == LIVES_START
+
+
+def test_lose_life_takes_one_and_reports_whether_any_is_left() -> None:
+    keeper = ScoreKeeper(lives=2)
+    assert keeper.lose_life() is False
+    assert keeper.lives == 1
+    assert keeper.lose_life() is True
+    assert keeper.lives == 0
+
+
+def test_lose_life_never_goes_below_zero() -> None:
+    keeper = ScoreKeeper(lives=0)
+    assert keeper.lose_life() is True
+    assert keeper.lives == 0

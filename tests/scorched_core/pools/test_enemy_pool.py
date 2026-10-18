@@ -1218,3 +1218,18 @@ def test_a_scripted_row_still_flashes_down_and_dies_at_zero_hp() -> None:
     pool.remove_dead(ring)
     assert pool.n == 0
     assert pool.kills == 1
+
+
+def test_clear_empties_the_pool_and_the_kill_buffer_but_keeps_the_uid_counter() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    jet(pool)
+    last_uid = int(pool.uid[1])
+    pool.hp[1] = 0
+    pool.remove_dead(EventRing())
+    assert (pool.n, pool.kill_n) == (1, 1)
+    pool.clear()
+    assert (pool.n, pool.kill_n) == (0, 0)
+    assert pool.kills == 1  # the cumulative counter is the game's to reset
+    jet(pool)
+    assert pool.uid[0] > last_uid  # uids are never reused

@@ -370,3 +370,13 @@ def test_pack_into_is_finite_for_every_live_missile_after_a_chase() -> None:
         pool.pack_into(out)
         assert all(math.isfinite(v) for v in out)
     assert 0.0 < out[3] < 1.0
+
+
+def test_clear_empties_the_pool() -> None:
+    pool = MissilePool(4)
+    pool.spawn(1.0, 2.0, 0.0, 7)
+    pool.spawn(3.0, 4.0, 0.0, 8)
+    pool.clear()
+    assert pool.n == 0
+    assert pool.spawn(5.0, 6.0, 0.0, 9)
+    assert pool.n == 1
