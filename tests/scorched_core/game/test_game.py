@@ -7,10 +7,10 @@ from array import array
 from collections.abc import Callable
 
 import pytest
-from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 
 from scorched_core.audio.sfx_id import SfxId
 from scorched_core.bosses.boss_state import BossState
+from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -31,6 +31,8 @@ from scorched_core.protocol import (
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
     EV_BOSS_DEFEATED,
+    EV_BOSS_PHASE,
+    EV_BOSS_RETREAT,
     EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
@@ -4011,3 +4013,172 @@ def test_the_manifest_lists_the_boss_bar_thresholds_of_every_boss_the_stage_has(
         {"slot": 1, "name": "midboss", "phase_fracs": [0.5]},
         {"slot": 2, "name": "boss", "phase_fracs": [0.5]},
     ]
+
+
+# --- the mid-boss timeout, countdown, phase change and the run ending around it ---------------
+
+_MIDBOSS_ONLY_STAGE = StageData(
+    number=1,
+    length=10_000.0,
+    waves=(),
+    markers=(("midboss", 500.0),),
+    midboss=MIDBOSS_1,
+)
+
+
+def _quiet_midboss_game(**kwargs: object) -> Game:
+    """Only the train on a quiet stage, so nothing but the train can hurt the ship."""
+    return Game(stage=_MIDBOSS_ONLY_STAGE, at="midboss", **kwargs)
+
+
+def _hull_index(game: Game) -> int:
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    return game.enemies.index_of_uid(game.flow.boss.hull_uid)
+
+
+def test_an_unshot_midboss_counts_down_its_last_twenty_seconds_then_retreats_unpaid() -> None:
+    game = _quiet_midboss_game(god=True)
+    header = game.buffers["header"]
+    countdown: list[int] = []
+    retreats = 0
+    hull_ys: list[float] = []
+    boss = None
+    for _ in range(6000):
+        _tick(game)
+        boss = game.flow.boss if game.flow.boss is not None else boss
+        timer = int(header[H_BOSS_TIMER_S])
+        if timer >= 0:
+            if not countdown:
+                assert boss.fight_ticks == MIDBOSS_1.timeout_ticks - 20 * 60  # 20 s left, no sooner
+            if not countdown or countdown[-1] != timer:
+                countdown.append(timer)
+        if _event_records(game, EV_BOSS_RETREAT):
+            retreats += 1
+        if retreats and boss.active:
+            hull_ys.append(float(game.enemies.y[_hull_index(game)]))
+        if retreats and header[H_BOSS_ACTIVE] == 0:
+            break
+    assert countdown == list(range(20, 0, -1))
+    assert retreats == 1
+    assert hull_ys == sorted(hull_ys, reverse=True)  # the train leaves upward
+    assert hull_ys[0] - hull_ys[-1] > 50.0
+    assert header[H_FLOW] == FlowState.PLAY
+    assert header[H_BOSS_ACTIVE] == 0
+    assert header[H_SCORE] == 0  # nobody was paid for a train that got away
+    assert not [k for k in game.enemies.kind[: game.enemies.n] if k == EnemyKind.TRAIN]
+    assert game.terrain.target == SCROLL_SPEED
+
+
+def test_the_countdown_is_hidden_until_twenty_seconds_remain() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    header = game.buffers["header"]
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    game.flow.boss.fight_ticks = MIDBOSS_1.timeout_ticks - 20 * 60 - 2
+    _tick(game)
+    assert header[H_BOSS_TIMER_S] == -1
+    _tick(game)
+    assert header[H_BOSS_TIMER_S] == 20
+
+
+def test_pause_and_hitstop_freeze_the_fight_timer() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    boss = game.flow.boss
+    before = boss.fight_ticks
+    game.set_paused(True)
+    _tick_n(game, 100)
+    assert boss.fight_ticks == before
+    game.set_paused(False)
+    game.hitstop.trigger(10)
+    _tick_n(game, 10)
+    assert boss.fight_ticks == before
+    _tick(game)
+    assert boss.fight_ticks == before + 1
+
+
+def test_both_turrets_gone_pushes_one_phase_two_event_and_the_hull_opens_fire() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    boss = game.flow.boss
+    for k in range(len(MIDBOSS_1.parts)):
+        game.enemies.hp[game.enemies.index_of_uid(boss.part_uid(k))] = 0
+    phases: list[list[float]] = []
+    fired_from: list[float] = []
+    for _ in range(400):
+        _tick(game)
+        phases += _event_records(game, EV_BOSS_PHASE)
+        hull_y = float(game.enemies.y[_hull_index(game)])
+        fired_from += [abs(record[2] - hull_y) for record in _event_records(game, EV_ENEMY_FIRE)]
+    assert [(record[3], record[4]) for record in phases] == [(2.0, 1.0)]
+    assert game.enemies.hp[_hull_index(game)] == MIDBOSS_1.hull_hp  # untouched, still above half
+    assert boss.phase_number == 2
+    assert game.buffers["header"][H_BOSS_PHASE] == 2
+    assert fired_from  # the hull fires its spread
+    assert max(fired_from) < 0.5  # from the hull itself, the turrets are stumps
+
+
+def test_a_player_death_does_not_stop_the_midboss() -> None:
+    game = _quiet_midboss_game(lives=5)
+    _tick_until(game, _fight_started, limit=2000)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.deaths == 1)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert game.flow is not None
+    assert game.flow.state == FlowState.MIDBOSS
+    assert game.flow.boss is not None
+    assert game.flow.boss.active
+    assert game.buffers["header"][H_BOSS_ACTIVE] == 1
+
+
+def test_game_over_during_the_midboss_ends_the_run_and_the_fight_stays_over() -> None:
+    game = _quiet_midboss_game(lives=1)
+    _tick_until(game, _fight_started, limit=2000)
+    _run_until_out(game)
+    header = game.buffers["header"]
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert header[H_BOSS_ACTIVE] == 0
+    assert game.flow is not None
+    assert game.flow.boss is None
+    _tick_n(game, 300)
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert game.flow.state == FlowState.GAME_OVER
+    assert game.terrain.target == MIDBOSS_CRAWL_SPEED  # no MIDBOSS -> PLAY transition afterwards
+
+
+def test_a_restart_during_the_midboss_clears_the_fight_and_it_triggers_again() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    old = game.flow.boss
+    game.restart()
+    header = game.buffers["header"]
+    assert game.flow.boss is None
+    assert game.enemies.n == 0
+    assert (header[H_BOSS_ACTIVE], header[H_BOSS_HP], header[H_BOSS_TIMER_S]) == (0, 0, -1)
+    assert game.terrain.target == SCROLL_SPEED
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow.boss is not old
+    assert game.flow.boss.fight_ticks < 10
+    assert header[H_FLOW] == FlowState.MIDBOSS
+
+
+def test_a_restart_after_the_midboss_triggers_it_again_at_the_marker() -> None:
+    game = _quiet_midboss_game(god=True, weapon=WeaponKind.LASER, level=5)
+    header = game.buffers["header"]
+    for _ in range(4000):
+        _fire_tick(game)
+        if header[H_SCORE] >= 30000 and header[H_BOSS_ACTIVE] == 0:
+            break
+    assert header[H_SCORE] >= 30000
+    assert header[H_FLOW] == FlowState.PLAY
+    game.restart()
+    assert header[H_SCORE] == 0
+    assert game.flow.boss is None
+    _tick_until(game, _fight_started, limit=2000)
+    assert header[H_BOSS_ACTIVE] == 1

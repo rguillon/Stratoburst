@@ -2,7 +2,6 @@ import itertools
 import math
 
 from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
-
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
@@ -451,3 +450,14 @@ def test_the_train_rides_the_maglev_line() -> None:
     maglev = next(f for f in STAGE_1.features if f.kind == SceneryKind.MAGLEV)
     assert maglev.x == MIDBOSS_1.x
     assert maglev.d0 < STAGE_1.marker("midboss") < maglev.d1
+
+
+def test_the_train_is_in_place_long_before_the_lull_after_its_marker_ends() -> None:
+    entrance_steps = (MIDBOSS_1.hold_y - MIDBOSS_1.enter_y) / MIDBOSS_1.enter_speed
+    assert entrance_steps * SCROLL_SPEED < MIDBOSS_LULL / 2  # even at full scroll speed
+    assert MIDBOSS_LULL == 420.0
+
+
+def test_no_wave_lies_in_the_lull_right_after_the_midboss_marker() -> None:
+    midboss = STAGE_1.marker("midboss")
+    assert [w for w in STAGE_1.waves if midboss <= w.at < midboss + MIDBOSS_LULL] == []
