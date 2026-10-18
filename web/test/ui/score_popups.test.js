@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createScorePopups } from '../../src/ui/score_popups.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
-const EVENTS = { EXPLOSION: 1, MEDAL: 13, EXTEND: 14 };
+const EVENTS = { EXPLOSION: 1, MEDAL: 13, EXTEND: 14, PART_DESTROYED: 15 };
 
 function build({ withMarkup = true, capacity } = {}) {
   const doc = createFakeDocument();
@@ -49,6 +49,48 @@ describe('createScorePopups', () => {
     expect(projected).toEqual([[80, 120]]);
     expect(popups.spans.filter((span) => !span.hidden)).toHaveLength(1);
     expect(popups.shown).toBe(1);
+  });
+
+  it('shows a destroyed boss part as a popup with its points at the part position', () => {
+    const { projected, make } = build();
+    const popups = make();
+    popups.handle(EVENTS.PART_DESTROYED, 120, 74, 5000, 0, 1);
+    const [first] = popups.spans;
+    expect(first.textContent).toBe('5000');
+    expect(first.hidden).toBe(false);
+    expect(first.style.left).toBe('240px');
+    expect(first.style.top).toBe('222px');
+    expect(projected).toEqual([[120, 74]]);
+    expect(popups.shown).toBe(1);
+  });
+
+  it('shares one pool between medals and parts, reusing the oldest first', () => {
+    const { make } = build({ capacity: 2 });
+    const popups = make();
+    popups.handle(EVENTS.MEDAL, 1, 1, 100);
+    popups.handle(EVENTS.PART_DESTROYED, 2, 2, 5000, 0, 1);
+    popups.handle(EVENTS.PART_DESTROYED, 3, 3, 20000, 1, 1);
+    expect(popups.spans.map((span) => span.textContent)).toEqual(['20000', '5000']);
+    expect(popups.shown).toBe(3);
+  });
+
+  it('writes a destroyed part value as a rounded integer, and 0 when it is not a number', () => {
+    const { make } = build();
+    const popups = make();
+    popups.handle(EVENTS.PART_DESTROYED, 0, 0, 4999.6, 0, 1);
+    popups.handle(EVENTS.PART_DESTROYED, 0, 0, Number.NaN, 0, 1);
+    expect(popups.spans[0].textContent).toBe('5000');
+    expect(popups.spans[1].textContent).toBe('0');
+  });
+
+  it('ignores PART_DESTROYED when the events table has no such event', () => {
+    const doc = createFakeDocument();
+    const root = doc.createElement('div');
+    root.id = 'popups';
+    doc.body.append(root);
+    const popups = createScorePopups({ doc, events: { MEDAL: 13 }, project: () => ({ x: 0, y: 0 }) });
+    popups.handle(15, 0, 0, 5000, 0, 1);
+    expect(popups.shown).toBe(0);
   });
 
   it('rounds the value and writes only an integer', () => {

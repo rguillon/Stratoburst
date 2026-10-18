@@ -5,12 +5,13 @@ import {
   MAX_DURATION_S,
   SHAKE_BOMB,
   SHAKE_DEATH,
+  SHAKE_PART,
   createShake,
   effectClockDelta,
   withCameraOffset,
 } from '../../src/fx/shake.js';
 
-// The manifest's event table, as Python publishes it: only two of these are big enough to shake.
+// The manifest's event table, as Python publishes it: only three of these are big enough to shake.
 const EVENTS = {
   EXPLOSION: 1,
   HIT: 2,
@@ -24,8 +25,9 @@ const EVENTS = {
   BOMB_DETONATE: 10,
   DEATHBOMB_SAVE: 11,
   SFX: 12,
+  PART_DESTROYED: 15,
 };
-const BIG = new Set(['BOMB_DETONATE', 'PLAYER_DEATH']);
+const BIG = new Set(['BOMB_DETONATE', 'PLAYER_DEATH', 'PART_DESTROYED']);
 const STEP = 1 / 60;
 
 function build() {
@@ -41,6 +43,20 @@ describe('the tuned shakes', () => {
     expect(MAX_AMPLITUDE).toBe(3.0);
     expect(MAX_DURATION_S).toBe(0.5);
     expect(SHAKE_DEATH.amplitude).toBeLessThan(SHAKE_BOMB.amplitude);
+  });
+
+  it('shakes a destroyed boss part at a medium strength, between the death and the bomb', () => {
+    expect(SHAKE_PART).toEqual({ amplitude: 2.0, durationS: 0.35 });
+    expect(Object.isFrozen(SHAKE_PART)).toBe(true);
+    expect(SHAKE_PART.amplitude).toBeGreaterThan(SHAKE_DEATH.amplitude);
+    expect(SHAKE_PART.amplitude).toBeLessThan(SHAKE_BOMB.amplitude);
+  });
+
+  it('never lets any tuned shake exceed the comfort ceilings', () => {
+    for (const tuned of [SHAKE_BOMB, SHAKE_DEATH, SHAKE_PART]) {
+      expect(tuned.amplitude).toBeLessThanOrEqual(MAX_AMPLITUDE);
+      expect(tuned.durationS).toBeLessThanOrEqual(MAX_DURATION_S);
+    }
   });
 });
 
@@ -230,6 +246,44 @@ describe('createShake', () => {
       expect(shake.active).toBe(false);
     });
 
+    it('triggers the part shake on PART_DESTROYED, which carries its points, and counts it', () => {
+      const shake = build();
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.PART_DESTROYED, 120, 74, 5000, 0, 1);
+      expect(shake.active).toBe(true);
+      expect(shake.count).toBe(1);
+      shake.update(STEP);
+      shake.offset(out);
+      expect(magnitude(out)).toBeCloseTo(SHAKE_PART.amplitude * (1 - STEP / SHAKE_PART.durationS) ** 2, 6);
+      for (let frame = 0; frame < 21; frame += 1) shake.update(STEP); // 0.35 s and a little more
+      expect(shake.active).toBe(false);
+    });
+
+    it('keeps the bomb shake when a part is destroyed during it, and the part shake over a faded death', () => {
+      const shake = build();
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.BOMB_DETONATE, 0, 0, 0, 0, 0);
+      shake.update(0.05);
+      shake.handle(EVENTS.PART_DESTROYED, 0, 0, 5000, 0, 1);
+      shake.update(STEP);
+      shake.offset(out);
+      expect(magnitude(out)).toBeCloseTo(3 * (1 - (0.05 + STEP) / 0.5) ** 2, 6);
+
+      const second = build();
+      second.handle(EVENTS.PLAYER_DEATH, 0, 0, 0, 0, 0);
+      second.update(0.3);
+      second.handle(EVENTS.PART_DESTROYED, 0, 0, 5000, 0, 1);
+      second.update(STEP);
+      second.offset(out);
+      expect(magnitude(out)).toBeCloseTo(2.0 * (1 - STEP / 0.35) ** 2, 6);
+    });
+
+    it('ignores PART_DESTROYED when the events table has no such event', () => {
+      const shake = createShake({ events: { BOMB_DETONATE: 10, PLAYER_DEATH: 7 } });
+      shake.handle(15, 0, 0, 5000, 0, 1);
+      expect(shake.active).toBe(false);
+    });
+
     it.each(Object.entries(EVENTS).filter(([name]) => !BIG.has(name)))(
       'leaves the shake idle for %s (event %i)',
       (name, type) => {
@@ -247,7 +301,7 @@ describe('createShake', () => {
       expect(shake.active).toBe(false);
     });
 
-    it('shakes only for the two big events', () => {
+    it('shakes only for the three big events', () => {
       const shake = build();
       for (const type of Object.values(EVENTS)) shake.handle(type, 0, 0, 0, 0, 0);
       expect(shake.count).toBe(BIG.size);
