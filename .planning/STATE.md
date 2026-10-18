@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-16-PLAN.md
-last_updated: "2026-10-18T05:03:12.504Z"
+stopped_at: Completed 02-17-PLAN.md
+last_updated: "2026-10-18T05:12:18.714Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: 11144a049c75f8f96454fdaae9e72e4cbea64c66
+state_head: faa230f4112d866a5a608b335815e7c8ec07498e
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 26
+  completed_plans: 27
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 17 of 33
+Plan: 18 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -82,6 +82,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P14 | 7 min | 2 tasks | 8 files |
 | Phase 02 P15 | 5 min | 2 tasks | 9 files |
 | Phase 02 P16 | 7 min | 2 tasks | 7 files |
+| Phase 02 P17 | 7 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-15: the grace window is exactly DEATHBOMB_TICKS (8) step calls after the hit step and invulnerability counts down only on ALIVE steps, so the 150-step blink starts on the fly-in arrival step
 - [Phase 02]: 02-15: a hit outside ALIVE or while invulnerable returns False and changes nothing; grant_invuln takes the larger remaining value so the bomb and the respawn share one counter
 - [Phase 02]: 02-16: the ?stress storm lives in storm_pool and gameplay enemy bullets in a separate 200-bullet ebullets pool; both pack into one ebullets channel (storm first, gameplay at offset storm_pool.n) and header STORM_N (21) keeps stress counts exact
+- [Phase 02]: 02-17: Orb bullets are LDR (every channel at most 0.98) and drawn in a separate bulletScene after bloom: the composer gets a second RenderPass (clear false, clearDepth true) before OutputPass and the low tier clears depth and renders the scene directly
+- [Phase 02]: 02-17: Pink is reserved by PALETTE: a test fails when a saturated effect, weapon or pickup colour is within 35 degrees of the enemy-bullet hue, and every explosion and hit recipe colour is a palette entry
+- [Phase 02]: 02-17: Player bolts use the bolt style (quad stretched 2.5x along aData.z, HDR elliptical streak) in the palette VULCAN_TRACER colour instead of the old cyan override
 
 ### Pending Todos
 
@@ -163,6 +167,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:03:12.425Z
-Stopped at: Completed 02-16-PLAN.md
+Last session: 2026-10-18T05:12:18.625Z
+Stopped at: Completed 02-17-PLAN.md
 Resume file: None
