@@ -352,6 +352,7 @@ class Game:
             self.input.settle()  # a PAUSE bit still held from before is not a new press
             self.ship.pending_x = 0.0  # the ship must not drift on drag owed from before
             self.ship.pending_y = 0.0
+            self._bomb_requested = False  # a press made while paused is not a bomb
         self.buffers["header"][H_FLAGS] = self._flags()
 
     def tick(  # noqa: PLR0913, PLR0917 - frozen boundary signature (RESEARCH Pattern 2)
@@ -368,8 +369,9 @@ class Game:
         self.input.update(buttons)
         if self.input.pressed(Button.PAUSE):
             self.set_paused(not self.paused)
-        # The press edge is latched, not acted on: a frame that runs no step, or a paused one,
-        # must not lose it (RESEARCH Pitfall 1). The next live step consumes it.
+        # The press edge is latched, not acted on: a frame that runs no step must not lose it
+        # (RESEARCH Pitfall 1). The next live step consumes it; resuming discards a press made
+        # while paused (set_paused), because the player was not playing.
         if self.input.pressed(Button.BOMB):
             self._bomb_requested = True
         self._firing = bool(buttons & Button.FIRE)
