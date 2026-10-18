@@ -103,6 +103,28 @@ describe('buildReport', () => {
     expect(text).toContain('refresh-capped-or-cpu-bound');
   });
 
+  describe('audio line', () => {
+    const audioLine = (info) => lines(buildReport(info)).find((l) => l.startsWith('audio:'));
+
+    it('shows a running context without the silent switch hint', () => {
+      expect(audioLine({ ...FULL, audioState: 'running' })).toBe('audio: running');
+      expect(buildReport({ ...FULL, audioState: 'running' })).not.toContain('silent switch');
+    });
+
+    it.each(['suspended', 'interrupted', 'none'])(
+      'adds the silent switch hint when the state is %s',
+      (state) => {
+        expect(audioLine({ ...FULL, audioState: state })).toBe(
+          `audio: ${state} (no sound on iPhone? check the silent switch)`,
+        );
+      },
+    );
+
+    it('shows n/a with no hint when the state was not measured', () => {
+      expect(audioLine(FULL)).toBe('audio: n/a');
+    });
+  });
+
   it('reports the time to the start gate in seconds', () => {
     expect(buildReport({ ...FULL, timeToGateMs: 4210 })).toContain('time to gate: 4.2 s');
   });

@@ -125,6 +125,30 @@ describe('createDebugSession', () => {
     expect(report).toContain('gl renderer: Test GPU');
   });
 
+  it('feeds the getAudioState value into the report text', () => {
+    const { session } = setup({ getAudioState: () => 'suspended' });
+
+    expect(session.reportText()).toContain(
+      'audio: suspended (no sound on iPhone? check the silent switch)',
+    );
+  });
+
+  it('reads the audio state afresh on every report', () => {
+    let state = 'suspended';
+    const { session } = setup({ getAudioState: () => state });
+    expect(session.reportText()).toContain('audio: suspended');
+
+    state = 'running';
+
+    expect(session.reportText()).toContain('audio: running');
+  });
+
+  it('reports the audio state as n/a when no getAudioState is given', () => {
+    const { session } = setup();
+
+    expect(session.reportText()).toContain('audio: n/a');
+  });
+
   it('copies the report when the overlay button is clicked', () => {
     const clipboard = { writeText: vi.fn(async () => {}) };
     const doc = createFakeDocument({ clipboard });
