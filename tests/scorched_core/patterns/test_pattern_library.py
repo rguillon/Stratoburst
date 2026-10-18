@@ -1,4 +1,6 @@
 import pytest
+
+from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.patterns.pattern_library import (
     PATTERN_NAMES,
     PATTERN_TABLE,
@@ -6,8 +8,6 @@ from scorched_core.patterns.pattern_library import (
     pattern_index,
 )
 from scorched_core.patterns.pattern_spec import PatternSpec
-
-from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.tuning import ENEMY_FIRE_DELAY
 
 
@@ -48,3 +48,15 @@ def test_pattern_index_is_the_position_in_the_table() -> None:
 def test_an_unknown_pattern_name_raises_naming_it() -> None:
     with pytest.raises(ValueError, match="nope"):
         pattern_index("nope")
+
+
+def test_the_train_patterns_are_registered_slow_and_sparse_for_the_mid_boss() -> None:
+    turret = PATTERNS["train_turret_aimed"]
+    hull = PATTERNS["train_hull_spread"]
+    assert turret.shape is FirePattern.AIMED
+    assert hull.shape is FirePattern.SPREAD
+    for spec in (turret, hull):
+        assert spec.speed <= 2.0
+        assert spec.interval >= 90
+    assert PATTERN_TABLE[pattern_index("train_turret_aimed")] is turret
+    assert PATTERN_TABLE[pattern_index("train_hull_spread")] is hull
