@@ -4,8 +4,9 @@ const finiteOrZero = (value) => (Number.isFinite(value) ? value : 0);
 
 // Merges keyboard and touch into the single per-frame tick input. Touch mode switches on at the
 // first touch pointerdown and off at the next keydown; while on, FIRE is OR-ed into every
-// sample (auto-fire, PLYR-03 on touch). Values never leave here non-finite (T-01-16).
-export function createInputSampler({ keyboard, touch, buttonBits, getMapperArgs }) {
+// sample (auto-fire, PLYR-03 on touch). The on-screen bomb button, when the page has one, ORs the
+// BOMB bit through the same button path as Shift or K. Values never leave here non-finite (T-01-16).
+export function createInputSampler({ keyboard, touch, bombButton = null, buttonBits, getMapperArgs }) {
   let touchMode = false;
 
   return {
@@ -14,6 +15,7 @@ export function createInputSampler({ keyboard, touch, buttonBits, getMapperArgs 
       const t = touch.sample();
       let buttons = k.buttons;
       if (touchMode) buttons |= buttonBits.FIRE;
+      if (bombButton?.sample()) buttons |= buttonBits.BOMB;
 
       let dragX = 0;
       let dragY = 0;

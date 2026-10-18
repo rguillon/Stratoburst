@@ -154,6 +154,37 @@
       #max-flash[hidden] {
         display: none;
       }
+      /* The touch bomb button (INPT-03): the bomb pickup's amber, never pink. data-no-steer keeps
+         touch_input from treating a press on it as a drag. */
+      #bomb-button {
+        position: fixed;
+        right: calc(16px + env(safe-area-inset-right, 0px));
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: clamp(72px, 15vmin, 112px);
+        height: clamp(72px, 15vmin, 112px);
+        padding: 0;
+        border: 3px solid rgba(255, 191, 32, 0.85);
+        border-radius: 50%;
+        background: rgba(255, 191, 32, 0.28);
+        color: rgba(255, 220, 140, 0.95);
+        font: 900 clamp(28px, 6vmin, 44px) / 1 system-ui, sans-serif;
+        text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #bomb-button[hidden] {
+        display: none;
+      }
+      #bomb-button:active {
+        background: rgba(255, 191, 32, 0.55);
+      }
       #paused {
         position: fixed;
         inset: 0;
@@ -199,6 +230,7 @@
       </div>
       <div id="status-readout" hidden><span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
       <div id="max-flash" hidden>MAX</div>
+      <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
     </div>
     <div id="paused" role="dialog" aria-label="Game paused" hidden>
       <div class="title">PAUSED</div>

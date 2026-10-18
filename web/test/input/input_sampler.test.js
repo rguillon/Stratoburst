@@ -31,8 +31,28 @@ function fakeTouch(sample = { dxPx: 0, dyPx: 0, active: false }) {
   };
 }
 
-function make({ keyboard = fakeKeyboard(), touch = fakeTouch(), getMapperArgs = mapperArgs } = {}) {
-  return { keyboard, touch, sampler: createInputSampler({ keyboard, touch, buttonBits: BITS, getMapperArgs }) };
+function fakeBombButton(pressed = false) {
+  let samples = 0;
+  return {
+    press: (on) => (pressed = on),
+    get samples() {
+      return samples;
+    },
+    sample: () => (samples++, pressed),
+  };
+}
+
+function make({
+  keyboard = fakeKeyboard(),
+  touch = fakeTouch(),
+  bombButton,
+  getMapperArgs = mapperArgs,
+} = {}) {
+  return {
+    keyboard,
+    touch,
+    sampler: createInputSampler({ keyboard, touch, bombButton, buttonBits: BITS, getMapperArgs }),
+  };
 }
 
 describe('createInputSampler', () => {
@@ -72,6 +92,29 @@ describe('createInputSampler', () => {
     sampler.setTouchMode(false);
     expect(sampler.touchMode).toBe(false);
     expect(sampler.sample().buttons).toBe(0);
+  });
+
+  it('ORs the BOMB bit when the bomb button samples true, and samples it every time', () => {
+    const bombButton = fakeBombButton(true);
+    const { sampler } = make({ bombButton });
+    expect(sampler.sample().buttons).toBe(BITS.BOMB);
+    bombButton.press(false);
+    expect(sampler.sample().buttons).toBe(0);
+    expect(bombButton.samples).toBe(2);
+  });
+
+  it('keeps FIRE and the keyboard bits next to the button BOMB bit in touch mode', () => {
+    const { sampler } = make({
+      keyboard: fakeKeyboard({ buttons: BITS.PAUSE, moveX: 0, moveY: 0 }),
+      bombButton: fakeBombButton(true),
+    });
+    sampler.setTouchMode(true);
+    expect(sampler.sample().buttons).toBe(BITS.PAUSE | BITS.FIRE | BITS.BOMB);
+  });
+
+  it('behaves as before on a keyboard-only page with no bomb button', () => {
+    const { sampler } = make({ keyboard: fakeKeyboard({ buttons: BITS.FIRE, moveX: 0, moveY: 0 }) });
+    expect(sampler.sample().buttons).toBe(BITS.FIRE);
   });
 
   it('converts the finger delta once per sample and zeroes it afterwards', () => {

@@ -49,6 +49,7 @@ test('a finger drag flies the ship 1:1 with no jump, auto-fire and a keydown lea
 
   // Touch mode is on and auto-fire sets the FIRING flag without any key.
   expect(await page.evaluate(() => globalThis.__scorched.touchMode)).toBe(true);
+  expect(await page.evaluate(() => globalThis.__scorched.bombButton.visible)).toBe(true);
   const firing = await page.evaluate(() => {
     const { header, slots, manifest } = globalThis.__scorched;
     return (header[slots.FLAGS] & manifest.flags.FIRING) !== 0;
@@ -61,8 +62,37 @@ test('a finger drag flies the ship 1:1 with no jump, auto-fire and a keydown lea
   );
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => globalThis.__scorched.touchMode)).toBe(false);
+  // The bomb button belongs to touch mode: it was shown by the touch and is hidden again now.
+  expect(await page.evaluate(() => globalThis.__scorched.bombButton.visible)).toBe(false);
   await page.evaluate(() =>
     globalThis.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD', key: 'd', bubbles: true })),
   );
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});
+
+// The centre of an element in CSS pixels.
+const centreOf = (page, selector) =>
+  page.evaluate((sel) => {
+    const r = document.querySelector(sel).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, selector);
+
+test('a tap on the bomb button drops a bomb without moving the ship', async ({ page }) => {
+  await bootGame(page, '?debug', { tap: true });
+  const cdp = await page.context().newCDPSession(page);
+
+  await expect(page.locator('#bomb-button')).toBeVisible();
+  expect(await page.evaluate(() => globalThis.__scorched.bombButton.visible)).toBe(true);
+  expect(await readSlot(page, 'BOMBS')).toBe(3);
+  expect(await readSlot(page, 'BOMB_PHASE')).toBe(0);
+  const x0 = await readSlot(page, 'SHIP_X');
+
+  const { x, y } = await centreOf(page, '#bomb-button');
+  await touch(cdp, 'touchStart', x, y);
+  await touch(cdp, 'touchEnd');
+
+  await expect.poll(() => readSlot(page, 'BOMBS'), { timeout: 20_000 }).toBe(2);
+  await expect.poll(() => readSlot(page, 'BOMB_PHASE'), { timeout: 20_000 }).not.toBe(0);
+  expect(Math.abs((await readSlot(page, 'SHIP_X')) - x0)).toBeLessThan(0.01);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });

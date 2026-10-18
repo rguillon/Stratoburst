@@ -8,6 +8,7 @@ import { createFrameLoop } from './loop/frame_loop.js';
 import { createPauseController } from './loop/pause_controller.js';
 import { createKeyboardInput } from './input/keyboard_input.js';
 import { createTouchInput } from './input/touch_input.js';
+import { createBombButton } from './input/bomb_button.js';
 import { createInputSampler } from './input/input_sampler.js';
 import { createRendererRig } from './render/renderer_rig.js';
 import { createShipModel, hullVisibleFor } from './render/ship_model.js';
@@ -351,14 +352,21 @@ async function main() {
   // Touch mode is decided by the two devices themselves: a touch pointerdown turns it on (and
   // with it auto-fire), any later keydown turns it off. The sampler owns the flag.
   let sampler = null;
-  const keyboard = createKeyboardInput(window, { onKeyDown: () => sampler?.setTouchMode(false) });
+  // The bomb button is a touch-mode control: it shows with touch mode and hides in keyboard mode.
+  const bombButton = createBombButton(document.getElementById('bomb-button'));
+  const setTouchMode = (on) => {
+    sampler?.setTouchMode(on);
+    bombButton.setVisible(on);
+  };
+  const keyboard = createKeyboardInput(window, { onKeyDown: () => setTouchMode(false) });
   const touch = createTouchInput(app, {
-    onTouchMode: () => sampler?.setTouchMode(true),
+    onTouchMode: () => setTouchMode(true),
   });
   const mapperArgs = { camera: rig.camera, viewportW: 1, viewportH: 1, shipWorld: ship.position };
   sampler = createInputSampler({
     keyboard,
     touch,
+    bombButton,
     buttonBits: manifest.buttons,
     getMapperArgs() {
       mapperArgs.viewportW = canvas.clientWidth;
@@ -367,7 +375,7 @@ async function main() {
     },
   });
   // A touch tap on the gate is already a touch session: steer by drag and auto-fire.
-  if (pointerType === 'touch') sampler.setTouchMode(true);
+  if (pointerType === 'touch') setTouchMode(true);
   const world = new THREE.Vector3();
   let frameCount = 0;
   let pause = null; // created after the loop; onFrame only runs once the loop has started
@@ -519,6 +527,11 @@ async function main() {
       },
       get touchMode() {
         return sampler.touchMode;
+      },
+      bombButton: {
+        get visible() {
+          return !bombButton.el.hidden;
+        },
       },
       get tier() {
         return currentTier;

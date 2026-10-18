@@ -15,6 +15,8 @@ class FakeElement {
     this.parent = null;
     this.focused = false;
     this.selected = false;
+    this.attributes = {};
+    this.captured = [];
   }
 
   append(...nodes) {
@@ -45,6 +47,61 @@ class FakeElement {
 
   addEventListener(type, handler) {
     (this.listeners[type] ??= []).push(handler);
+  }
+
+  removeEventListener(type, handler) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((h) => h !== handler);
+  }
+
+  listenerCount(type) {
+    return (this.listeners[type] ?? []).length;
+  }
+
+  setAttribute(name, value = '') {
+    this.attributes[name] = String(value);
+  }
+
+  getAttribute(name) {
+    return name in this.attributes ? this.attributes[name] : null;
+  }
+
+  setPointerCapture(pointerId) {
+    this.captured.push(pointerId);
+  }
+
+  releasePointerCapture(pointerId) {
+    this.captured = this.captured.filter((id) => id !== pointerId);
+  }
+
+  // Attribute selectors only ("[data-no-steer]"), matched on this element and then its parents.
+  closest(selector) {
+    const name = selector.slice(1, -1);
+    for (let node = this; node; node = node.parent) {
+      if (name in node.attributes) return node;
+    }
+    return null;
+  }
+
+  // Delivers an event to this element's listeners and then bubbles it up through the parents until
+  // a listener calls stopPropagation. Returns the event so a test can read preventDefault.
+  dispatch(type, init = {}) {
+    const event = {
+      type,
+      target: this,
+      defaultPrevented: false,
+      propagationStopped: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      stopPropagation() {
+        this.propagationStopped = true;
+      },
+      ...init,
+    };
+    for (let node = this; node && !event.propagationStopped; node = node.parent) {
+      for (const handler of node.listeners[type] ?? []) handler(event);
+    }
+    return event;
   }
 
   click() {
