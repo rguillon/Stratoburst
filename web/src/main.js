@@ -26,6 +26,7 @@ import { CITY_TARGET_KINDS, buildRubble } from './render/models/city_targets.js'
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
 import { createWreckRing, wreckKindsFor } from './fx/wreck_ring.js';
+import { createStumpFx, stumpKindsFor } from './fx/stump_fx.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
@@ -247,6 +248,18 @@ async function main() {
     toWorld: (x, y, out) => rig.groundLayer.toWorld(x, y, out),
   });
   rig.groundLayer.group.add(wrecks.group);
+  // A boss part shot off leaves a stump (D-14) that smokes and burns for the rest of the fight; the
+  // stump kinds are the manifest names ending in _STUMP, and it reads the same enemies channel.
+  const stumpFx = createStumpFx({
+    data: bridge.channels.enemies,
+    capacity: manifest.channels.enemies.cap,
+    stumpKinds: stumpKindsFor(manifest.enemy_kinds),
+    groundKinds,
+    layers: fxLayers,
+    getScale: () => TIERS[currentTier].particleScale,
+    toWorld: (x, y, ground, out) =>
+      ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
+  });
   // Scorch marks of ground kills lie on the terrain below the shadows and the dim mask.
   const decals = createDecalRing({
     events: manifest.events,
@@ -334,8 +347,8 @@ async function main() {
   });
   rig.scene.add(bombFx.group);
   bombFx.showAll(true);
-  // Screen shake: only the big events (a bomb detonation, the ship's death) move the camera, and only
-  // around the render call. The freeze itself is Python's hitstop.
+  // Screen shake: only the big events (a bomb detonation, the ship's death, a boss part blowing off) move
+  // the camera, and only around the render call. The freeze itself is Python's hitstop.
   const shake = createShake({ events: manifest.events });
   const fx = createFxDispatcher({
     handlers: [explosionFx, wrecks, decals, lightPool, bombFx, shake],
@@ -586,7 +599,9 @@ async function main() {
       city.update(scrollNow);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
-      fxTime += effectClockDelta(dt, clockState);
+      const effectDt = effectClockDelta(dt, clockState);
+      fxTime += effectDt;
+      stumpFx.update(header[slots.ENEMY_N], effectDt);
       lightPool.update(dt / 1000);
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
@@ -708,6 +723,10 @@ async function main() {
         },
         get wrecksSpawned() {
           return wrecks.spawned;
+        },
+        // Particles the stumps of shot-off boss parts have emitted so far (e2e checks they smoulder).
+        get stumpPuffs() {
+          return stumpFx.emitted;
         },
         get decals() {
           return decals.live;

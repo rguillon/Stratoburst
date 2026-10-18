@@ -9,6 +9,8 @@ import { mulberry32 } from './explosion_fx.js';
 // Amplitude in world units and length in seconds. Tunable.
 export const SHAKE_BOMB = Object.freeze({ amplitude: 3.0, durationS: 0.5 });
 export const SHAKE_DEATH = Object.freeze({ amplitude: 1.6, durationS: 0.35 });
+// A boss part shot off (D-14): a medium shake, between the death and the bomb.
+export const SHAKE_PART = Object.freeze({ amplitude: 2.0, durationS: 0.35 });
 // Hard ceilings, so no trigger can exceed the comfort limits whatever it asks for.
 export const MAX_AMPLITUDE = 3.0;
 export const MAX_DURATION_S = 0.5;
@@ -69,11 +71,12 @@ export function createShake({ events, rng = mulberry32(SEED) }) {
     return out;
   }
 
-  // Only the two big events shake. Every other kind (hits, kills, shots, pickups, enemy fire) is
+  // Only the three big events shake. Every other kind (hits, kills, shots, pickups, enemy fire) is
   // deliberately ignored, so ordinary action stays smooth.
   function handle(type) {
     if (type === events.BOMB_DETONATE) trigger(SHAKE_BOMB.amplitude, SHAKE_BOMB.durationS);
     else if (type === events.PLAYER_DEATH) trigger(SHAKE_DEATH.amplitude, SHAKE_DEATH.durationS);
+    else if (type === events.PART_DESTROYED) trigger(SHAKE_PART.amplitude, SHAKE_PART.durationS);
   }
 
   return {

@@ -5,11 +5,12 @@ import { bootGame, readSlot } from './helpers.js';
 // in the maglev column (x 120) pierces the hull and both turrets; the bar drains, a turret shot off
 // shakes the screen, pops its points and leaves a smouldering stump, and the bar is gone once the
 // train is dead and play resumes.
-// The production build runs under software GL, so the waits are generous: timing is not under test.
+// The production build runs under software GL, and other specs run beside this one, so the waits are
+// generous (the intro alone can take half a minute under load): timing is not under test.
 test('the train comes in with its HP bar, loses parts with a shake, a popup and a stump, and the bar goes with the kill', async ({
   page,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   await bootGame(page, '?debug&at=midboss&weapon=laser&level=5', { stage: true });
 
   // The boss bar is state-driven from BOSS_ACTIVE: it appears with the fight.
@@ -19,7 +20,7 @@ test('the train comes in with its HP bar, loses parts with a shake, a popup and 
       return header[slots.BOSS_ACTIVE] === 1;
     },
     null,
-    { polling: 'raf', timeout: 30_000 },
+    { polling: 'raf', timeout: 60_000 },
   );
   await expect(page.locator('#boss-bar')).toBeVisible();
   await expect(page.locator('#boss-bar .ticks .tick:not([hidden])')).toHaveCount(1);
@@ -46,7 +47,7 @@ test('the train comes in with its HP bar, loses parts with a shake, a popup and 
         return dir === 'ArrowLeft' ? ship <= 123 : ship >= 117;
       },
       [key],
-      { polling: 'raf', timeout: 5_000 },
+      { polling: 'raf', timeout: 15_000 },
     );
     await page.keyboard.up(key);
     await page.waitForTimeout(100);

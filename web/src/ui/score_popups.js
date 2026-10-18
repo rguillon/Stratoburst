@@ -1,12 +1,12 @@
-// World score popups (D-20): a medal catch shows its value where the medal was, rising and fading.
-// Only medals pop up (the destroyed-part popups arrive with the boss plans); a regular kill shows
-// nothing, so the bullets stay readable. A fixed pool of spans lives inside #popups, reused round
-// robin, so a burst of catches never grows the DOM (T-03-15). The text is a rounded integer from the
-// event, written through textContent only.
+// World score popups (D-20): a medal catch shows its value where the medal was, and a boss part shot
+// off shows its points where it was, rising and fading. A regular kill shows nothing, so the bullets
+// stay readable. A fixed pool of spans lives inside #popups, reused round robin, so a burst of
+// catches never grows the DOM (T-03-15). The text is a rounded integer from the event, written
+// through textContent only.
 
 // `events` is the manifest's event name -> id map and `project(x, y)` turns a logical playfield point
 // into CSS pixels `{ x, y }` (it may return one reused object). Register the result with the effects
-// dispatcher: it only reacts to MEDAL events.
+// dispatcher: it only reacts to MEDAL and PART_DESTROYED events, whose `a` is the value shown.
 export function createScorePopups({ doc = document, events, project, capacity = 8 }) {
   const root = doc.getElementById('popups');
   if (!root) throw new Error('#popups is missing from the page');
@@ -35,7 +35,7 @@ export function createScorePopups({ doc = document, events, project, capacity = 
       return shown;
     },
     handle(type, x, y, a) {
-      if (type !== events.MEDAL) return;
+      if (type !== events.MEDAL && type !== events.PART_DESTROYED) return;
       const span = spans[next];
       next = (next + 1) % capacity;
       shown += 1;
