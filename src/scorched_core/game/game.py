@@ -5,6 +5,8 @@ import random
 from array import array
 from typing import Final
 
+from scorched_core.audio.sfx_id import SfxId
+from scorched_core.audio.sfx_router import route_sfx
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.clock.hitstop import Hitstop
 from scorched_core.clock.refresh_estimator import RefreshEstimator
@@ -317,6 +319,7 @@ class Game:
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
             "buttons": {b.name: b.value for b in Button},
             "events": dict(_EVENT_KINDS),
+            "sfx": {sfx.name: sfx.value for sfx in SfxId},
             "blast": dict(_BLAST_CLASSES),
             "fire_patterns": dict(_FIRE_PATTERNS),
             "enemy_kinds": {kind.name: kind.value for kind in EnemyKind},
@@ -505,6 +508,7 @@ class Game:
         # put. The bomb press stays latched: it is resolved only after this gate.
         if self.hitstop.consume():
             return
+        first = self.events.n  # the router reads only this step's events (D-29)
         self.terrain.step()
         life = self.life
         self._resolve_bomb_request()
@@ -578,6 +582,7 @@ class Game:
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1
+        route_sfx(self.events, first, self.events.n)
         # Proves the error panel (PLAT-09): the JS fault mode is injected on the JS side only.
         if self.fault is FaultMode.PY and self.tick_count == FAULT_TICK:
             msg = f"Injected Python fault (?crash=py) at tick {FAULT_TICK}"

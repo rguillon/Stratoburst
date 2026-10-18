@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 import pytest
 
+from scorched_core.audio.sfx_id import SfxId
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -30,6 +31,7 @@ from scorched_core.protocol import (
     EV_PLAYER_DEATH,
     EV_PLAYER_HIT,
     EV_RESPAWN,
+    EV_SFX,
     EV_SHOT,
     EVENT_CAP,
     EVENT_STRIDE,
@@ -167,6 +169,13 @@ def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
         "SFX": 12,
     }
     assert manifest["blast"] == {"SMALL": 0, "MEDIUM": 1, "LARGE": 2}
+
+
+def test_manifest_publishes_every_sfx_id_by_name() -> None:
+    sfx = Game().manifest()["sfx"]
+    assert sfx == {sound.name: sound.value for sound in SfxId}
+    assert sfx["EXPLODE_SMALL"] == 0
+    assert sfx["LASER_HUM"] == 17
 
 
 def test_manifest_publishes_the_button_bits_so_js_never_hardcodes_them() -> None:
@@ -712,7 +721,7 @@ def test_overkill_two_bolts_on_one_enemy_give_one_explosion_and_one_kill() -> No
     game.pbullets.spawn(x + 1.0, y + 10.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_KILLS] == 1
-    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.buffers["header"][H_EVENT_N] == 2  # one explosion and its one sound
     assert game.buffers["events"][0] == EV_EXPLOSION
     assert game.pbullets.n == 1  # the dead enemy absorbed only the first bolt
 
@@ -957,7 +966,7 @@ def test_a_kill_publishes_one_explosion_through_the_events_channel() -> None:
     _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     events = game.buffers["events"]
-    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.buffers["header"][H_EVENT_N] == 2  # the explosion and its sound
     assert events[0] == EV_EXPLOSION
     assert events[1] == pytest.approx(game.ship.x, abs=5.0)  # the jet swayed one step
     assert events[2] == pytest.approx(game.ship.y - 40.0, abs=2.0)
@@ -965,11 +974,23 @@ def test_a_kill_publishes_one_explosion_through_the_events_channel() -> None:
     assert game.buffers["header"][H_EVENT_DROPPED] == 0
 
 
+def test_a_kill_step_follows_its_explosion_with_the_explosion_sound_id() -> None:
+    game = Game()
+    _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    events = game.buffers["events"]
+    assert events[0] == EV_EXPLOSION
+    assert events[EVENT_STRIDE] == EV_SFX
+    assert events[EVENT_STRIDE + 1] == events[1]
+    assert events[EVENT_STRIDE + 2] == events[2]
+    assert events[EVENT_STRIDE + 3] == SfxId.EXPLODE_SMALL
+
+
 def test_event_n_resets_on_a_zero_step_tick_after_an_event_tick() -> None:
     game = Game()
     _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.buffers["header"][H_EVENT_N] == 2
     assert game.tick(0.0, 0, 0.0, 0.0, 0.0, 0.0) == 0
     assert game.buffers["header"][H_EVENT_N] == 0
 
@@ -978,7 +999,7 @@ def test_event_n_resets_on_a_paused_tick_after_an_event_tick() -> None:
     game = Game()
     _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["header"][H_EVENT_N] == 1
+    assert game.buffers["header"][H_EVENT_N] == 2
     game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
     assert game.paused
     assert game.buffers["header"][H_EVENT_N] == 0
