@@ -161,7 +161,75 @@ Plans:
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
 
-**Plans**: TBD
+**Plans:** 28 plans (19 waves)
+
+Plans:
+**Wave 1**
+- [ ] 03-01-PLAN.md — (wave 1) Stage timeline engine: typed stage data, distance-keyed director, variable scroll, ?at marker jump (Python)
+- [ ] 03-02-PLAN.md — (wave 1) Neon night rig: fixed three-light night lighting, light fog, per-tier bloom strength
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03-03-PLAN.md — (wave 2) Orange-yellow enemy bullets, neon palette, white/cyan vs gunmetal/red factions, colour scan test
+- [ ] 03-04-PLAN.md — (wave 2) Stage 1 is the default game: protocol v3 header/events, ?gallery, ?at, live scroll rate
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03-05-PLAN.md — (wave 3) Bullet patterns as data: aimed / spread / ring / stream registry, one runner, gallery parity (Python)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03-06-PLAN.md — (wave 4) Flight paths and formations; stage 1 waves authored to the boss (Python)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03-07-PLAN.md — (wave 5) Score, extends and lives on the HUD
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 03-08-PLAN.md — (wave 6) Lives run out: game over state, restart, ?lives test flag (Python)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 03-09-PLAN.md — (wave 7) Game-over overlay with final / best score and a tap or key restart
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 03-10-PLAN.md — (wave 8) Stage intro: fly-in under a STAGE 1 banner, rings cleared on stage start
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 03-11-PLAN.md — (wave 9) Raiden II medals: chain ladder, drift, miss and death resets, popups
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 03-12-PLAN.md — (wave 10) Stage 1 city as data: road-grid blocks, slums / downtown / airbase arc, manifest layout (Python)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [ ] 03-13-PLAN.md — (wave 11) City on one ground frame with ground units (NDC-proven), neon scenery and road grid
+- [ ] 03-14-PLAN.md — (wave 11) Boss engine: parts as pool rows, stumps, phases, emitters, timeout, death chain (Python)
+
+**Wave 12** *(blocked on Wave 11 completion)*
+- [ ] 03-15-PLAN.md — (wave 12) Destructible city targets aligned with their blocks, points and medal drops (Python)
+
+**Wave 13** *(blocked on Wave 12 completion)*
+- [ ] 03-16-PLAN.md — (wave 13) Target models, electrical-spark blasts, rubble wrecks, flickering damaged signs
+- [ ] 03-17-PLAN.md — (wave 13) Armored-train mid-boss on the maglev with a crawl, phases and a 45 s timeout (Python)
+
+**Wave 14** *(blocked on Wave 13 completion)*
+- [ ] 03-18-PLAN.md — (wave 14) Mid-boss in the browser: train models, boss HP bar with ticks and countdown, part shakes and stumps
+- [ ] 03-19-PLAN.md — (wave 14) Giant bomber boss: WARNING, crawl, three phases with an opening core, 100 s timeout, CLEAR (Python)
+
+**Wave 15** *(blocked on Wave 14 completion)*
+- [ ] 03-20-PLAN.md — (wave 15) Bomber in the browser: WARNING banner, shadow sweep, models, HUGE blast and shake chain
+
+**Wave 16** *(blocked on Wave 15 completion)*
+- [ ] 03-21-PLAN.md — (wave 16) Stage clear: four-line tally, STAGE CLEAR, run loop with everything kept
+
+**Wave 17** *(blocked on Wave 16 completion)*
+- [ ] 03-22-PLAN.md — (wave 17) Best score persisted through the adapter, tolerant storage, never from test-flag runs
+- [ ] 03-23-PLAN.md — (wave 17) Arcade pixel font vendored behind a package-legitimacy checkpoint
+- [ ] 03-24-PLAN.md — (wave 17) Stage SFX: boss alarm, extend chime, tally ticks, medals, parts, boss kill, clear, game over
+- [ ] 03-25-PLAN.md — (wave 17) Atmosphere: GPU rain, wet-street glow, flickering signs, fire plumes, tier-gated
+- [ ] 03-27-PLAN.md — (wave 17) Stage perf gate (boss and mortal runs in Pyodide) and a native full-stage play-through test
+
+**Wave 18** *(blocked on Wave 17 completion)*
+- [ ] 03-26-PLAN.md — (wave 18) HUD over the playfield edges, clear of the bomb button; EXTEND banner and lives pulse
+
+**Wave 19** *(blocked on Wave 18 completion)*
+- [ ] 03-28-PLAN.md — (wave 19) Vertical-slice gate: real-device play-through, feel checklist, data tuning, verdict, deploy
+
 **UI hint**: yes
 
 ### Phase 4: Full Campaign & Arcade Shell
@@ -189,5 +257,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
-| 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
+| 3. Stage 1 Vertical Slice | 0/28 | Planned | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
