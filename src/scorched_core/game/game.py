@@ -66,7 +66,14 @@ from scorched_core.protocol import (
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
-from scorched_core.tuning import GRID_CELL, HITBOX_RADIUS, SCROLL_SPEED
+from scorched_core.tuning import (
+    ENEMY_GROUND,
+    ENEMY_RADIUS,
+    GRID_CELL,
+    GROUND_SCROLL_RATIO,
+    HITBOX_RADIUS,
+    SCROLL_SPEED,
+)
 from scorched_core.weapons.twin_shot import TwinShot
 
 # Bolts are culled once they are this far outside the playfield.
@@ -194,7 +201,13 @@ class Game:
             "events": dict(_EVENT_KINDS),
             "blast": dict(_BLAST_CLASSES),
             "enemy_kinds": {kind.name: kind.value for kind in EnemyKind},
-            "tuning": {"scroll_speed": SCROLL_SPEED, "hitbox_radius": HITBOX_RADIUS},
+            "tuning": {
+                "scroll_speed": SCROLL_SPEED,
+                "hitbox_radius": HITBOX_RADIUS,
+                "ground_scroll_ratio": GROUND_SCROLL_RATIO,
+                "enemy_ground": [int(ground) for ground in ENEMY_GROUND],
+                "enemy_radius": list(ENEMY_RADIUS),
+            },
         }
 
     def set_paused(self, paused: bool) -> None:
@@ -273,7 +286,7 @@ class Game:
         self.pbullets.integrate()
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
         self.gallery.step(self.enemies)
-        self.enemies.step()
+        self.enemies.step(self.ship.x, self.ship.y)
         self.grid.rebuild(self.enemies.x, self.enemies.y, self.enemies.n)
         resolve_shots_vs_enemies(
             self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events

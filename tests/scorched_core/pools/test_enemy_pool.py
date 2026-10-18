@@ -27,12 +27,17 @@ from scorched_core.tuning import (
     ENEMY_RADIUS,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
+    GROUND_SCROLL_RATIO,
     HOVER_DRIFT,
     HOVER_DRIFT_PERIOD,
     HOVER_EXIT_SPEED,
     HOVER_HOLD_TICKS,
     HOVER_STOP_Y,
+    SCROLL_SPEED,
 )
+
+SHIP_X = 120.0
+SHIP_Y = 272.0
 
 
 def jet(pool: EnemyPool, x: float = 120.0, y: float = 100.0, vy: float = 0.9) -> int:
@@ -80,7 +85,7 @@ def test_a_step_moves_down_and_follows_the_sine_sway() -> None:
     pool = EnemyPool()
     jet(pool, y=0.0)
     for k in range(1, 61):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         expected = 120.0 + ENEMY_SWAY * math.sin(k * math.tau / ENEMY_SWAY_PERIOD)
         assert pool.x[0] == pytest.approx(expected, abs=2e-3), k
     assert pool.y[0] == pytest.approx(60 * 0.9, abs=1e-3)
@@ -91,7 +96,7 @@ def test_vx_drifts_the_sway_centre() -> None:
     pool = EnemyPool()
     pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.5, 0.0)
     for _ in range(ENEMY_SWAY_PERIOD):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
     assert pool.x[0] == pytest.approx(100.0 + 0.5 * ENEMY_SWAY_PERIOD, abs=1e-2)
 
 
@@ -99,7 +104,7 @@ def test_the_angle_is_the_heading_of_the_steps_displacement() -> None:
     pool = EnemyPool()
     jet(pool, y=0.0, vy=1.0)
     previous = pool.x[0]
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.angle[0] == pytest.approx(math.atan2(pool.x[0] - previous, 1.0), abs=1e-5)
     assert pool.angle[0] > 0.0  # the first sway step swings right
 
@@ -110,7 +115,7 @@ def test_flash_decays_by_one_per_step_to_zero() -> None:
     pool.apply_hit(0, 1, EventRing())
     seen = []
     for _ in range(ENEMY_FLASH_TICKS + 2):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         seen.append(pool.flash[0])
     assert seen == [3, 2, 1, 0, 0, 0]
 
@@ -119,7 +124,7 @@ def test_an_enemy_below_the_exit_line_leaves_without_a_kill_or_event() -> None:
     ring = EventRing()
     pool = EnemyPool()
     jet(pool, y=PLAYFIELD_H + ENEMY_EXIT_MARGIN)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     pool.remove_dead(ring)
     assert pool.n == 0
     assert pool.kills == 0
@@ -129,7 +134,7 @@ def test_an_enemy_below_the_exit_line_leaves_without_a_kill_or_event() -> None:
 def test_an_enemy_just_inside_the_exit_line_stays() -> None:
     pool = EnemyPool()
     jet(pool, y=PLAYFIELD_H + ENEMY_EXIT_MARGIN - 1.0)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.n == 1
 
 
@@ -139,7 +144,7 @@ def test_an_enemy_just_inside_the_exit_line_stays() -> None:
 def test_an_enemy_far_outside_either_side_leaves(x: float) -> None:
     pool = EnemyPool()
     pool.spawn(EnemyKind.JET, x, 100.0, MotionKind.SWAY, 0.0, 0.0)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.n == 0
     assert pool.kills == 0
 
@@ -149,7 +154,7 @@ def test_a_leaver_swap_removal_keeps_the_other_enemies_stepping() -> None:
     jet(pool, y=PLAYFIELD_H + ENEMY_EXIT_MARGIN)
     jet(pool, x=60.0, y=10.0)
     jet(pool, x=180.0, y=20.0)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.n == 2
     assert sorted(round(pool.y[i], 1) for i in range(2)) == [10.9, 20.9]
     assert all(pool.age[i] == 1 for i in range(2))
@@ -340,7 +345,7 @@ def test_hover_descends_at_its_speed_without_drifting_until_it_reaches_the_stop_
     pool = EnemyPool()
     heli(pool)
     for k in range(1, 11):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         assert pool.y[0] == pytest.approx(-14.0 + 1.2 * k, abs=1e-4)
         assert pool.x[0] == 80.0
     assert pool.timer[0] == HOVER_HOLD_TICKS
@@ -351,14 +356,14 @@ def test_hover_stops_exactly_on_the_stop_line_and_holds_for_the_hold_ticks() -> 
     heli(pool)
     descent = math.ceil((HOVER_STOP_Y + 14.0) / 1.2)
     for _ in range(descent):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
     assert pool.y[0] == HOVER_STOP_Y
     assert pool.timer[0] == HOVER_HOLD_TICKS
     for k in range(1, HOVER_HOLD_TICKS + 1):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         assert pool.y[0] == HOVER_STOP_Y, k
         assert pool.timer[0] == HOVER_HOLD_TICKS - k
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.y[0] == pytest.approx(HOVER_STOP_Y + HOVER_EXIT_SPEED, abs=1e-4)
 
 
@@ -367,7 +372,7 @@ def test_hover_drifts_side_to_side_on_a_sine_while_holding() -> None:
     pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y, MotionKind.HOVER, 0.0, 1.2)
     xs = []
     for k in range(1, HOVER_DRIFT_PERIOD + 1):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         expected = 120.0 + HOVER_DRIFT * math.sin(k * math.tau / HOVER_DRIFT_PERIOD)
         assert pool.x[0] == pytest.approx(expected, abs=2e-3), k
         xs.append(pool.x[0])
@@ -379,14 +384,14 @@ def test_hover_leaves_downward_after_the_hold_and_is_culled_at_the_exit_line() -
     pool = EnemyPool()
     pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y, MotionKind.HOVER, 0.0, 1.2)
     for _ in range(HOVER_HOLD_TICKS):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
     held_x = pool.x[0]
     leave_steps = math.ceil((PLAYFIELD_H + ENEMY_EXIT_MARGIN - HOVER_STOP_Y) / HOVER_EXIT_SPEED)
     for _ in range(leave_steps - 1):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         assert pool.x[0] == held_x  # the drift is frozen on the way out
     assert pool.n == 1
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.n == 0
     assert pool.kills == 0
 
@@ -395,7 +400,7 @@ def test_a_hover_helicopter_keeps_facing_the_player_at_angle_zero() -> None:
     pool = EnemyPool()
     pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y - 3.0, MotionKind.HOVER, 0.0, 1.2)
     for _ in range(HOVER_HOLD_TICKS // 2):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         assert pool.angle[0] == 0.0
 
 
@@ -403,14 +408,14 @@ def test_hover_vx_carries_the_drift_centre() -> None:
     pool = EnemyPool()
     pool.spawn(EnemyKind.HELI, 100.0, HOVER_STOP_Y, MotionKind.HOVER, 0.25, 1.2)
     for _ in range(HOVER_DRIFT_PERIOD):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
     assert pool.x[0] == pytest.approx(100.0 + 0.25 * HOVER_DRIFT_PERIOD, abs=1e-2)
 
 
 def test_a_hover_helicopter_spawned_below_the_stop_line_holds_at_once() -> None:
     pool = EnemyPool()
     pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y + 20.0, MotionKind.HOVER, 0.0, 1.2)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.y[0] == HOVER_STOP_Y + 20.0
     assert pool.timer[0] == HOVER_HOLD_TICKS - 1
 
@@ -419,7 +424,7 @@ def test_removal_moves_the_motion_and_timer_with_the_swapped_enemy() -> None:
     pool = EnemyPool()
     jet(pool)
     heli(pool)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     pool.hp[0] = 0
     pool.remove_dead(EventRing())
     assert pool.n == 1
@@ -432,18 +437,11 @@ def test_killing_a_hover_helicopter_pushes_a_medium_air_explosion() -> None:
     pool = EnemyPool()
     pool.spawn(EnemyKind.HELI, 120.0, HOVER_STOP_Y, MotionKind.HOVER, 0.0, 1.2)
     for _ in range(30):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
     pool.hp[0] = 0
     pool.remove_dead(ring)
     assert ring.buf[0] == EV_EXPLOSION
     assert (ring.buf[3], ring.buf[4], ring.buf[5]) == (BLAST_MEDIUM, 0.0, float(EnemyKind.HELI))
-
-
-def test_ground_motion_does_not_move_yet() -> None:
-    pool = EnemyPool()
-    pool.spawn(EnemyKind.TANK, 70.0, 50.0, MotionKind.GROUND, 1.0, 1.0)
-    pool.step()
-    assert (pool.x[0], pool.y[0]) == (70.0, 50.0)
 
 
 # --- DIVE ----------------------------------------------------------------------------------
@@ -458,7 +456,7 @@ def test_dive_flies_a_straight_line_at_its_velocity() -> None:
     pool = EnemyPool()
     dive(pool, 60.0, -12.0, 0.5, 2.2)
     for k in range(1, 41):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         assert pool.x[0] == pytest.approx(60.0 + 0.5 * k, abs=1e-3)
         assert pool.y[0] == pytest.approx(-12.0 + 2.2 * k, abs=1e-3)
 
@@ -466,10 +464,10 @@ def test_dive_flies_a_straight_line_at_its_velocity() -> None:
 def test_dive_faces_its_heading() -> None:
     pool = EnemyPool()
     dive(pool, 60.0, -12.0, 2.4, 0.9)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.angle[0] == pytest.approx(math.atan2(2.4, 0.9), abs=1e-5)
     dive(pool, 120.0, -12.0, 0.0, 2.4)
-    pool.step()
+    pool.step(SHIP_X, SHIP_Y)
     assert pool.angle[1] == 0.0
 
 
@@ -478,7 +476,7 @@ def test_a_dive_jet_crossing_the_field_leaves_on_the_far_side_without_a_kill_or_
     pool = EnemyPool()
     dive(pool, -12.0, 60.0, 2.4, 0.9)
     for _ in range(200):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
         pool.remove_dead(ring)
         if pool.n == 0:
             break
@@ -491,6 +489,114 @@ def test_a_dive_jet_is_still_inside_while_it_crosses_the_middle_of_the_field() -
     pool = EnemyPool()
     dive(pool, -12.0, 60.0, 2.4, 0.9)
     for _ in range(50):
-        pool.step()
+        pool.step(SHIP_X, SHIP_Y)
     assert pool.n == 1
     assert 90.0 < pool.x[0] < 120.0
+
+
+# --- GROUND and aim -----------------------------------------------------------------------
+
+
+def tank(
+    pool: EnemyPool, x: float = 100.0, y: float = -16.0, vx: float = 0.0, vy: float = 0.0
+) -> int:
+    assert pool.spawn(EnemyKind.TANK, x, y, MotionKind.GROUND, vx, vy)
+    return pool.n - 1
+
+
+def test_ground_without_a_crawl_moves_exactly_the_scaled_scroll_speed_per_step() -> None:
+    pool = EnemyPool()
+    tank(pool)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.y[0] == pytest.approx(-16.0 + 0.752, abs=1e-5)
+    assert pool.x[0] == 100.0
+    for _ in range(99):
+        pool.step(SHIP_X, SHIP_Y)
+    assert pool.y[0] == pytest.approx(-16.0 + 100 * 0.752, abs=1e-3)
+
+
+def test_ground_scroll_speed_is_the_terrain_scroll_times_the_exported_ratio() -> None:
+    assert SCROLL_SPEED * GROUND_SCROLL_RATIO == pytest.approx(0.752)  # noqa: SIM300
+
+
+def test_ground_adds_its_own_crawl_to_the_scroll() -> None:
+    pool = EnemyPool()
+    tank(pool, vx=0.25, vy=0.1)
+    for _ in range(40):
+        pool.step(SHIP_X, SHIP_Y)
+    assert pool.x[0] == pytest.approx(100.0 + 0.25 * 40, abs=1e-3)
+    assert pool.y[0] == pytest.approx(-16.0 + (0.752 + 0.1) * 40, abs=1e-3)
+
+
+def test_ground_angle_is_the_heading_of_its_own_crawl_and_zero_when_it_does_not_crawl() -> None:
+    pool = EnemyPool()
+    tank(pool, vx=0.25, vy=0.5)
+    tank(pool)
+    pool.step(SHIP_X, SHIP_Y)
+    assert pool.angle[0] == pytest.approx(math.atan2(0.25, 0.5), abs=1e-5)
+    assert pool.angle[1] == 0.0
+
+
+def test_a_ground_unit_is_culled_below_the_exit_line_without_a_kill_or_event() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    tank(pool, y=PLAYFIELD_H + ENEMY_EXIT_MARGIN - 0.5)
+    pool.step(SHIP_X, SHIP_Y)
+    pool.remove_dead(ring)
+    assert (pool.n, pool.kills, ring.n) == (0, 0, 0)
+
+
+@pytest.mark.parametrize("kind", [EnemyKind.TANK, EnemyKind.TURRET])
+def test_aim_points_a_tank_or_turret_at_the_ship(kind: EnemyKind) -> None:
+    pool = EnemyPool()
+    pool.spawn(kind, 60.0, 100.0, MotionKind.GROUND, 0.0, 0.0)
+    pool.step(180.0, 300.0)
+    expected = math.atan2(180.0 - 60.0, 300.0 - (100.0 + 0.752))
+    assert pool.aux[0] == pytest.approx(expected, abs=1e-5)
+    assert 0.0 < pool.aux[0] < math.pi / 2
+
+
+def test_aim_is_zero_when_the_ship_is_straight_below_and_negative_to_the_left() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.TURRET, 120.0, 100.0, MotionKind.GROUND, 0.0, 0.0)
+    pool.step(120.0, 300.0)
+    assert pool.aux[0] == 0.0
+    pool.step(20.0, 300.0)
+    assert pool.aux[0] < 0.0
+
+
+def test_aim_is_packed_into_the_aux_slot() -> None:
+    pool = EnemyPool()
+    pool.spawn(EnemyKind.TURRET, 60.0, 100.0, MotionKind.GROUND, 0.0, 0.0)
+    pool.step(180.0, 300.0)
+    out = array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP))
+    pool.pack_into(out)
+    assert out[6] == pool.aux[0]
+    assert out[6] != 0.0
+
+
+@pytest.mark.parametrize("kind", [EnemyKind.JET, EnemyKind.HELI, EnemyKind.CARRIER])
+def test_other_kinds_keep_aux_zero(kind: EnemyKind) -> None:
+    pool = EnemyPool()
+    pool.spawn(kind, 60.0, 100.0, MotionKind.SWAY, 0.0, 0.5)
+    pool.step(180.0, 300.0)
+    assert pool.aux[0] == 0.0
+
+
+def test_killing_a_tank_pushes_a_large_ground_explosion() -> None:
+    ring = EventRing()
+    pool = EnemyPool()
+    tank(pool, y=40.0)
+    pool.step(SHIP_X, SHIP_Y)
+    pool.hp[0] = 0
+    pool.remove_dead(ring)
+    assert ring.buf[0] == EV_EXPLOSION
+    assert (ring.buf[3], ring.buf[4], ring.buf[5]) == (BLAST_LARGE, 1.0, float(EnemyKind.TANK))
+
+
+def test_a_corrupt_motion_value_fails_loudly_instead_of_standing_still() -> None:
+    pool = EnemyPool()
+    jet(pool)
+    pool.motion[0] = 99
+    with pytest.raises(ValueError, match="unknown motion 99"):
+        pool.step(SHIP_X, SHIP_Y)

@@ -110,6 +110,26 @@ def test_helicopters_hover_and_air_units_never_use_the_ground_motion() -> None:
     for _tick, kind, _x, _y, motion, *_rest in GALLERY_SCRIPT:
         if kind == EnemyKind.HELI:
             assert motion == MotionKind.HOVER
+        if kind in (EnemyKind.JET, EnemyKind.HELI, EnemyKind.CARRIER):
+            assert motion != MotionKind.GROUND
+
+
+def test_the_loop_spawns_at_least_four_tanks_and_two_turrets_all_on_the_ground_motion() -> None:
+    assert _count(EnemyKind.TANK) >= 4
+    assert _count(EnemyKind.TURRET) >= 2
+    for _tick, kind, _x, _y, motion, *_rest in GALLERY_SCRIPT:
+        if kind in (EnemyKind.TANK, EnemyKind.TURRET):
+            assert motion == MotionKind.GROUND
+
+
+def test_ground_entries_start_above_the_field_and_crawl_gently() -> None:
+    ground = [e for e in GALLERY_SCRIPT if e[4] == MotionKind.GROUND]
+    assert ground
+    for _tick, _kind, x, y, _motion, vx, vy, _drop in ground:
+        assert y < 0.0
+        assert 0.0 < x < PLAYFIELD_W
+        assert abs(vx) <= 0.25
+        assert vy == 0.0
 
 
 def test_jets_sweep_in_from_both_sides_and_the_top() -> None:
@@ -135,7 +155,7 @@ def test_the_gallery_never_exceeds_the_alive_cap_over_two_loops_and_never_refuse
         before = enemies.n
         due = _due_now(spawner)
         spawner.step(enemies)
-        enemies.step()
+        enemies.step(120.0, 272.0)
         spawned += due
         peak = max(peak, enemies.n)
         assert enemies.n <= before + due
@@ -167,9 +187,9 @@ def test_script_ticks_are_sorted_and_lie_inside_the_loop() -> None:
 
 
 def test_script_entries_enter_from_outside_the_visible_field_with_a_known_kind() -> None:
-    for _tick, kind, x, y, _motion, vx, vy, drop in GALLERY_SCRIPT:
+    for _tick, kind, x, y, motion, vx, vy, drop in GALLERY_SCRIPT:
         assert kind in EnemyKind
-        from_top = y < 0.0 and vy > 0.0
+        from_top = y < 0.0 and (vy > 0.0 or motion == MotionKind.GROUND)
         from_left = x < 0.0 and vx > 0.0
         from_right = x > PLAYFIELD_W and vx < 0.0
         assert from_top or from_left or from_right

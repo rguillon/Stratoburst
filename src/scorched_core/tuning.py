@@ -52,6 +52,11 @@ HOVER_DRIFT: Final = 20.0  # side-to-side amplitude in units
 HOVER_DRIFT_PERIOD: Final = 180  # steps per full drift cycle
 HOVER_EXIT_SPEED: Final = 1.4  # units per step, straight down
 
+# Ground units are anchored to the terrain (D-21, STGE-04) and scroll with it. A ratio below 1
+# keeps the residual slide against the ray-compensated JS ground layer within about 2% across
+# aspect ratios (RESEARCH Pattern 14, about 1 / 1.065); it is exported in the manifest.
+GROUND_SCROLL_RATIO: Final = 0.94
+
 # The shooting gallery's looping spawn script (D-17), the stand-in for the Phase 3 stage
 # timeline. Entries are ``(tick, kind, x, y, motion, vx, vy, drop)`` sorted by tick: jets dive
 # in as a V from the top and sweep in from both sides, helicopters hover, carriers cruise.
@@ -62,25 +67,34 @@ _CARRIER: Final = EnemyKind.CARRIER
 _DIVE: Final = MotionKind.DIVE
 _HOVER: Final = MotionKind.HOVER
 _SWAY: Final = MotionKind.SWAY
+_GROUND: Final = MotionKind.GROUND
+_TANK: Final = EnemyKind.TANK
+_TURRET: Final = EnemyKind.TURRET
 GALLERY_SCRIPT: Final = (
     (30, _JET, 60.0, -12.0, _DIVE, 0.5, 2.2, -1),  # a V from the top
     (42, _JET, 120.0, -12.0, _DIVE, 0.0, 2.4, -1),
     (54, _JET, 180.0, -12.0, _DIVE, -0.5, 2.2, -1),
     (200, _HELI, 80.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (230, _HELI, 160.0, -14.0, _HOVER, 0.0, 1.2, -1),
+    (300, _TANK, 70.0, -16.0, _GROUND, 0.25, 0.0, -1),  # ground units crawl with the terrain
+    (340, _TURRET, 60.0, -16.0, _GROUND, 0.0, 0.0, -1),
     (400, _CARRIER, 120.0, -18.0, _SWAY, 0.0, 0.5, -1),
     (520, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),  # sweeping in from the left
     (535, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),
     (550, _JET, -12.0, 60.0, _DIVE, 2.4, 0.9, -1),
+    (620, _TANK, 180.0, -16.0, _GROUND, -0.25, 0.0, -1),
     (700, _JET, 252.0, 80.0, _DIVE, -2.4, 0.9, -1),  # and from the right
     (715, _JET, 252.0, 80.0, _DIVE, -2.4, 0.9, -1),
     (730, _JET, 252.0, 80.0, _DIVE, -2.4, 0.9, -1),
+    (780, _TURRET, 180.0, -16.0, _GROUND, 0.0, 0.0, -1),
     (860, _HELI, 120.0, -14.0, _HOVER, 0.0, 1.2, -1),
     (900, _JET, 50.0, -12.0, _SWAY, 0.0, 1.1, -1),
     (900, _JET, 190.0, -12.0, _SWAY, 0.0, 1.1, -1),
     (1000, _CARRIER, 70.0, -18.0, _SWAY, 0.0, 0.5, -1),
     (1060, _JET, 100.0, -12.0, _DIVE, 0.3, 2.3, -1),
     (1072, _JET, 140.0, -12.0, _DIVE, -0.3, 2.3, -1),
+    (1120, _TANK, 90.0, -16.0, _GROUND, 0.2, 0.0, -1),
+    (1135, _TANK, 150.0, -16.0, _GROUND, -0.2, 0.0, -1),
 )
 
 # Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS must stay at or below it

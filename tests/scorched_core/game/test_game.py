@@ -1,4 +1,5 @@
 import itertools
+import math
 import random
 import sys
 from collections.abc import Callable
@@ -118,7 +119,13 @@ def test_the_bomb_bit_has_no_gameplay_effect_in_phase_one() -> None:
 
 
 def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
-    assert Game().manifest()["tuning"] == {"scroll_speed": 0.8, "hitbox_radius": 2.0}
+    assert Game().manifest()["tuning"] == {
+        "scroll_speed": 0.8,
+        "hitbox_radius": 2.0,
+        "ground_scroll_ratio": 0.94,
+        "enemy_ground": [0, 0, 0, 1, 1],
+        "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0],
+    }
 
 
 def test_header_scroll_y_follows_the_terrain_steps() -> None:
@@ -793,3 +800,30 @@ def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_EVENT_N] == 1
     assert game.buffers["events"][0] == EV_HIT
+
+
+def test_the_manifest_exports_the_ground_scroll_ratio_and_per_kind_radii() -> None:
+    tuning = Game().manifest()["tuning"]
+    assert tuning["ground_scroll_ratio"] == 0.94
+    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1]
+    assert tuning["enemy_radius"] == [9.0, 10.0, 14.0, 11.0, 10.0]
+
+
+def test_a_ground_tank_scrolls_with_the_terrain_through_the_game_step() -> None:
+    game = Game()
+    game.enemies.n = 0
+    game.enemies.spawn(EnemyKind.TANK, 100.0, 20.0, MotionKind.GROUND, 0.0, 0.0)
+    for _ in range(10):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.y[0] == pytest.approx(20.0 + 10 * 0.752, abs=1e-4)
+
+
+def test_a_turret_aims_at_the_ship_through_the_game_step() -> None:
+    game = Game()
+    game.enemies.n = 0
+    game.enemies.spawn(EnemyKind.TURRET, game.ship.x + 60.0, 20.0, MotionKind.GROUND, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    expected = math.atan2(game.ship.x - game.enemies.x[0], game.ship.y - game.enemies.y[0])
+    assert game.enemies.aux[0] == pytest.approx(expected, abs=1e-5)
+    assert game.buffers["enemies"][6] == game.enemies.aux[0]
+    assert game.enemies.aux[0] < 0.0

@@ -5,6 +5,7 @@ from array import array
 from dataclasses import dataclass, field
 from typing import Final
 
+from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.events.event_ring import EventRing
 from scorched_core.protocol import (
@@ -25,15 +26,19 @@ from scorched_core.tuning import (
     ENEMY_RADIUS,
     ENEMY_SWAY,
     ENEMY_SWAY_PERIOD,
+    GROUND_SCROLL_RATIO,
     HOVER_DRIFT,
     HOVER_DRIFT_PERIOD,
     HOVER_EXIT_SPEED,
     HOVER_HOLD_TICKS,
     HOVER_STOP_Y,
+    SCROLL_SPEED,
 )
 
 _PHASE_STEP: Final = math.tau / ENEMY_SWAY_PERIOD
 _HOVER_PHASE_STEP: Final = math.tau / HOVER_DRIFT_PERIOD
+_GROUND_SCROLL: Final = SCROLL_SPEED * GROUND_SCROLL_RATIO  # terrain-anchored: 0.752 per step
+_AIMING: Final = (EnemyKind.TANK, EnemyKind.TURRET)  # kinds whose turret tracks the ship
 _EXIT_BOTTOM: Final = PLAYFIELD_H + ENEMY_EXIT_MARGIN
 _EXIT_LEFT: Final = -2.0 * ENEMY_EXIT_MARGIN
 _EXIT_RIGHT: Final = PLAYFIELD_W + 2.0 * ENEMY_EXIT_MARGIN
@@ -136,8 +141,8 @@ class EnemyPool:
         self.n = i + 1
         return True
 
-    def step(self) -> None:
-        """Advance one 60 Hz step by each enemy's motion and decay the hit flash.
+    def step(self, ship_x: float, ship_y: float) -> None:
+        """Advance one 60 Hz step by each enemy's motion, aim turrets and decay the hit flash.
 
         SWAY sways down the screen facing its heading. DIVE flies a straight line facing it.
         HOVER descends to ``HOVER_STOP_Y``, holds
@@ -146,7 +151,7 @@ class EnemyPool:
         """
         x, y, vx, vy, base_x = self.x, self.y, self.vx, self.vy, self.base_x
         phase, angle, flash, age = self.phase, self.angle, self.flash, self.age
-        motion, timer = self.motion, self.timer
+        motion, timer, kind, aux = self.motion, self.timer, self.kind, self.aux
         for i in range(self.n - 1, -1, -1):
             age[i] += 1
             match motion[i]:
@@ -171,11 +176,18 @@ class EnemyPool:
                     else:
                         y[i] += HOVER_EXIT_SPEED
                     x[i] = base_x[i] + HOVER_DRIFT * math.sin(phase[i])
-                case _:  # GROUND stays put until its arm lands
-                    pass
+                case MotionKind.GROUND:
+                    x[i] += vx[i]
+                    y[i] += _GROUND_SCROLL + vy[i]
+                    angle[i] = math.atan2(vx[i], vy[i])
+                case unknown:
+                    msg = f"unknown motion {unknown} on enemy slot {i}"
+                    raise ValueError(msg)
             if y[i] > _EXIT_BOTTOM or x[i] < _EXIT_LEFT or x[i] > _EXIT_RIGHT:
                 self._remove_at(i)
                 continue
+            if kind[i] in _AIMING:
+                aux[i] = math.atan2(ship_x - x[i], ship_y - y[i])
             if flash[i] > 0:
                 flash[i] -= 1
 
