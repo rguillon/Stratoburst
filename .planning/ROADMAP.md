@@ -65,7 +65,7 @@ Plans:
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
 
-**Plans:** 18/33 plans executed (21 waves)
+**Plans:** 19/33 plans executed (21 waves)
 
 Plans:
 **Wave 1**
@@ -105,7 +105,7 @@ Plans:
 - [x] 02-18-PLAN.md — (wave 9) Enemy fire: aimed shots and rings at Raiden pacing into the gameplay pool (Python)
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 02-19-PLAN.md — (wave 10) Explosion light pool (fixed 3 lights) and air shadows that show altitude
+- [x] 02-19-PLAN.md — (wave 10) Explosion light pool (fixed 3 lights) and air shadows that show altitude
 - [ ] 02-20-PLAN.md — (wave 10) Lethal hits wired: death and fly-in respawn in the game; ?god flag, mortal e2e helper, death spec
 
 **Wave 11** *(blocked on Wave 10 completion)*
@@ -188,6 +188,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
-| 2. Arcade Shooting Feel | 18/33 | In Progress | - |
+| 2. Arcade Shooting Feel | 19/33 | In Progress | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
