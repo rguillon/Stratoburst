@@ -65,7 +65,7 @@ Plans:
   4. Bullets, engines and explosions glow with bloom under dynamic lighting, while enemy bullets stay clearly readable against fire and explosions. With the full effect stack on, the Phase 1 framerate targets still hold on desktop and both phones.
   5. Bombs and player death trigger screen shake and a short hitstop (ordinary hits do not). Every shot, hit, explosion, pickup, bomb and death has a synthesized sound effect, and audio plays on iOS Safari after the start tap.
 
-**Plans:** 4/33 plans executed (21 waves)
+**Plans:** 5/33 plans executed (21 waves)
 
 Plans:
 **Wave 1**
@@ -79,7 +79,7 @@ Plans:
 - [x] 02-04-PLAN.md — (wave 3) Gallery enemies drawn per kind; wire names become enemies / ENEMY_N / KILLS
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 02-05-PLAN.md — (wave 4) Full roster: dive and hover jets and helicopters, ground tanks and aiming turrets, 1200-step loop (Python)
+- [x] 02-05-PLAN.md — (wave 4) Full roster: dive and hover jets and helicopters, ground tanks and aiming turrets, 1200-step loop (Python)
 - [ ] 02-06-PLAN.md — (wave 4) Model kit, smooth player ship and rounded buildings with tier-driven detail
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -188,6 +188,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
-| 2. Arcade Shooting Feel | 4/33 | In Progress | - |
+| 2. Arcade Shooting Feel | 5/33 | In Progress | - |
 | 3. Stage 1 Vertical Slice | 0/TBD | Not started | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
