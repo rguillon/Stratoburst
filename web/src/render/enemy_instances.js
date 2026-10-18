@@ -8,21 +8,21 @@ const FLASH = 3;
 const KIND = 5;
 const AUX = 6;
 
-// Military tones for the primitive stand-ins, every channel below 1.0.
-const BASE_COLORS = {
-  JET: [0.36, 0.42, 0.24], // olive
-  HELI: [0.55, 0.5, 0.34], // khaki
-  CARRIER: [0.3, 0.36, 0.32], // grey-green
-  TANK: [0.62, 0.52, 0.34], // sand
-  TURRET: [0.4, 0.44, 0.38], // grey-green
+// Dark gunmetal for the primitive stand-ins (D-38), every channel at most 0.3.
+export const BASE_COLORS = {
+  JET: [0.16, 0.17, 0.2],
+  HELI: [0.2, 0.21, 0.24],
+  CARRIER: [0.18, 0.19, 0.22],
+  TANK: [0.14, 0.15, 0.18],
+  TURRET: [0.22, 0.23, 0.26],
 };
-const FALLBACK_COLOR = [0.45, 0.45, 0.4];
+export const FALLBACK_COLOR = [0.2, 0.21, 0.24];
 
 // The body colour comes from the model's vertex colours; the instance colour only scales it. A hit
-// multiplies by 6, which pushes the desaturated military colours past the bloom threshold: the
+// multiplies by 10, which pushes the dark gunmetal colours past the bloom threshold: the
 // Phase 1 HDR flash mechanism (ENMY-08).
 const REST_COLOR = [1, 1, 1];
-const FLASH_COLOR = [6, 6, 6];
+const FLASH_COLOR = [10, 10, 10];
 
 // How fast a helicopter rotor spins, in radians per second of the effect clock.
 export const ROTOR_RATE = 30;

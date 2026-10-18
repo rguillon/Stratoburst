@@ -1,23 +1,27 @@
 import * as THREE from 'three';
-import { bake, beveledExtrude, capsule, lathe, place, segmentsFor, tint } from './model_kit.js';
+import { PALETTE } from '../../fx/palette.js';
+import { bake, beveledExtrude, capsule, lathe, neonStrip, place, segmentsFor, tint } from './model_kit.js';
 import { mirroredShape, polygonShape } from './outline_shapes.js';
 
 // The enemy helicopter (VISL-01, D-24): a capsule cabin, a tapered tail boom, stub wings with
-// rocket pods and skids, in khaki. Nose toward +Z. Sized to the HELI hitbox radius of 10. The
+// rocket pods and skids, in dark gunmetal with red neon (D-38). Nose toward +Z. Sized to the HELI hitbox radius of 10. The
 // rotor is the model's `top`: it is centred on the model origin so it can turn about Y alone.
 
 // Every channel stays below 1.0 so a resting helicopter never crosses the bloom threshold.
-const CABIN = [0.46, 0.43, 0.3];
-const CANOPY = [0.09, 0.12, 0.16];
-const BOOM = [0.4, 0.38, 0.27];
-const WING = [0.36, 0.34, 0.25];
-const POD = [0.26, 0.27, 0.24];
-const SKID = [0.2, 0.21, 0.19];
-const FIN = [0.38, 0.36, 0.26];
-const ROTOR = [0.14, 0.15, 0.13];
-// HDR navigation lights: a channel above 1.0 crosses the bloom threshold, so only the lights bloom.
-const NAV_WARM = [3.0, 2.6, 1.7];
+const CABIN = [0.2, 0.21, 0.24];
+const CANOPY = [0.08, 0.09, 0.11];
+const BOOM = [0.16, 0.17, 0.2];
+const WING = [0.13, 0.14, 0.17];
+const POD = [0.1, 0.11, 0.13];
+const SKID = [0.09, 0.1, 0.12];
+const FIN = [0.16, 0.17, 0.2];
+const ROTOR = [0.07, 0.08, 0.09];
+// HDR lights: a channel above 1.0 crosses the bloom threshold, so only the lights and the neon
+// strips bloom. The tail light is red neon; the wing-tip light stays green.
+const NAV_RED = PALETTE.NEON_RED.rgb;
 const NAV_GREEN = [0.4, 3.0, 0.9];
+const STRIP_RADIUS = 0.16;
+const WING_STRIPS = Object.freeze([[[2.4, 0.3, 1.85], [8.2, 0.3, 1.3]]]);
 
 const BOOM_PROFILE = [
   [0, 0],
@@ -95,15 +99,20 @@ function bodyGeometry(detail) {
   return bake(parts, 'enemy-heli');
 }
 
-// A warm white light on the tail fin and a green one on the right wing tip.
+// A red light on the tail fin, a green one on the right wing tip and a red neon strip along each
+// stub wing's leading edge.
 function glowGeometry(detail) {
-  return bake(
-    [
-      sphere(detail, LIGHT_SEGMENTS, [0, 3.8, -11.4], [0.45, 0.45, 0.45], NAV_WARM),
-      sphere(detail, LIGHT_SEGMENTS, [8.6, 0.2, 0.3], [0.45, 0.45, 0.45], NAV_GREEN),
-    ],
-    'enemy-heli-glow',
-  );
+  const parts = [
+    sphere(detail, LIGHT_SEGMENTS, [0, 3.8, -11.4], [0.45, 0.45, 0.45], NAV_RED),
+    sphere(detail, LIGHT_SEGMENTS, [8.6, 0.2, 0.3], [0.45, 0.45, 0.45], NAV_GREEN),
+  ];
+  for (const side of [-1, 1]) {
+    for (const [from, to] of WING_STRIPS) {
+      const mirrored = (point) => [side * point[0], point[1], point[2]];
+      parts.push(neonStrip(mirrored(from), mirrored(to), STRIP_RADIUS, PALETTE.NEON_RED.rgb, detail));
+    }
+  }
+  return bake(parts, 'enemy-heli-glow');
 }
 
 // A mast and a thin two-blade rotor (one bar across), centred over the cabin.

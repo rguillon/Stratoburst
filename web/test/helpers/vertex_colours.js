@@ -20,6 +20,18 @@ export function hasColour(geometry, rgb, tolerance = 1e-4) {
   return colours(geometry).some((c) => c.every((v, k) => Math.abs(v - rgb[k]) < tolerance));
 }
 
+// The z of every vertex painted with `rgb`, to place one accent (the engines, the embers).
+export function zOfColour(geometry, rgb, tolerance = 1e-4) {
+  const position = geometry.getAttribute('position');
+  const color = geometry.getAttribute('color');
+  const zs = [];
+  for (let i = 0; i < position.count; i++) {
+    const same = [color.getX(i), color.getY(i), color.getZ(i)].every((v, k) => Math.abs(v - rgb[k]) < tolerance);
+    if (same) zs.push(position.getZ(i));
+  }
+  return zs;
+}
+
 // Dark gunmetal: no channel above 0.3 and a low saturation, so it reads as steel and never blooms.
 export function expectGunmetal(geometry, label) {
   for (const rgb of colours(geometry)) {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mulberry32 } from './explosion_fx.js';
+import { PALETTE } from './palette.js';
 
 // Charred wrecks of ground units (STGE-04, ENMY-08). A fixed ring: the oldest wreck is overwritten
 // when it is full, one InstancedMesh per ground kind is allocated once, and update() allocates
@@ -26,7 +27,7 @@ const FLAME_WINDOW = 6;
 const MAX_DT = 0.25;
 // Emitter looks, as in the explosion recipes: HDR flame, dark smoke that rises (negative gravity).
 const SMOKE_COLOR = [0.14, 0.13, 0.12];
-const FLAME_COLOR = [3.4, 1.6, 0.4];
+const FLAME_COLOR = PALETTE.FIRE.rgb;
 const SMOKE_GRAVITY = -0.15;
 
 // Module-level scratch objects: update() runs every frame and must not allocate.

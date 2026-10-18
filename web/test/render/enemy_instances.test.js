@@ -413,7 +413,7 @@ describe('createEnemyInstances tops', () => {
     expect(top.count).toBe(2);
     expect(positionOf(top, 0).toArray()).toEqual(positionOf(byName['enemy-heli'], 0).toArray());
     expect(colourOf(top, 0)).toEqual([1, 1, 1]);
-    expect(colourOf(top, 1)).toEqual([6, 6, 6]);
+    expect(colourOf(top, 1)).toEqual([10, 10, 10]);
   });
 
   it('draws no tops once the last helicopter has left', () => {

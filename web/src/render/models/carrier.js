@@ -1,20 +1,21 @@
 import * as THREE from 'three';
-import { bake, beveledExtrude, capsule, lathe, place, segmentsFor, tint } from './model_kit.js';
+import { PALETTE } from '../../fx/palette.js';
+import { bake, beveledExtrude, capsule, lathe, neonStrip, place, segmentsFor, tint } from './model_kit.js';
 import { mirroredShape, polygonShape } from './outline_shapes.js';
 
 // The enemy carrier (VISL-01, D-19, D-24): a big, slow transport that reads as the largest air
-// enemy. A wide cargo fuselage with a bright stripe, high wings, four engine pods and a T-tail, in
-// khaki. Nose toward +Z. Sized to the CARRIER hitbox radius of 14: a span of 30 and a length of 28.
+// enemy. A wide cargo fuselage with a light stripe, high wings, four engine pods and a T-tail, in
+// dark gunmetal with red neon (D-38). Nose toward +Z. Sized to the CARRIER hitbox radius of 14: a span of 30 and a length of 28.
 
 // Every channel stays below 1.0, the stripe included, so a resting carrier never blooms.
-const HULL = [0.46, 0.43, 0.3];
-const STRIPE = [0.88, 0.78, 0.42];
-const WING = [0.4, 0.38, 0.27];
-const POD = [0.3, 0.3, 0.26];
-const TAIL = [0.38, 0.36, 0.26];
-// HDR accents: bright engine discs and an amber beacon on the spine.
-const ENGINE_GLOW = [3.0, 1.3, 0.45];
-const BEACON = [3.2, 2.0, 0.3];
+const HULL = [0.2, 0.21, 0.24];
+const STRIPE = [0.27, 0.28, 0.29];
+const WING = [0.16, 0.17, 0.2];
+const POD = [0.12, 0.13, 0.15];
+const TAIL = [0.14, 0.15, 0.18];
+// HDR accents: red engine discs, a red beacon on the spine and red neon strips on the wings.
+const STRIP_RADIUS = 0.22;
+const WING_STRIPS = Object.freeze([[[5.5, 3.65, 1.8], [14, 3.65, -2.9]]]);
 
 // Fuselage profile, [radius, y] from the tail (y = -14) to the nose (y = +14).
 const FUSELAGE_PROFILE = [
@@ -111,15 +112,22 @@ function bodyGeometry(detail) {
   return bake(parts, 'enemy-carrier');
 }
 
-// Four engine discs behind the pods and an amber beacon on the spine.
+// Four engine discs behind the pods, a red beacon on the spine and a red neon strip along each
+// wing's leading edge.
 function glowGeometry(detail) {
   const parts = [];
   for (const side of [-1, 1]) {
     for (const x of ENGINE_X) {
-      parts.push(sphere(detail, [side * x, ENGINE_Y, ENGINE_Z - 2.9], [0.8, 0.8, 0.45], ENGINE_GLOW));
+      parts.push(sphere(detail, [side * x, ENGINE_Y, ENGINE_Z - 2.9], [0.8, 0.8, 0.45], PALETTE.ENGINE.rgb));
     }
   }
-  parts.push(sphere(detail, [0, 4.8, -3], [0.7, 0.7, 0.7], BEACON));
+  parts.push(sphere(detail, [0, 4.8, -3], [0.7, 0.7, 0.7], PALETTE.BEACON_RED.rgb));
+  for (const side of [-1, 1]) {
+    for (const [from, to] of WING_STRIPS) {
+      const mirrored = (point) => [side * point[0], point[1], point[2]];
+      parts.push(neonStrip(mirrored(from), mirrored(to), STRIP_RADIUS, PALETTE.NEON_RED.rgb, detail));
+    }
+  }
   return bake(parts, 'enemy-carrier-glow');
 }
 

@@ -81,6 +81,27 @@ export function place(geometry, { position = [0, 0, 0], rotation = [0, 0, 0], sc
   return geometry;
 }
 
+const STRIP_AXIS = new THREE.Vector3(0, 1, 0);
+const stripFrom = new THREE.Vector3();
+const stripDirection = new THREE.Vector3();
+const stripRotation = new THREE.Quaternion();
+
+// A thin glowing capsule running from one end point to the other, tinted with an (HDR) colour:
+// the neon trim of the factions (D-38). `radius` is the strip's half-width.
+export function neonStrip(from, to, radius, rgb, detail) {
+  stripFrom.fromArray(from);
+  stripDirection.fromArray(to).sub(stripFrom);
+  const length = stripDirection.length();
+  const strip = capsule(radius, length, detail);
+  strip.applyQuaternion(stripRotation.setFromUnitVectors(STRIP_AXIS, stripDirection.normalize()));
+  strip.translate(
+    (from[0] + to[0]) / 2,
+    (from[1] + to[1]) / 2,
+    (from[2] + to[2]) / 2,
+  );
+  return tint(strip, rgb);
+}
+
 // Makes one part mergeable: non-indexed, with exactly position, normal and color. Smooth
 // normals survive toNonIndexed because it copies the per-vertex values to every face corner.
 function normalized(part) {

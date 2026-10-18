@@ -1,19 +1,24 @@
 import * as THREE from 'three';
-import { bake, beveledExtrude, capsule, lathe, place, segmentsFor, tint } from './model_kit.js';
+import { PALETTE } from '../../fx/palette.js';
+import { bake, beveledExtrude, capsule, lathe, neonStrip, place, segmentsFor, tint } from './model_kit.js';
 import { mirroredShape, polygonShape } from './outline_shapes.js';
 
 // The enemy jet (VISL-01, D-24): the same smooth, stylized family as the player's ship, but in
-// military greens and facing down the screen (nose toward +Z, toward the player). Sized to the
-// JET hitbox radius of 9: a span of 18 and a length of 20.
+// dark gunmetal with red neon (D-38) and facing down the screen (nose toward +Z, toward the
+// player). Sized to the JET hitbox radius of 9: a span of 18 and a length of 20.
 
 // Every channel stays below 1.0 so a resting jet never crosses the bloom threshold.
-const HULL = [0.32, 0.36, 0.3];
-const BELLY = [0.2, 0.23, 0.2];
-const WING = [0.28, 0.32, 0.27];
-const POD = [0.22, 0.25, 0.22];
-const FIN = [0.26, 0.3, 0.25];
-// Bright HDR exhaust: a channel above 1.0 crosses the bloom threshold, so only the engines bloom.
-const ENGINE_GLOW = [3.0, 1.3, 0.45];
+const HULL = [0.16, 0.17, 0.2];
+const BELLY = [0.09, 0.1, 0.12];
+const WING = [0.13, 0.14, 0.17];
+const POD = [0.2, 0.21, 0.24];
+const FIN = [0.12, 0.13, 0.15];
+// Bright HDR red exhaust and wing strips: a channel above 1.0 crosses the bloom threshold, so only
+// the engines and the neon bloom.
+const STRIP_RADIUS = 0.18;
+const WING_STRIPS = Object.freeze([
+  [[2.4, 0.45, -0.55], [8.4, 0.45, -6.2]],
+]);
 
 // Fuselage profile, [radius, y] from the tail (y = -10) to the nose (y = +10).
 const FUSELAGE_PROFILE = [
@@ -88,14 +93,20 @@ function bodyGeometry(detail) {
   return bake(parts, 'enemy-jet');
 }
 
-// Two small exhaust discs at the tail.
+// Two small exhaust discs at the tail and a red neon strip along each wing's leading edge.
 function glowGeometry(detail) {
   const [width, height] = segmentsFor(detail, SPHERE_SEGMENTS);
   const parts = [-1, 1].map((side) => {
     const disc = new THREE.SphereGeometry(0.75, width, height);
     place(disc, { position: [side * 2.4, -0.3, -6.9], scale: [1, 1, 0.55] });
-    return tint(disc, ENGINE_GLOW);
+    return tint(disc, PALETTE.ENGINE.rgb);
   });
+  for (const side of [-1, 1]) {
+    for (const [from, to] of WING_STRIPS) {
+      const mirrored = (point) => [side * point[0], point[1], point[2]];
+      parts.push(neonStrip(mirrored(from), mirrored(to), STRIP_RADIUS, PALETTE.NEON_RED.rgb, detail));
+    }
+  }
   return bake(parts, 'enemy-jet-glow');
 }
 

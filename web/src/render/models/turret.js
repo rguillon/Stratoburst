@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { bake, beveledExtrude, capsule, lathe, place, segmentsFor, tint } from './model_kit.js';
+import { PALETTE } from '../../fx/palette.js';
+import { bake, beveledExtrude, capsule, lathe, neonStrip, place, segmentsFor, tint } from './model_kit.js';
 import { polygonShape } from './outline_shapes.js';
 
 // The enemy anti-air turret (VISL-01, D-24): a beveled octagonal concrete base plate, a lathe
@@ -8,12 +9,18 @@ import { polygonShape } from './outline_shapes.js';
 // it can turn about Y alone, which is how it follows the aim angle.
 
 // Every channel stays below 1.0 so a resting turret never crosses the bloom threshold.
-const CONCRETE = [0.48, 0.45, 0.38];
-const PEDESTAL = [0.4, 0.38, 0.32];
-const HOUSING = [0.3, 0.32, 0.27];
-const BARREL = [0.2, 0.22, 0.18];
-// An HDR status light: a channel above 1.0 crosses the bloom threshold, so only the light blooms.
+const CONCRETE = [0.22, 0.23, 0.26];
+const PEDESTAL = [0.17, 0.18, 0.21];
+const HOUSING = [0.16, 0.17, 0.2];
+const BARREL = [0.1, 0.11, 0.13];
+// HDR lights: a channel above 1.0 crosses the bloom threshold, so only the lights bloom. The status
+// light stays green; the plate edges carry red neon strips (D-38).
 const STATUS = [0.6, 3.0, 0.8];
+const STRIP_RADIUS = 0.2;
+const PLATE_STRIPS = Object.freeze([
+  [[-3.4, 2.0, 8.4], [3.4, 2.0, 8.4]],
+  [[-8.0, 2.0, 3.4], [-3.4, 2.0, 8.0]],
+]);
 
 const PLATE_DEPTH = 1.6;
 const PLATE_BEVEL = 0.4;
@@ -57,12 +64,13 @@ function bodyGeometry(detail) {
   return bake([tint(plate, CONCRETE), tint(pedestal, PEDESTAL)], 'enemy-turret');
 }
 
-// A status light on the plate, toward the front-right corner.
+// A status light on the plate, toward the front-right corner, and red neon along the front edges.
 function glowGeometry(detail) {
-  return bake(
-    [sphere(detail, LIGHT_SEGMENTS, [5.6, 2.3, 5.6], [0.7, 0.7, 0.7], STATUS)],
-    'enemy-turret-glow',
-  );
+  const parts = [sphere(detail, LIGHT_SEGMENTS, [5.6, 2.3, 5.6], [0.7, 0.7, 0.7], STATUS)];
+  for (const [from, to] of PLATE_STRIPS) {
+    parts.push(neonStrip(from, to, STRIP_RADIUS, PALETTE.NEON_RED.rgb, detail));
+  }
+  return bake(parts, 'enemy-turret-glow');
 }
 
 // A rounded housing on the collar and two parallel barrels along +Z, centred on the pedestal axis.

@@ -4,8 +4,8 @@ import { buildTank } from '../../../src/render/models/tank.js';
 import {
   expectGunmetal,
   expectNoBulletHue,
-  expectRedNeon,
   hasColour,
+  zOfColour,
 } from '../../helpers/vertex_colours.js';
 
 const vertexCount = (geometry) => geometry.getAttribute('position').count;
@@ -53,6 +53,7 @@ describe('buildTank', () => {
   it('has red HDR exhaust embers in the glow, no orange-yellow, and never pink', () => {
     const { glow } = buildTank('high');
     const embers = colours(glow);
+    expect(hasColour(glow, PALETTE.ENGINE.rgb)).toBe(true);
     expect(hasColour(glow, PALETTE.NEON_RED.rgb)).toBe(true);
     expect(embers.some(([r, g, b]) => r > 1 && g < r * 0.3 && b < r * 0.3)).toBe(true);
     expect(embers.every(([r, g, b]) => !(r > 1 && b > 1 && g < r * 0.5))).toBe(true);
@@ -66,9 +67,9 @@ describe('buildTank', () => {
   });
 
   it('puts the embers at the rear, behind the turret ring', () => {
-    const { glow } = buildTank('high');
-    glow.computeBoundingBox();
-    expect(glow.boundingBox.max.z).toBeLessThan(0);
+    const zs = zOfColour(buildTank('high').glow, PALETTE.ENGINE.rgb);
+    expect(zs.length).toBeGreaterThan(0);
+    expect(Math.max(...zs)).toBeLessThan(0);
   });
 
   it('centres the turret on the ring so it can turn about Y, with the barrel toward +Z', () => {

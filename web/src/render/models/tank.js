@@ -1,20 +1,29 @@
 import * as THREE from 'three';
-import { bake, beveledExtrude, capsule, place, segmentsFor, tint } from './model_kit.js';
+import { PALETTE } from '../../fx/palette.js';
+import { bake, beveledExtrude, capsule, neonStrip, place, segmentsFor, tint } from './model_kit.js';
 import { mirroredShape, polygonShape } from './outline_shapes.js';
 
-// The enemy tank (VISL-01, D-24): a beveled olive hull, two track blocks with road wheels and a
+// The enemy tank (VISL-01, D-24): a beveled dark gunmetal hull, two track blocks with road wheels and a
 // rounded turret with a barrel. Front toward +Z. Sized to the TANK hitbox radius of 11: the hull
 // is about 23 long and the tracks span about 18. The turret is the model's `top`: it is centred
 // on the turret ring so it can turn about Y alone, which is how it follows the aim angle.
 
 // Every channel stays below 1.0 so a resting tank never crosses the bloom threshold.
-const HULL = [0.3, 0.34, 0.22];
-const TRACK = [0.15, 0.16, 0.13];
-const WHEEL = [0.2, 0.21, 0.17];
-const TURRET = [0.34, 0.38, 0.25];
-const BARREL = [0.2, 0.22, 0.17];
-// HDR exhaust embers: a channel above 1.0 crosses the bloom threshold, so only the embers bloom.
-const EMBER = [2.6, 1.0, 0.2];
+const HULL = [0.16, 0.17, 0.2];
+const TRACK = [0.08, 0.085, 0.1];
+const WHEEL = [0.12, 0.13, 0.15];
+const TURRET = [0.2, 0.21, 0.24];
+const BARREL = [0.12, 0.13, 0.15];
+// HDR red embers and neon strips: a channel above 1.0 crosses the bloom threshold, so only the
+// embers and the neon bloom (D-38).
+const EMBER = PALETTE.ENGINE.rgb;
+const NEON = PALETTE.NEON_RED.rgb;
+const STRIP_RADIUS = 0.2;
+const HULL_STRIPS = Object.freeze([
+  [[-4.5, 4.7, -9], [4.5, 4.7, -9]],
+  [[-5.4, 4.7, -8], [-5.4, 4.7, 6]],
+  [[5.4, 4.7, -8], [5.4, 4.7, 6]],
+]);
 
 // Right half of the hull plan in the XY plane (+Y is the nose): a sloped glacis and a square tail.
 const HALF_HULL = [
@@ -78,15 +87,14 @@ function bodyGeometry(detail) {
   return bake(parts, 'enemy-tank');
 }
 
-// Two small embers glowing at the rear deck.
+// Two small embers glowing at the rear deck and red neon strips along the hull's rear and sides.
 function glowGeometry(detail) {
-  return bake(
-    [
-      sphere(detail, EMBER_SEGMENTS, [-3, 3.9, -10.4], [0.6, 0.6, 0.6], EMBER),
-      sphere(detail, EMBER_SEGMENTS, [3, 3.9, -10.4], [0.6, 0.6, 0.6], EMBER),
-    ],
-    'enemy-tank-glow',
-  );
+  const parts = [
+    sphere(detail, EMBER_SEGMENTS, [-3, 3.9, -10.4], [0.6, 0.6, 0.6], EMBER),
+    sphere(detail, EMBER_SEGMENTS, [3, 3.9, -10.4], [0.6, 0.6, 0.6], EMBER),
+  ];
+  for (const [from, to] of HULL_STRIPS) parts.push(neonStrip(from, to, STRIP_RADIUS, NEON, detail));
+  return bake(parts, 'enemy-tank-glow');
 }
 
 // A rounded turret on the ring, a mantlet and a barrel along +Z, centred on the ring axis.
