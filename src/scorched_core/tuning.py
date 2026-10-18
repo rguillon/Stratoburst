@@ -2,7 +2,8 @@
 
 from typing import Final
 
-from scorched_core.protocol import PLAYFIELD_H, PLAYFIELD_W
+from scorched_core.entities.enemy_kind import EnemyKind
+from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL, PLAYFIELD_H, PLAYFIELD_W
 
 # About 1.2 s to cross the playfield width at 60 steps per second (D-10).
 SHIP_SPEED: Final = PLAYFIELD_W / (1.2 * 60.0)
@@ -31,17 +32,27 @@ PBULLET_RADIUS: Final = 2.0
 TWIN_OFFSET: Final = 5.0
 MUZZLE_AHEAD: Final = 10.0
 
-# Drifting air drones (D-14): plain block targets that sway down the screen.
-DRONE_RADIUS: Final = 8.0
-DRONE_HP: Final = 3
-DRONE_SPEED: Final = 0.9  # units per step, downward
-DRONE_SWAY: Final = 30.0  # sinusoidal sway amplitude in units
-DRONE_SWAY_PERIOD: Final = 120  # steps per full sway cycle
-DRONE_SPAWN_INTERVAL: Final = 40  # steps between spawns
-DRONE_MAX_ALIVE: Final = 10
-DRONE_FLASH_TICKS: Final = 6
-# Derived so a drone at full sway still lies wholly inside the playfield.
-DRONE_SPAWN_MARGIN_X: Final = DRONE_SWAY + DRONE_RADIUS
+# Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
+# indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
+ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames
+ENEMY_MAX_ALIVE: Final = 40  # spawns beyond this are refused; the columns hold ENEMY_CAP
+ENEMY_EXIT_MARGIN: Final = 24.0  # an enemy this far outside the playfield is gone
+ENEMY_SWAY: Final = 30.0  # sinusoidal sway amplitude in units
+ENEMY_SWAY_PERIOD: Final = 120  # steps per full sway cycle
+ENEMY_RADIUS: Final = (9.0, 10.0, 14.0, 11.0, 10.0)
+ENEMY_HP: Final = (3, 6, 12, 8, 6)
+ENEMY_BLAST: Final = (BLAST_SMALL, BLAST_MEDIUM, BLAST_MEDIUM, BLAST_LARGE, BLAST_MEDIUM)
+ENEMY_GROUND: Final = (False, False, False, True, True)
 
-# Broadphase cell edge; must be at least DRONE_RADIUS + PBULLET_RADIUS so a 3x3 query suffices.
+# The shooting gallery's looping spawn script (D-17), the stand-in for the Phase 3 stage
+# timeline. Entries are ``(tick, kind, x, y, vx, vy, drop)`` sorted by tick; ten jets arrive
+# 40 ticks apart (the Phase 1 drone cadence), the last one inside the loop.
+GALLERY_LOOP_TICKS: Final = 400
+_GALLERY_JET_X: Final = (60.0, 180.0, 120.0, 90.0, 150.0, 70.0, 170.0, 110.0, 130.0, 100.0)
+GALLERY_SCRIPT: Final = tuple(
+    (39 + 40 * i, EnemyKind.JET, x, -12.0, 0.0, 0.9, -1) for i, x in enumerate(_GALLERY_JET_X)
+)
+
+# Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS must stay at or below it
+# so a 3x3 query suffices.
 GRID_CELL: Final = 32.0

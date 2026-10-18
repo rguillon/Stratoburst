@@ -7,24 +7,25 @@ from typing import Final
 
 from scorched_core.clock.fixed_step_runner import FixedStepRunner
 from scorched_core.clock.refresh_estimator import RefreshEstimator
-from scorched_core.collision.circle_hits import resolve_shots_vs_drones
+from scorched_core.collision.circle_hits import resolve_shots_vs_enemies
 from scorched_core.collision.uniform_grid import UniformGrid
-from scorched_core.entities.drone_swarm import DroneSwarm
+from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.events.event_ring import EventRing
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.input.button import Button
 from scorched_core.input.input_frame import InputFrame
 from scorched_core.pools.bullet_pool import BulletPool
+from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import (
     BLAST_LARGE,
     BLAST_MEDIUM,
     BLAST_SMALL,
-    DRONE_CAP,
-    DRONE_STRIDE,
     EBULLET_MAX_CAP,
     EBULLET_MIN_CAP,
     EBULLET_STRIDE,
+    ENEMY_CAP,
+    ENEMY_STRIDE,
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
     EV_DEATHBOMB_SAVE,
@@ -42,12 +43,12 @@ from scorched_core.protocol import (
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
-    H_DRONE_N,
-    H_DRONES_DOWN,
     H_EBULLET_N,
+    H_ENEMY_N,
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_KILLS,
     H_PBULLET_N,
     H_SCROLL_Y,
     H_SHIP_X,
@@ -62,6 +63,7 @@ from scorched_core.protocol import (
     PLAYFIELD_W,
     PROTOCOL_VERSION,
 )
+from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.terrain_scroll import TerrainScroll
 from scorched_core.stress.bullet_storm import BulletStorm
 from scorched_core.tuning import GRID_CELL, HITBOX_RADIUS, SCROLL_SPEED
@@ -70,6 +72,9 @@ from scorched_core.weapons.twin_shot import TwinShot
 # Bolts are culled once they are this far outside the playfield.
 _MARGIN: Final = 16.0
 
+# Plan 02-03 keeps the Phase 1 wire names DRONE_N and DRONES_DOWN for slots 8 and 11 (they now
+# carry gallery enemies and cumulative kills); plan 02-04 renames them together with their JS
+# readers.
 _HEADER_SLOTS: dict[str, int] = {
     "STEPS": H_STEPS,
     "SCROLL_Y": H_SCROLL_Y,
@@ -79,10 +84,10 @@ _HEADER_SLOTS: dict[str, int] = {
     "FLAGS": H_FLAGS,
     "PBULLET_N": H_PBULLET_N,
     "EBULLET_N": H_EBULLET_N,
-    "DRONE_N": H_DRONE_N,
+    "DRONE_N": H_ENEMY_N,
     "TICK_COUNT": H_TICK_COUNT,
     "STORM_HITS": H_STORM_HITS,
-    "DRONES_DOWN": H_DRONES_DOWN,
+    "DRONES_DOWN": H_KILLS,
     "EVENT_N": H_EVENT_N,
     "EVENT_DROPPED": H_EVENT_DROPPED,
 }
@@ -121,8 +126,10 @@ class Game:
         "buffers",
         "ebullet_cap",
         "ebullets",
+        "enemies",
         "events",
         "fault",
+        "gallery",
         "grid",
         "input",
         "paused",
@@ -133,7 +140,6 @@ class Game:
         "storm",
         "storm_hits",
         "stress",
-        "swarm",
         "terrain",
         "tick_count",
         "twin",
@@ -151,9 +157,10 @@ class Game:
         self.pbullets = BulletPool(PBULLET_CAP)
         self.twin = TwinShot()
         self.events = EventRing()
-        self.swarm = DroneSwarm(self.rng, events=self.events)
-        self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, DRONE_CAP)
-        self._scratch = array("i", bytes(4 * DRONE_CAP))
+        self.enemies = EnemyPool()
+        self.gallery = GallerySpawner()
+        self.grid = UniformGrid(PLAYFIELD_W, PLAYFIELD_H, GRID_CELL, ENEMY_CAP)
+        self._scratch = array("i", bytes(4 * ENEMY_CAP))
         self.storm = BulletStorm(self.ebullets, self.stress, self.rng) if self.stress > 0 else None
         self.storm_hits = 0
         self.terrain = TerrainScroll()
@@ -169,7 +176,7 @@ class Game:
             "header": array("f", bytes(4 * HEADER_LEN)),
             "pbullets": array("f", bytes(4 * PBULLET_STRIDE * PBULLET_CAP)),
             "ebullets": array("f", bytes(4 * EBULLET_STRIDE * self.ebullet_cap)),
-            "drones": array("f", bytes(4 * DRONE_STRIDE * DRONE_CAP)),
+            "drones": array("f", bytes(4 * ENEMY_STRIDE * ENEMY_CAP)),
             "events": self.events.buf,
         }
 
@@ -182,13 +189,14 @@ class Game:
             "channels": {
                 "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
                 "ebullets": {"stride": EBULLET_STRIDE, "cap": self.ebullet_cap},
-                "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
+                "drones": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
                 "events": {"stride": EVENT_STRIDE, "cap": EVENT_CAP},
             },
             "flags": {"PAUSED": FLAG_PAUSED, "FIRING": FLAG_FIRING},
             "buttons": {b.name: b.value for b in Button},
             "events": dict(_EVENT_KINDS),
             "blast": dict(_BLAST_CLASSES),
+            "enemy_kinds": {kind.name: kind.value for kind in EnemyKind},
             "tuning": {"scroll_speed": SCROLL_SPEED, "hitbox_radius": HITBOX_RADIUS},
         }
 
@@ -237,7 +245,7 @@ class Game:
         self._pack_header(steps)
         if steps > 0:
             self.pbullets.pack_into(self.buffers["pbullets"], 0.0)
-            self.swarm.pack_into(self.buffers["drones"])
+            self.enemies.pack_into(self.buffers["drones"])
             self.ebullets.pack_into(self.buffers["ebullets"], 1.0)
         return steps
 
@@ -254,8 +262,8 @@ class Game:
         header[H_FLAGS] = self._flags()
         header[H_TICK_COUNT] = self.tick_count
         header[H_PBULLET_N] = self.pbullets.n
-        header[H_DRONE_N] = self.swarm.n
-        header[H_DRONES_DOWN] = self.swarm.destroyed
+        header[H_ENEMY_N] = self.enemies.n
+        header[H_KILLS] = self.enemies.kills
         header[H_EBULLET_N] = self.ebullets.n
         header[H_STORM_HITS] = self.storm_hits
         header[H_EVENT_N] = self.events.n
@@ -267,8 +275,13 @@ class Game:
         self.twin.step(self._firing, self.ship.x, self.ship.y, self.pbullets)
         self.pbullets.integrate()
         self.pbullets.cull_outside(-_MARGIN, -_MARGIN, PLAYFIELD_W + _MARGIN, PLAYFIELD_H + _MARGIN)
-        self.swarm.step()
-        resolve_shots_vs_drones(self.pbullets, self.swarm, self.grid, self._scratch)
+        self.gallery.step(self.enemies)
+        self.enemies.step()
+        self.grid.rebuild(self.enemies.x, self.enemies.y, self.enemies.n)
+        resolve_shots_vs_enemies(
+            self.pbullets, self.enemies, self.grid, self._scratch, 1, self.events
+        )
+        self.enemies.remove_dead(self.events)
         if self.storm is not None:
             self.storm_hits += self.storm.step(self.ship.x, self.ship.y, HITBOX_RADIUS)
         self.tick_count += 1

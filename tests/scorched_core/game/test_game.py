@@ -1,17 +1,19 @@
 import itertools
 import random
 import sys
+from collections.abc import Callable
 
 import pytest
 
 from scorched_core.clock.fixed_step_runner import STEP_MS
+from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
 from scorched_core.protocol import (
-    DRONE_CAP,
-    DRONE_STRIDE,
     EBULLET_STRIDE,
+    ENEMY_CAP,
+    ENEMY_STRIDE,
     EV_EXPLOSION,
     EV_HIT,
     EVENT_CAP,
@@ -19,12 +21,12 @@ from scorched_core.protocol import (
     FLAG_FIRING,
     FLAG_PAUSED,
     H_ALPHA,
-    H_DRONE_N,
-    H_DRONES_DOWN,
     H_EBULLET_N,
+    H_ENEMY_N,
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_KILLS,
     H_PBULLET_N,
     H_SCROLL_Y,
     H_SHIP_X,
@@ -47,7 +49,8 @@ def test_manifest_contract() -> None:
     assert header["len"] == HEADER_LEN
     assert header["slots"]["STEPS"] == 0
     assert header["slots"]["SHIP_X"] == H_SHIP_X
-    assert header["slots"]["DRONES_DOWN"] == 11
+    assert header["slots"]["DRONE_N"] == 8 == H_ENEMY_N
+    assert header["slots"]["DRONES_DOWN"] == 11 == H_KILLS
     assert header["slots"]["EVENT_N"] == 12
     assert header["slots"]["EVENT_DROPPED"] == 13
     assert header["len"] == 48
@@ -55,10 +58,11 @@ def test_manifest_contract() -> None:
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600},
-        "drones": {"stride": DRONE_STRIDE, "cap": DRONE_CAP},
+        "drones": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
         "events": {"stride": 6, "cap": 128},
     }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
+    assert manifest["enemy_kinds"] == {"JET": 0, "HELI": 1, "CARRIER": 2, "TANK": 3, "TURRET": 4}
 
 
 def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
@@ -141,7 +145,7 @@ def test_buffer_lengths_and_zero_fill() -> None:
         "header": HEADER_LEN,
         "pbullets": PBULLET_STRIDE * PBULLET_CAP,
         "ebullets": EBULLET_STRIDE * 750,
-        "drones": DRONE_STRIDE * DRONE_CAP,
+        "drones": ENEMY_STRIDE * ENEMY_CAP,
         "events": EVENT_STRIDE * EVENT_CAP,
     }
     assert all(v == 0.0 for buf in game.buffers.values() for v in buf)
@@ -364,85 +368,90 @@ def _sweep_and_fire(game: Game, ticks: int) -> None:
         game.tick(STEP_MS, Button.FIRE, direction, 0.0, 0.0, 0.0)
 
 
-def _track_nearest_drone_and_fire(game: Game, ticks: int) -> None:
-    """A scripted pilot: steer under the lowest drone and keep fire held."""
-    swarm = game.swarm
+def _track_lowest_enemy_and_fire(game: Game, ticks: int) -> None:
+    """A scripted pilot: steer under the lowest enemy and keep fire held."""
+    enemies = game.enemies
     for _ in range(ticks):
         move_x = 0.0
-        if swarm.n:
-            lowest = max(range(swarm.n), key=lambda i: swarm.y[i])
-            dx = swarm.x[lowest] - game.ship.x
+        if enemies.n:
+            lowest = max(range(enemies.n), key=lambda i: enemies.y[i])
+            dx = enemies.x[lowest] - game.ship.x
             move_x = 0.0 if abs(dx) < 2.0 else (1.0 if dx > 0 else -1.0)
         game.tick(STEP_MS, Button.FIRE, move_x, 0.0, 0.0, 0.0)
 
 
-def test_the_header_counts_drones_from_step_forty_on() -> None:
+def test_the_header_counts_enemies_from_step_forty_on() -> None:
     game = Game()
     for _ in range(39):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["header"][H_DRONE_N] == 0
+    assert game.buffers["header"][H_ENEMY_N] == 0
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["header"][H_DRONE_N] == 1
-    assert game.buffers["header"][H_DRONES_DOWN] == 0
+    assert game.buffers["header"][H_ENEMY_N] == 1
+    assert game.buffers["header"][H_KILLS] == 0
 
 
-def test_drones_are_packed_into_the_drone_channel() -> None:
+def test_enemies_are_packed_into_the_drones_channel() -> None:
     game = Game()
     for _ in range(40):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    drones = game.buffers["drones"]
-    assert drones[0] == game.swarm.x[0]
-    assert drones[1] == game.swarm.y[0]
-    assert drones[5] == 1.0
+    packed = game.buffers["drones"]
+    assert packed[0] == game.enemies.x[0]
+    assert packed[1] == game.enemies.y[0]
+    assert packed[5] == float(EnemyKind.JET)
 
 
-def test_a_zero_step_tick_keeps_the_drone_buffer_but_reports_the_count() -> None:
+def test_a_zero_step_tick_keeps_the_enemy_buffer_but_reports_the_count() -> None:
     game = Game()
     for _ in range(40):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     before = game.buffers["drones"].tobytes()
     game.tick(STEP_MS / 2, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["drones"].tobytes() == before
-    assert game.buffers["header"][H_DRONE_N] == 1
+    assert game.buffers["header"][H_ENEMY_N] == 1
 
 
-def test_a_bolt_that_reaches_a_drone_costs_it_a_hit_through_the_game_step() -> None:
+def _park_one_enemy(game: Game, hp: int, kind: EnemyKind = EnemyKind.JET) -> None:
+    """Replace the gallery's population with one stationary enemy above the ship's bolts."""
+    enemies = game.enemies
+    enemies.n = 0
+    enemies.spawn(kind, game.ship.x, game.ship.y - 40.0, 0.0, 0.0)
+    enemies.hp[0] = hp
+
+
+def test_a_bolt_that_reaches_an_enemy_costs_it_a_hit_through_the_game_step() -> None:
     game = Game()
-    swarm = game.swarm
-    swarm.x[0] = swarm.base_x[0] = game.ship.x
-    swarm.y[0], swarm.hp[0], swarm.n = game.ship.y - 40.0, 3, 1
+    _park_one_enemy(game, 3)
     game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert swarm.hp[0] == 2
+    assert game.enemies.hp[0] == 2
     assert game.pbullets.n == 0
 
 
-def test_drones_down_counts_destroyed_drones_in_the_header() -> None:
+def test_kills_count_destroyed_enemies_in_the_header() -> None:
     game = Game()
-    swarm = game.swarm
-    swarm.x[0] = swarm.base_x[0] = game.ship.x
-    swarm.y[0], swarm.hp[0], swarm.n = game.ship.y - 40.0, 1, 1
+    _park_one_enemy(game, 1)
     game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-    assert game.buffers["header"][H_DRONE_N] == 0
-    assert game.buffers["header"][H_DRONES_DOWN] == 1
+    assert game.buffers["header"][H_ENEMY_N] == 0
+    assert game.buffers["header"][H_KILLS] == 1
 
 
 def test_the_same_seed_and_inputs_give_byte_identical_buffers_determinism() -> None:
-    def run(seed: int) -> tuple[bytes, ...]:
+    def run(seed: int, pilot: Callable[[Game, int], None]) -> tuple[bytes, ...]:
         game = Game(seed=seed)
-        _sweep_and_fire(game, 600)
+        pilot(game, 600)
         return tuple(game.buffers[name].tobytes() for name in ("header", "pbullets", "drones"))
 
-    assert run(11) == run(11)
-    assert run(11) != run(12)
+    assert run(11, _sweep_and_fire) == run(11, _sweep_and_fire)
+    assert run(11, _sweep_and_fire) == run(12, _sweep_and_fire)  # the gallery is scripted
+    assert run(11, _sweep_and_fire) != run(11, _track_lowest_enemy_and_fire)
 
 
-def test_scripted_kill_ship_tracking_the_nearest_drone_downs_three_within_1200_ticks() -> None:
+def test_scripted_kill_ship_tracking_the_lowest_enemy_downs_three_within_1200_ticks() -> None:
     game = Game()
-    _track_nearest_drone_and_fire(game, 1200)
-    assert game.buffers["header"][H_DRONES_DOWN] >= 3
-    assert game.swarm.destroyed == game.buffers["header"][H_DRONES_DOWN]
+    _track_lowest_enemy_and_fire(game, 1200)
+    assert game.buffers["header"][H_KILLS] >= 3
+    assert game.enemies.kills == game.buffers["header"][H_KILLS]
 
 
 def jittered_dts(hz: int, seconds: float = 10.0, jitter_ms: float = 0.4) -> list[float]:
@@ -659,22 +668,23 @@ def test_only_the_python_fault_mode_raises_in_the_simulation_fault(fault: FaultM
     assert game.tick_count == 300
 
 
-def _kill_one_drone(game: Game, x: float, y: float) -> None:
-    """Park a one-hp drone just above a bolt that reaches it on the next step."""
-    swarm = game.swarm
-    swarm.x[0] = swarm.base_x[0] = x
-    swarm.y[0], swarm.hp[0], swarm.n = y, 1, 1
+def _kill_one_enemy(game: Game, x: float, y: float) -> None:
+    """Park a one-hp jet just above a bolt that reaches it on the next step."""
+    enemies = game.enemies
+    enemies.n = 0
+    enemies.spawn(EnemyKind.JET, x, y, 0.0, 0.0)
+    enemies.hp[0] = 1
     game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
 
 
 def test_a_kill_publishes_one_explosion_through_the_events_channel() -> None:
     game = Game()
-    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     events = game.buffers["events"]
     assert game.buffers["header"][H_EVENT_N] == 1
     assert events[0] == EV_EXPLOSION
-    assert events[1] == pytest.approx(game.ship.x, abs=5.0)  # the drone swayed one step
+    assert events[1] == pytest.approx(game.ship.x, abs=5.0)  # the jet swayed one step
     assert events[2] == pytest.approx(game.ship.y - 40.0, abs=2.0)
     assert events[3] == 0.0  # BLAST_SMALL
     assert game.buffers["header"][H_EVENT_DROPPED] == 0
@@ -682,7 +692,7 @@ def test_a_kill_publishes_one_explosion_through_the_events_channel() -> None:
 
 def test_event_n_resets_on_a_zero_step_tick_after_an_event_tick() -> None:
     game = Game()
-    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_EVENT_N] == 1
     assert game.tick(0.0, 0, 0.0, 0.0, 0.0, 0.0) == 0
@@ -691,7 +701,7 @@ def test_event_n_resets_on_a_zero_step_tick_after_an_event_tick() -> None:
 
 def test_event_n_resets_on_a_paused_tick_after_an_event_tick() -> None:
     game = Game()
-    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_EVENT_N] == 1
     game.tick(STEP_MS, Button.PAUSE, 0.0, 0.0, 0.0, 0.0)
@@ -701,7 +711,7 @@ def test_event_n_resets_on_a_paused_tick_after_an_event_tick() -> None:
 
 def test_event_n_resets_on_a_following_step_tick_with_no_new_event() -> None:
     game = Game()
-    _kill_one_drone(game, game.ship.x, game.ship.y - 40.0)
+    _kill_one_enemy(game, game.ship.x, game.ship.y - 40.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_EVENT_N] == 0
@@ -717,9 +727,7 @@ def test_event_dropped_is_cumulative_across_ticks() -> None:
 
 def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
     game = Game()
-    swarm = game.swarm
-    swarm.x[0] = swarm.base_x[0] = game.ship.x
-    swarm.y[0], swarm.hp[0], swarm.n = game.ship.y - 40.0, 3, 1
+    _park_one_enemy(game, 3)
     game.pbullets.spawn(game.ship.x, game.ship.y - 30.0, 0.0, -8.0)
     game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     assert game.buffers["header"][H_EVENT_N] == 1

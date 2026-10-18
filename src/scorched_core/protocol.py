@@ -18,10 +18,10 @@ H_SHIP_Y: Final = 4
 H_FLAGS: Final = 5
 H_PBULLET_N: Final = 6
 H_EBULLET_N: Final = 7
-H_DRONE_N: Final = 8
+H_ENEMY_N: Final = 8
 H_TICK_COUNT: Final = 9
 H_STORM_HITS: Final = 10
-H_DRONES_DOWN: Final = 11
+H_KILLS: Final = 11
 H_EVENT_N: Final = 12
 H_EVENT_DROPPED: Final = 13
 # Slots 14-29 are reserved by later Phase 2 plans (numbering table in 02-01-PLAN.md) and
@@ -36,8 +36,8 @@ PBULLET_CAP: Final = 128
 EBULLET_STRIDE: Final = 4
 EBULLET_MIN_CAP: Final = 600
 EBULLET_MAX_CAP: Final = 5000
-DRONE_STRIDE: Final = 8
-DRONE_CAP: Final = 32
+ENEMY_STRIDE: Final = 8
+ENEMY_CAP: Final = 48
 
 # Events channel: one record per event, written fresh every tick (never replayed).
 EVENT_STRIDE: Final = 6  # kind, x, y, a, b, c
