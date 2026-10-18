@@ -180,7 +180,7 @@ def test_the_lives_option_is_truncated_and_clamped_and_junk_means_three(
     game = create_game({"lives": lives})._game
     assert game.score.lives == expected
     assert game.flow is not None
-    assert game.flow.state is FlowState.PLAY
+    assert game.flow.state is FlowState.INTRO
 
 
 def test_no_lives_option_means_three_lives() -> None:
@@ -212,7 +212,7 @@ def test_no_options_build_stage_one() -> None:
         assert web._game.stage is STAGE_1
         assert manifest["stage"]["number"] == 1
         web._game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
-        assert web._game.buffers["header"][H_FLOW] == FlowState.PLAY
+        assert web._game.buffers["header"][H_FLOW] == FlowState.INTRO
 
 
 def test_the_gallery_option_builds_the_phase_two_gallery() -> None:

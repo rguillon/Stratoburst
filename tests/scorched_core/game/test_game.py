@@ -14,6 +14,7 @@ from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.entities.player_phase import PlayerPhase
+from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
@@ -122,6 +123,7 @@ from scorched_core.tuning import (
     LIVES_START,
     MAX_BONUS_POINTS,
     PICKUP_RADIUS,
+    RESPAWN_START_Y,
     SCORE_CAP,
     SCROLL_ACCEL,
     SCROLL_SPEED,
@@ -285,13 +287,13 @@ def test_manifest_stage_is_stage_zero_and_looping_in_the_gallery() -> None:
     }
 
 
-def test_the_stage_header_shows_stage_one_play_and_a_growing_distance() -> None:
+def test_the_stage_header_shows_stage_one_the_intro_and_a_growing_distance() -> None:
     game = Game(stage=STAGE_1, god=True)
     for _ in range(10):
         game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
     header = game.buffers["header"]
     assert header[H_STAGE] == 1
-    assert header[H_FLOW] == FlowState.PLAY
+    assert header[H_FLOW] == FlowState.INTRO
     assert header[H_STAGE_DIST] == pytest.approx(game.terrain.distance, rel=1e-6)
     assert header[H_STAGE_DIST] == pytest.approx(8.0, rel=1e-6)
     assert header[H_SCROLL_RATE] == pytest.approx(game.terrain.speed, rel=1e-6)
@@ -3102,9 +3104,19 @@ _RESTART_STAGE = StageData(
 )
 
 
+def _skip_intro(game: Game) -> Game:
+    """Put a stage game straight into PLAY with an arrived ship (the intro has its own tests)."""
+    assert game.flow is not None
+    game.flow.state = FlowState.PLAY
+    game.flow.timer = 0
+    game.life.reset()
+    game.ship = PlayerShip()
+    return game
+
+
 def _stage_game(stage: StageData = _QUIET_STAGE, **kwargs: object) -> Game:
     """A mortal stage game; the quiet stage spawns nothing, so only what a test places can hurt."""
-    return Game(stage=stage, **kwargs)
+    return _skip_intro(Game(stage=stage, **kwargs))
 
 
 def _run_until_out(game: Game) -> list[int]:
@@ -3171,7 +3183,7 @@ def test_the_game_over_event_carries_the_final_score_and_the_record_flag_lives()
 
 
 def test_with_two_lives_the_ship_flies_back_in_and_one_life_is_left_lives() -> None:
-    game = Game(stage=STAGE_1, lives=2)
+    game = _skip_intro(Game(stage=STAGE_1, lives=2))
     _put_bullet_on_ship(game)
     _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
     assert _header(game, H_LIVES) == 1
@@ -3341,8 +3353,8 @@ def test_restart_starts_a_fresh_run_and_keeps_the_high_score_restart() -> None:
     assert header[H_WEAPON] == float(WeaponKind.LASER)
     assert header[H_LEVEL] == 3.0
     assert header[H_BOMBS] == 5.0
-    assert header[H_PLAYER_PHASE] == float(PlayerPhase.ALIVE)
-    assert header[H_FLOW] == float(FlowState.PLAY)
+    assert header[H_PLAYER_PHASE] == float(PlayerPhase.RESPAWN)  # D-26: the intro fly-in
+    assert header[H_FLOW] == float(FlowState.INTRO)
     assert header[H_INVULN] == 0.0
     assert header[H_KILLS] == 0.0
     assert header[H_MAX_BONUS] == 0.0
@@ -3351,11 +3363,11 @@ def test_restart_starts_a_fresh_run_and_keeps_the_high_score_restart() -> None:
     assert header[H_PICKUP_N] == header[H_EBULLET_N] == 0.0
     assert header[H_SCROLL_Y] == 0.0
     assert header[H_SCROLL_RATE] == pytest.approx(SCROLL_SPEED)
-    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, RESPAWN_START_Y)
     assert game.events.n == 0
     assert game.save_requested is False
     assert game.bomb.phase is BombPhase.NONE
-    assert game.life.phase is PlayerPhase.ALIVE
+    assert game.life.phase is PlayerPhase.RESPAWN
 
 
 def test_after_a_restart_the_run_plays_again_and_can_end_again_restart() -> None:
@@ -3364,6 +3376,7 @@ def test_after_a_restart_the_run_plays_again_and_can_end_again_restart() -> None
     assert game.enemies.n == 1  # the wave at 2.0 spawned
     _run_until_out(game)
     game.restart()
+    _skip_intro(game)
     assert game.enemies.n == 0
     _tick_n(game, 4)
     assert game.enemies.n == 1  # the director starts from the top of the timeline again
@@ -3415,7 +3428,7 @@ def test_restart_returns_a_moved_ship_to_its_start_and_drops_owed_drag_restart()
     game.ship.x, game.ship.y = 10.0, 20.0
     game.ship.add_drag(5.0, 5.0)
     game.restart()
-    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, RESPAWN_START_Y)
     assert (game.ship.pending_x, game.ship.pending_y) == (0.0, 0.0)
 
 

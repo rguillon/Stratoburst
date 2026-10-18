@@ -376,7 +376,12 @@ class Game:
         self.director = StageDirector(stage) if stage is not None else None
         # The gallery has no run to lose (Phase 2 D-18): infinite lives and no flow.
         self.flow = (
-            StageFlow(life=self.life, score=self.score, events=self.events)
+            StageFlow(
+                life=self.life,
+                score=self.score,
+                events=self.events,
+                stage_number=stage.number,
+            )
             if stage is not None
             else None
         )
@@ -387,8 +392,7 @@ class Game:
         )
         self.storm_hits = 0
         self.terrain = TerrainScroll()
-        if at is not None:
-            self._jump_to_marker(at)
+        self._open_stage()
         self.tick_count = 0
         self._firing = False
         self._move_x = 0.0
@@ -425,6 +429,17 @@ class Game:
         self.terrain.jump(distance)
         if distance > 0.0:  # a clamped start is the stage's own start: its first rows are kept
             self.director.jump(distance)
+
+    def _open_stage(self) -> None:
+        """Begin a stage run: jump to the ``?at=`` marker and fly the ship in (D-26, D-30).
+
+        The intro fly-in grants no invulnerability, so the ship never blinks at stage start. The
+        shooting gallery has no intro: its ship starts ALIVE at the start position.
+        """
+        if self._at is not None:
+            self._jump_to_marker(self._at)
+        if self.flow is not None:
+            self.life.begin_fly_in(self.ship, 0)
 
     @property
     def save_requested(self) -> bool:
@@ -470,8 +485,7 @@ class Game:
         terrain.distance = 0.0
         terrain.speed = terrain.target = SCROLL_SPEED
         director.reset()
-        if self._at is not None:
-            self._jump_to_marker(self._at)
+        self._open_stage()
         flow.reset()
         self._pack_header(0)
 
@@ -600,6 +614,7 @@ class Game:
         stage = self.stage
         header[H_STAGE] = 0 if stage is None else stage.number
         header[H_FLOW] = -1 if self.flow is None else int(self.flow.state)
+        header[H_FLOW_T] = 0 if self.flow is None else self.flow.progress
         header[H_STAGE_DIST] = 0 if stage is None else self.terrain.distance
         header[H_SHIP_X] = self.ship.x
         header[H_SHIP_Y] = self.ship.y
