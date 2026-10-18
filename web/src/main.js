@@ -22,10 +22,10 @@ import { createCityLayer } from './render/city_layer.js';
 import { createCityGround } from './render/city_ground.js';
 import { warmScenery } from './render/models/scenery_models.js';
 import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
-import { CITY_TARGET_KINDS } from './render/models/city_targets.js';
+import { CITY_TARGET_KINDS, buildRubble } from './render/models/city_targets.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
-import { createWreckRing } from './fx/wreck_ring.js';
+import { createWreckRing, wreckKindsFor } from './fx/wreck_ring.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
@@ -186,6 +186,10 @@ async function main() {
       groundKindNames[name] = value;
     }
   }
+  // The destructible city targets (D-34): they spark when destroyed, leave rubble and flicker when damaged.
+  const cityKinds = new Set(
+    CITY_TARGET_KINDS.filter((name) => name in manifest.enemy_kinds).map((name) => manifest.enemy_kinds[name]),
+  );
   // Instanced meshes per gallery kind, all added before the second prewarm.
   const enemies = createEnemyInstances({
     data: bridge.channels.enemies,
@@ -196,6 +200,7 @@ async function main() {
     detail: TIERS[tier0].modelDetail,
     groundKinds,
     groundGroup: rig.groundLayer.group,
+    flickerKinds: cityKinds,
   });
   detailViews.push(enemies);
   for (const mesh of enemies.airMeshes) rig.scene.add(mesh);
@@ -207,10 +212,6 @@ async function main() {
   };
   rig.scene.add(fxLayers.additive.mesh);
   rig.scene.add(fxLayers.normal.mesh);
-  // The destructible city targets (D-34): their destruction adds electrical sparks to the blast.
-  const cityKinds = new Set(
-    CITY_TARGET_KINDS.filter((name) => name in manifest.enemy_kinds).map((name) => manifest.enemy_kinds[name]),
-  );
   const explosionFx = createExplosionFx({
     layers: fxLayers,
     events: manifest.events,
@@ -226,13 +227,13 @@ async function main() {
   // Terrain scroll this frame (steps plus the sub-step alpha); the wrecks read it at a kill.
   let scrollNow = 0;
   // Charred wrecks of ground kills live in the ground layer and scroll away with the terrain.
-  // Only the ground kinds that already have a model leave a wreck: Python may add ground kinds (the
-  // mid-boss parts) before their JS models exist, and the ring builds a hull per kind it is given.
-  const wreckKinds = Object.fromEntries(
-    Object.entries(groundKindNames).filter(([name]) => hasModel(name)),
-  );
+  // Which ground kills leave a wreck is data (manifest `enemy_wreck`) and needs a JS model: train
+  // turrets and stumps have a model but no wreck, and a kind Python adds before its model exists has
+  // neither. A destroyed city target is drawn as a charred rubble pile, never as its intact building.
+  const wreckKinds = wreckKindsFor(groundKindNames, manifest.tuning.enemy_wreck, hasModel);
   const wrecks = createWreckRing({
     kinds: wreckKinds,
+    rubble: { kinds: cityKinds, geometry: buildRubble() },
     events: manifest.events,
     geometryFor: enemyModel,
     ratio: manifest.tuning.ground_scroll_ratio,

@@ -39,9 +39,21 @@ const color = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const spot = new THREE.Vector3();
 
+// The wreck kinds of a stage, from data: the ground kinds whose `enemy_wreck` table entry is 1 and
+// that have a JS model. A train turret or a stump has a model but no wreck entry, so it never leaves
+// a second wreck under the boss; a kind Python adds before its model exists is skipped, because the
+// ring builds a hull per kind it is given. `groundKindNames` is name -> kind value.
+export function wreckKindsFor(groundKindNames, enemyWreck, hasModel) {
+  return Object.fromEntries(
+    Object.entries(groundKindNames).filter(([name, value]) => enemyWreck[value] === 1 && hasModel(name)),
+  );
+}
+
 // `kinds` maps the ground kind names to their channel values; `geometryFor(kindName, detail)`
 // returns the model whose `body` is the wreck's shape. `getScroll()` is the terrain scroll at the
 // moment an event is handled, and `ratio` is the ground scroll ratio of the living units.
+// `rubble` ({ kinds: Set of kind values, geometry }) draws those kinds as a charred rubble pile
+// instead of their low-detail body, which is how a destroyed building stops looking intact.
 // `layers` ({ additive, normal } particle layers), `getScale()` (the tier's particleScale) and
 // `toWorld(x, y, out)` (the ground layer's) drive the smoulder; without `layers` there is none.
 export function createWreckRing({
@@ -57,6 +69,7 @@ export function createWreckRing({
   getScale = () => 1,
   toWorld = null,
   rng = mulberry32(0x77ec4),
+  rubble = null,
 }) {
   const group = new THREE.Group();
   group.name = 'wreck-ring';
@@ -68,7 +81,8 @@ export function createWreckRing({
   const meshByKind = [];
   const meshes = [];
   for (const [name, value] of Object.entries(kinds)) {
-    const mesh = new THREE.InstancedMesh(geometryFor(name, 'low').body, material, capacity);
+    const geometry = rubble?.kinds.has(value) ? rubble.geometry : geometryFor(name, 'low').body;
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
     mesh.name = `wreck-${name.toLowerCase()}`;
     mesh.frustumCulled = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

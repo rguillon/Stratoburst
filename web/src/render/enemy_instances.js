@@ -7,6 +7,7 @@ const ANGLE = 2;
 const FLASH = 3;
 const KIND = 5;
 const AUX = 6;
+const HP = 4;
 
 // Dark gunmetal for the primitive stand-ins (D-38), every channel at most 0.3.
 export const BASE_COLORS = {
@@ -24,8 +25,21 @@ export const FALLBACK_COLOR = [0.2, 0.21, 0.24];
 const REST_COLOR = [1, 1, 1];
 const FLASH_COLOR = [10, 10, 10];
 
+// A damaged city target's neon (D-33): below half hp the glow flickers about 6 times a second between
+// a dim and the full colour, out of step from slot to slot, until the building dies. Only a sign-sized
+// area flickers, so it stays under the 3 Hz full-screen flash guideline.
+const FLICKER_BELOW_HP = 0.5;
+const FLICKER_RATE = 6;
+const FLICKER_DIM = 0.12;
+const FLICKER_SLOT_STEP = 1.7;
+
 // How fast a helicopter rotor spins, in radians per second of the effect clock.
 export const ROTOR_RATE = 30;
+
+// True during the dim half of a flicker cycle; deterministic in the effect clock and the slot.
+function flickerDim(timeS, slot) {
+  return Math.floor((timeS * FLICKER_RATE + slot * FLICKER_SLOT_STEP) * 2) % 2 === 1;
+}
 
 // Collision radii of the Python kinds (tuning.ENEMY_RADIUS); the primitive shapes are sized to them.
 const RADII = { JET: 9, HELI: 10, CARRIER: 14, TANK: 11, TURRET: 10 };
@@ -83,6 +97,9 @@ function defaultGeometryFor() {
 // Ground kinds (`groundKinds`, a Set of kind values) draw inside `groundGroup`, the ray-compensating
 // ground layer, so a tank is seen on the terrain exactly where the bolts hit it (D-21). Their
 // meshes are added to that group here; the air meshes are left for the caller to add to the scene.
+//
+// `flickerKinds` (a Set of kind values) are the buildings whose glow flickers when badly damaged:
+// their glow mesh gets an instance colour of its own, written every frame from the hp fraction.
 export function createEnemyInstances({
   data,
   capacity,
@@ -93,6 +110,7 @@ export function createEnemyInstances({
   geometryFor = defaultGeometryFor(),
   groundKinds = new Set(),
   groundGroup = null,
+  flickerKinds = new Set(),
 }) {
   const bodyMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -136,7 +154,12 @@ export function createEnemyInstances({
       top.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
       top.instanceColor.setUsage(THREE.DynamicDrawUsage);
     }
-    entries[value] = { name, body, glow, top, ground, spins: name === 'HELI', index: value };
+    const flickers = glow !== null && flickerKinds.has(value);
+    if (flickers) {
+      glow.setColorAt(0, color.setRGB(REST_COLOR[0], REST_COLOR[1], REST_COLOR[2]));
+      glow.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    }
+    entries[value] = { name, body, glow, top, ground, flickers, spins: name === 'HELI', index: value };
   }
   const slotCount = entries.length;
   const counts = new Int32Array(slotCount);
@@ -174,6 +197,12 @@ export function createEnemyInstances({
       if (entry.glow !== null) entry.glow.setMatrixAt(slot, matrix);
       const rgb = data[base + FLASH] > 0 ? FLASH_COLOR : REST_COLOR;
       entry.body.setColorAt(slot, color.setRGB(rgb[0], rgb[1], rgb[2]));
+      if (entry.flickers) {
+        // The hit flash wins: a flashing building holds its full glow instead of dipping.
+        const dim = data[base + FLASH] <= 0 && data[base + HP] < FLICKER_BELOW_HP && flickerDim(timeS, slot);
+        const level = dim ? FLICKER_DIM : 1;
+        entry.glow.setColorAt(slot, color.setRGB(level, level, level));
+      }
       if (entry.top !== null) {
         // A rotor spins on the effect clock; any other top (a turret head) points along the aim angle.
         const topAngle = entry.spins ? data[base + ANGLE] + timeS * ROTOR_RATE : data[base + AUX];
@@ -193,6 +222,7 @@ export function createEnemyInstances({
       entry.body.instanceMatrix.needsUpdate = true;
       entry.body.instanceColor.needsUpdate = true;
       if (entry.glow !== null) entry.glow.instanceMatrix.needsUpdate = true;
+      if (entry.flickers) entry.glow.instanceColor.needsUpdate = true;
       if (entry.top !== null) {
         entry.top.instanceMatrix.needsUpdate = true;
         entry.top.instanceColor.needsUpdate = true;
