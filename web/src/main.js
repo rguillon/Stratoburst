@@ -103,12 +103,12 @@ async function main() {
   });
   // Enemy bullets are drawn after bloom, in their own scene.
   rig.bulletScene.add(ebullets.mesh);
-  // Player bolts: HDR cyan so they cross the bloom threshold.
+  // Player bolts: HDR tracers stretched along their flight angle, so they bloom and the vulcan fan's
+  // angled streams read as streaks.
   const pbullets = createBulletInstances({
     data: bridge.channels.pbullets,
     capacity: manifest.channels.pbullets.cap,
-    size: 3,
-    color: [0.6, 2.4, 4.0],
+    style: 'bolt',
     name: 'pbullets',
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,

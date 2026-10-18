@@ -1,8 +1,9 @@
 // Turns EXPLOSION (and HIT) events into particle bursts. The recipes are data keyed by the
 // manifest blast classes; `emitters` of a recipe list how many particles of which look go on
-// which layer. Colours are HDR (>1) so they cross the bloom threshold; none sit in the hot-pink
-// band around 330 degrees that belongs to enemy bullets.
+// which layer. Every colour comes from PALETTE, whose test keeps saturated colours out of the
+// hot-pink band around 330 degrees that belongs to enemy bullets.
 import * as THREE from 'three';
+import { PALETTE } from './palette.js';
 
 const TWO_PI = Math.PI * 2;
 const scratch = new THREE.Vector3();
@@ -27,36 +28,37 @@ function emitter(layer, count, life, speed, size, color, gravity = 0, spread = 0
 }
 
 const CORE = (size, life, color) => emitter('additive', 1, [life, life], [0, 0], size, color);
-const SPARKS = (count) => emitter('additive', count, [0.35, 0.6], [30, 70], [2.5, 0.5], [3.2, 2.2, 0.9]);
+const SPARKS = (count) =>
+  emitter('additive', count, [0.35, 0.6], [30, 70], [2.5, 0.5], PALETTE.SPARK.rgb);
 const FIRE = (count, speed, size, life) =>
-  emitter('additive', count, life, speed, size, [3.4, 1.6, 0.4], 0, 0.3);
+  emitter('additive', count, life, speed, size, PALETTE.FIRE.rgb, 0, 0.3);
 const SMOKE = (count) =>
-  emitter('normal', count, [1.0, 1.6], [8, 20], [6, 16], [0.18, 0.16, 0.15], -0.15, 0.4);
+  emitter('normal', count, [1.0, 1.6], [8, 20], [6, 16], PALETTE.SMOKE.rgb, -0.15, 0.4);
 
 // Keyed by the manifest blast class names (SMALL, MEDIUM, LARGE).
 export const RECIPES = Object.freeze({
   SMALL: Object.freeze([
-    CORE([10, 18], 0.18, [4.0, 2.6, 1.2]),
+    CORE([10, 18], 0.18, PALETTE.FIRE_CORE.rgb),
     SPARKS(20),
-    emitter('additive', 6, [0.6, 0.9], [10, 25], [2, 0.6], [3.0, 1.4, 0.4], 0.3, 0.5),
+    emitter('additive', 6, [0.6, 0.9], [10, 25], [2, 0.6], PALETTE.EMBER.rgb, 0.3, 0.5),
   ]),
   MEDIUM: Object.freeze([
-    CORE([18, 30], 0.25, [4.0, 2.4, 1.0]),
+    CORE([18, 30], 0.25, PALETTE.FIRE_CORE.rgb),
     FIRE(16, [15, 40], [6, 12], [0.5, 0.8]),
     SPARKS(10),
     SMOKE(10),
   ]),
   LARGE: Object.freeze([
-    CORE([26, 44], 0.32, [4.0, 2.4, 1.0]),
+    CORE([26, 44], 0.32, PALETTE.FIRE_CORE.rgb),
     FIRE(30, [20, 55], [8, 16], [0.6, 1.0]),
     SMOKE(18),
-    emitter('normal', 14, [0.8, 1.4], [30, 60], [3, 2], [0.12, 0.1, 0.09], 1, 0.9),
+    emitter('normal', 14, [0.8, 1.4], [30, 60], [3, 2], PALETTE.DEBRIS.rgb, 1, 0.9),
     SPARKS(12),
   ]),
 });
 
 export const HIT_RECIPE = Object.freeze([
-  emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], [3, 3, 3]),
+  emitter('additive', 4, [0.12, 0.2], [25, 45], [2, 0.4], PALETTE.HIT_SPARK.rgb),
 ]);
 
 // `toWorld(x, y, ground, out)` places a logical point in the world: on the gameplay plane for an air

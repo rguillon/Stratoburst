@@ -6,8 +6,11 @@ import { PALETTE } from '../fx/palette.js';
 //
 // Styles:
 //   'flat' - a solid HDR square (the original look; `color` is HDR so it crosses the bloom threshold)
+//   'bolt' - a player tracer: an HDR streak stretched along the flight angle (aData.z, 0 = up the screen)
 //   'orb'  - the enemy bullet: hot-pink halo, white core, dark rim, LDR, drawn in the post-bloom pass
 const ORB_RENDER_ORDER = 30;
+const BOLT_STRETCH = 2.5;
+const DEFAULT_SIZE = { orb: 6, bolt: 3 };
 
 const FLAT_FRAGMENT = `
 uniform vec3 uColor;
@@ -26,6 +29,41 @@ void main() {
   p.x += aData.x - halfW;
   p.z += aData.y - halfH;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}`;
+
+// The quad is stretched along its local forward axis (-z, up the screen), then turned by the flight
+// angle: forward (0, -1) maps to (sin a, -cos a), the direction Python derived the angle from.
+// vLocal is the pre-rotation position in -1..1, so the fragment shader sees an ellipse.
+const BOLT_VERTEX = `
+attribute vec4 aData;
+uniform float halfW;
+uniform float halfH;
+uniform float uInvHalf;
+uniform float uStretch;
+varying vec2 vLocal;
+void main() {
+  vec3 p = position;
+  vLocal = p.xz * uInvHalf;
+  float s = sin(aData.z);
+  float c = cos(aData.z);
+  float z = p.z * uStretch;
+  p.x = position.x * c - z * s;
+  p.z = position.x * s + z * c;
+  p.x += aData.x - halfW;
+  p.z += aData.y - halfH;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}`;
+
+// An elliptical streak, hottest at the centre: the HDR boost is what makes it bloom.
+const BOLT_FRAGMENT = `
+uniform vec3 uColor;
+varying vec2 vLocal;
+void main() {
+  float d = dot(vLocal, vLocal);
+  if (d > 1.0) discard;
+  gl_FragColor = vec4(uColor * (1.0 + (1.0 - d)), 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }`;
 
 // vLocal runs -1..1 across the quad; the orb is a disc of radius 1 in that space.
@@ -75,6 +113,18 @@ function buildMaterial(style, { color, size, halfW, halfH }) {
         fragmentShader: FLAT_FRAGMENT,
         depthWrite: false,
       });
+    case 'bolt':
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...base,
+          uInvHalf: { value: 2 / size },
+          uStretch: { value: BOLT_STRETCH },
+          uColor: { value: vec3(color ?? PALETTE.VULCAN_TRACER.rgb) },
+        },
+        vertexShader: BOLT_VERTEX,
+        fragmentShader: BOLT_FRAGMENT,
+        depthWrite: false,
+      });
     case 'orb':
       return new THREE.ShaderMaterial({
         uniforms: {
@@ -100,7 +150,7 @@ export function createBulletInstances({
   capacity,
   name = 'ebullets',
   style = name === 'ebullets' ? 'orb' : 'flat',
-  size = style === 'orb' ? 6 : 4,
+  size = DEFAULT_SIZE[style] ?? 4,
   color,
   playfieldW,
   playfieldH,
