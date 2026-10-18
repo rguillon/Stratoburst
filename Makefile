@@ -55,7 +55,7 @@ test-web: ## vitest only
 build: ## Production build into dist/
 	npm run build
 
-perf: ## Python tick budget: 500 stress bullets + held fire and drones in Pyodide-on-Node, fails above 3 ms average
+perf: ## Python tick budget: 500 stress bullets, gallery enemies and enemy fire with every weapon at Lv5 in Pyodide-on-Node, fails above 3 ms average
 	npm run perf --if-present
 
 dev: ## Vite dev server
