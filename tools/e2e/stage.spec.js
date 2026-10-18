@@ -48,3 +48,27 @@ test('an unknown ?at= value is ignored and the stage starts at the beginning', a
   expect(await readSlot(page, 'STAGE_DIST')).toBeLessThan(200);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+// D-34: the authored city layout ships once in the manifest as stride-6 placement records.
+test('the manifest carries stage 1\'s expanded city layout', async ({ page }) => {
+  await bootGame(page, '?debug', { stage: true });
+
+  const city = await page.evaluate(() => {
+    const { manifest } = globalThis.__scorched;
+    return {
+      length: manifest.stage.city.length,
+      stride: manifest.stage.city_stride,
+      pitch: manifest.stage.block_pitch,
+      size: manifest.stage.block_size,
+      maglev: manifest.scenery_kinds.MAGLEV,
+      groundY0: manifest.tuning.ground_y0,
+    };
+  });
+  expect(city.stride).toBe(6);
+  expect(city.length).toBeGreaterThan(0);
+  expect(city.length % city.stride).toBe(0);
+  expect(city.pitch).toBe(80);
+  expect(city.size).toBe(64);
+  expect(city.maglev).toBe(4);
+  expect(city.groundY0).toBe(-40);
+});

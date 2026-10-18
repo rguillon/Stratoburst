@@ -96,6 +96,9 @@ from scorched_core.protocol import (
     PLAYFIELD_H,
     PLAYFIELD_W,
 )
+from scorched_core.stages.city_block import CityBlock
+from scorched_core.stages.city_builder import scenery_placements
+from scorched_core.stages.city_style import CityStyle
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
 from scorched_core.stages.stage_1 import STAGE_1
@@ -286,7 +289,20 @@ def test_manifest_stage_describes_the_stage_markers_in_stage_mode() -> None:
         "length": STAGE_1.length,
         "markers": {"midboss": 4200.0, "boss": 8640.0},
         "loop": False,
+        "city": list(STAGE_1.placements),
+        "city_stride": 6,
+        "block_pitch": 80.0,
+        "block_size": 64.0,
     }
+
+
+def test_manifest_stage_city_is_the_expanded_layout_of_the_stage() -> None:
+    blocks = (CityBlock(d=0.0, col=1, cols=2, rows=2, style=CityStyle.DOWNTOWN, seed=4),)
+    stage = StageData(number=2, length=100.0, waves=(), markers=(), city=blocks, seed=5)
+    city = Game(stage=stage).manifest()["stage"]["city"]
+    assert city == list(scenery_placements(blocks, (), 5))
+    assert len(city) > 0
+    assert len(city) % 6 == 0
 
 
 def test_manifest_stage_is_stage_zero_and_looping_in_the_gallery() -> None:
@@ -295,6 +311,24 @@ def test_manifest_stage_is_stage_zero_and_looping_in_the_gallery() -> None:
         "length": STAGE_1.length,
         "markers": {},
         "loop": True,
+        "city": list(STAGE_1.placements),
+        "city_stride": 6,
+        "block_pitch": 80.0,
+        "block_size": 64.0,
+    }
+
+
+def test_manifest_publishes_the_scenery_kinds_by_name() -> None:
+    assert Game().manifest()["scenery_kinds"] == {
+        "SLUM_HOUSE": 0,
+        "LOWRISE": 1,
+        "TOWER": 2,
+        "SIGN": 3,
+        "MAGLEV": 4,
+        "HANGAR": 5,
+        "RUNWAY_LIGHT": 6,
+        "FIRE": 7,
+        "LAMP": 8,
     }
 
 
@@ -357,6 +391,7 @@ def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
         "scroll_speed": 0.8,
         "hitbox_radius": 2.0,
         "ground_scroll_ratio": 0.94,
+        "ground_y0": -40.0,
         "enemy_ground": [0, 0, 0, 1, 1],
         "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0],
         "bomb_radius_min": 20.0,

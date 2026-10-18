@@ -2,6 +2,11 @@ import pytest
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
+from scorched_core.stages.city_block import CityBlock
+from scorched_core.stages.city_builder import scenery_placements
+from scorched_core.stages.city_feature import CityFeature
+from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.wave_entry import WaveEntry
 
@@ -96,3 +101,37 @@ def test_a_path_motion_without_a_path_is_rejected() -> None:
     wave = WaveEntry(at=7.0, kind=EnemyKind.JET, x=80.0, motion=MotionKind.PATH)
     with pytest.raises(ValueError, match=r"wave 0 \(at=7.0, JET\) .*PATH.*no path"):
         StageData(number=1, length=100.0, waves=(wave,), markers=())
+
+
+def test_a_stage_has_no_city_by_default() -> None:
+    stage = StageData(number=1, length=10.0, waves=(), markers=())
+    assert (stage.city, stage.features, stage.seed) == ((), (), 1)
+    assert stage.placements == ()
+
+
+def test_a_stage_carries_its_expanded_city_layout() -> None:
+    blocks = (CityBlock(d=0.0, col=1, cols=2, rows=2, style=CityStyle.DOWNTOWN, seed=3, signs=1),)
+    features = (CityFeature(SceneryKind.MAGLEV, 120.0, 0.0, 80.0, 20.0),)
+    stage = StageData(
+        number=1, length=100.0, waves=(), markers=(), city=blocks, features=features, seed=9
+    )
+    assert stage.placements == scenery_placements(blocks, features, 9)
+    assert len(stage.placements) > 0
+
+
+def test_a_city_block_past_the_stage_length_is_rejected() -> None:
+    blocks = (CityBlock(d=101.0, col=0, cols=1, rows=1, style=CityStyle.SLUMS, seed=1),)
+    with pytest.raises(ValueError, match=r"city block 0 .*outside"):
+        StageData(number=1, length=100.0, waves=(), markers=(), city=blocks)
+
+
+def test_a_city_feature_past_the_stage_length_is_rejected() -> None:
+    features = (CityFeature(SceneryKind.MAGLEV, 120.0, 90.0, 120.0, 10.0),)
+    with pytest.raises(ValueError, match=r"city feature 0 .*outside"):
+        StageData(number=1, length=100.0, waves=(), markers=(), features=features)
+
+
+def test_a_city_feature_of_an_unsupported_kind_is_rejected_at_construction() -> None:
+    features = (CityFeature(SceneryKind.TOWER, 120.0, 0.0, 50.0, 10.0),)
+    with pytest.raises(ValueError, match="TOWER"):
+        StageData(number=1, length=100.0, waves=(), markers=(), features=features)
