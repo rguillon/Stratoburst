@@ -68,3 +68,24 @@ test('holding fire with the level 3 laser opens a half-width 4 beam and releasin
     .toBe(false);
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });
+
+test('holding fire with the level 5 homing weapon launches missiles that are drawn with trails', async ({
+  page,
+}) => {
+  await bootGame(page, '?debug&weapon=homing&level=5');
+  expect(await readSlot(page, 'WEAPON')).toBe(2);
+  expect(await page.evaluate(() => globalThis.__scorched.fx.missilesDrawn)).toBe(0);
+
+  const particlesBefore = await page.evaluate(() => globalThis.__scorched.fx.particlesSpawned);
+  await page.keyboard.down('Space');
+  await expect.poll(() => readSlot(page, 'MISSILE_N'), { timeout: 3_000 }).toBeGreaterThan(0);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.missilesDrawn), { timeout: 3_000 })
+    .toBeGreaterThan(0);
+  // Each live missile leaves an exhaust trail through the particle layers.
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__scorched.fx.particlesSpawned), { timeout: 3_000 })
+    .toBeGreaterThan(particlesBefore);
+  await page.keyboard.up('Space');
+  await expect(page.locator('#error-panel')).toHaveCount(0);
+});

@@ -14,6 +14,7 @@ import { createShipModel } from './render/ship_model.js';
 import { projectCorners } from './render/camera_fit.js';
 import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
+import { createMissileInstances } from './render/missile_instances.js';
 import { enemyModel, warmModels } from './render/models/enemy_models.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
@@ -222,6 +223,18 @@ async function main() {
   });
   rig.scene.add(beam.group);
   beam.update(1, manifest.playfield.w / 2, manifest.playfield.h / 2, 0);
+  // The violet homing missiles and their exhaust trails. The mesh is drawn once (count 1) while the
+  // shaders compile, then hidden until the first missile launches.
+  const missiles = createMissileInstances({
+    data: bridge.channels.missiles,
+    capacity: manifest.channels.missiles.cap,
+    layers: fxLayers,
+    getScale: () => TIERS[currentTier].particleScale,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(missiles.mesh);
+  missiles.mesh.count = 1;
   const fx = createFxDispatcher({ handlers: [explosionFx, wrecks, decals, lightPool] });
   let fxTime = 0;
 
@@ -255,6 +268,7 @@ async function main() {
   applyModelDetail(currentTier);
   rig.render();
   beam.update(0, 0, 0, 0); // compiled and rendered through both paths: hidden until the laser fires
+  missiles.update(0, 0); // likewise hidden until a missile launches
   loading.setProgress(1);
   loading.setStatus('Ready');
   const timeToGateMs = performance.now() - t0;
@@ -340,6 +354,7 @@ async function main() {
       pbullets.update(header[slots.PBULLET_N]);
       readout.update(header[slots.WEAPON], header[slots.LEVEL]);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
+      missiles.update(header[slots.MISSILE_N], fxTime);
       // Ground units extrapolate like the terrain, at the ground ratio, so they never stutter
       // against the roads.
       enemies.update(
@@ -451,6 +466,9 @@ async function main() {
         },
         get beamVisible() {
           return beam.group.visible;
+        },
+        get missilesDrawn() {
+          return missiles.mesh.count;
         },
       },
       // The ground layer's ray-compensation scale (e2e checks it stays within 1.03..1.09).
