@@ -174,10 +174,12 @@ describe('startGame', () => {
   function fakeGamePyodide(manifest = GAME_MANIFEST) {
     const calls = { attached: [], destroyed: [], writes: 0 };
     const tick = () => {};
+    const restart = () => {};
     const game = {
       manifest: () => ({ destroy: () => calls.destroyed.push('manifest'), toJs: () => manifest }),
       attach: (name, array) => calls.attached.push([name, array]),
       tick,
+      restart,
     };
     const pyodide = {
       FS: { mkdirTree() {}, writeFile: () => (calls.writes += 1) },
@@ -185,7 +187,7 @@ describe('startGame', () => {
         name === 'sys' ? { path: { insert() {} } } : { create_game: () => game },
       toPy: (options) => options,
     };
-    return { pyodide, calls, game, tick };
+    return { pyodide, calls, game, tick, restart };
   }
 
   it('installs the sources, then allocates one Float32Array per channel sized stride * cap', async () => {
@@ -227,6 +229,15 @@ describe('startGame', () => {
     expect(started.slots).toBe(GAME_MANIFEST.header.slots);
     expect(started.game).toBe(game);
     expect(started.tick).toBe(tick);
+  });
+
+  it('holds the restart function once, next to tick, so no proxy is looked up per call', async () => {
+    const { pyodide, game, restart } = fakeGamePyodide();
+
+    const started = await startGame(pyodide, { seed: 1 });
+
+    expect(started.restart).toBe(restart);
+    expect(started.restart).toBe(game.restart);
   });
 
   it('destroys the manifest proxy once it has been converted', async () => {
