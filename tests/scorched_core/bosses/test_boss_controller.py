@@ -2,13 +2,13 @@ import math
 from array import array
 
 import pytest
-from scorched_core.bosses.emitter_spec import EmitterSpec
-from scorched_core.bosses.phase_spec import PhaseSpec
 
 from scorched_core.bosses.boss_controller import BossController
 from scorched_core.bosses.boss_spec import BossSpec
 from scorched_core.bosses.boss_state import BossState
+from scorched_core.bosses.emitter_spec import EmitterSpec
 from scorched_core.bosses.part_spec import PartSpec
+from scorched_core.bosses.phase_spec import PhaseSpec
 from scorched_core.clock.hitstop import Hitstop
 from scorched_core.collision.circle_hits import resolve_shots_vs_enemies
 from scorched_core.collision.uniform_grid import UniformGrid
@@ -482,6 +482,7 @@ def test_the_all_parts_rule_only_applies_from_phase_one() -> None:
     hit_hull_to(rig, 100)
     rig.step()
     assert rig.controller.phase_number == 3
+    rig.run(BOSS_PHASE_SHIELD_TICKS)  # the transition shield wears off
     rig.kill_part(0)
     rig.kill_part(1)
     rig.step()
@@ -489,7 +490,8 @@ def test_the_all_parts_rule_only_applies_from_phase_one() -> None:
 
 
 def test_a_spec_with_no_parts_never_takes_the_all_parts_rule() -> None:
-    rig = Rig(make_spec(parts=()))
+    hull_only = (PhaseSpec(1.0, ()), PhaseSpec(0.6, ()))
+    rig = Rig(make_spec(parts=(), phases=hull_only))
     rig.enter()
     rig.run(20)
     assert rig.controller.phase_number == 1
@@ -560,6 +562,17 @@ def test_a_new_phase_may_swap_the_hull_row_kind() -> None:
     assert rig.enemies.kind[rig.hull()] == EnemyKind.TRAIN_TURRET  # no kind: left as it was
 
 
+def test_a_phase_change_with_a_hull_kind_survives_a_vanished_hull_row() -> None:
+    swap = (PhaseSpec(1.0, ()), PhaseSpec(0.6, (), hull_kind=EnemyKind.TRAIN_TURRET))
+    rig = Rig(make_spec(phases=swap))
+    rig.enter()
+    rig.enemies.remove_uid(rig.controller.hull_uid)
+    rig.kill_part(0)
+    rig.kill_part(1)
+    rig.step()
+    assert rig.controller.phase_number == 2  # the all-parts rule, with no hull row to re-kind
+
+
 # --- emitters ---
 
 
@@ -600,12 +613,20 @@ def test_each_volley_pushes_one_low_priority_enemy_fire_event_with_the_shape() -
     assert len(fires) == 3
     assert fires[0][2] == float(TURRET_PATTERN.shape)
     assert fires[2][2] == float(HULL_PATTERN.shape)
+
+
+def test_enemy_fire_events_are_low_priority_so_a_busy_ring_refuses_them() -> None:
+    rig = Rig()
+    rig.enter()
+    rig.run(TURRET_PATTERN.delay - 1)
     rig.events.clear()
     for _ in range(EVENT_SOFT_CAP):
         rig.events.push(EV_EXPLOSION, 0.0, 0.0)
-    rig.run(0)
-    pushed = rig.events.push(EV_ENEMY_FIRE, 0.0, 0.0, low=True)
-    assert not pushed  # the soft cap refuses low events, which is what ENEMY_FIRE is
+    dropped = rig.events.dropped
+    rig.controller.step(rig.enemies, rig.bullets, SHIP_X, SHIP_Y, rig.events)
+    assert rig.bullets.n == 2 + HULL_PATTERN.count  # the volleys still fly
+    assert rig.events.n == EVENT_SOFT_CAP  # but their events were refused
+    assert rig.events.dropped == dropped + 3
 
 
 def test_a_volley_that_spawned_nothing_pushes_no_event() -> None:
@@ -763,11 +784,14 @@ def test_the_retreat_waits_until_the_lowest_part_is_above_the_exit_line() -> Non
     rig = Rig(make_spec(parts=low, timeout_ticks=5, phases=(PhaseSpec(1.0, ()),)))
     rig.enter()
     rig.run(5)
-    while rig.enemies.y[rig.hull()] > -131.0:
+    assert rig.controller.state is BossState.RETREAT
+    y_before = float(rig.enemies.y[rig.hull()])
+    while not rig.controller.gone:
+        y_before = float(rig.enemies.y[rig.hull()])
         rig.step()
-    assert rig.controller.state is BossState.RETREAT  # hull at -130: the part (-80) is not above
-    rig.run(2)
-    assert rig.controller.gone
+    # the part sits 50 below the hull: it is above -80 only once the hull is above -130
+    assert y_before + 50.0 >= -80.0
+    assert y_before - BOSS_RETREAT_SPEED + 50.0 < -80.0
 
 
 def test_a_hull_destroyed_on_the_timeout_step_counts_as_destroyed() -> None:
@@ -879,7 +903,7 @@ def test_the_end_of_the_sequence_is_one_huge_explosion_and_a_defeat_event() -> N
     rig.enter()
     kill_hull(rig)
     rig.bullets.spawn(10.0, 10.0, 0.0, 1.0)
-    for _ in range(rig.spec.death_ticks - 1):
+    for _ in range(rig.spec.death_ticks):
         assert not rig.controller.gone
         rig.step()
     assert rig.controller.gone
@@ -900,13 +924,13 @@ def test_the_final_events_survive_a_nearly_full_ring() -> None:
     rig = Rig()
     rig.enter()
     kill_hull(rig)
-    rig.run(rig.spec.death_ticks - 2)
+    rig.run(rig.spec.death_ticks - 1)
     rig.events.clear()
     for _ in range(EVENT_SOFT_CAP):
         rig.events.push(EV_EXPLOSION, 0.0, 0.0)
     rig.controller.step(rig.enemies, rig.bullets, SHIP_X, SHIP_Y, rig.events)
     rig.controller.settle(rig.enemies, rig.bullets, rig.events, rig.hitstop)
-    assert any(e[2] == 2.0 for e in rig.events_of(EV_BOSS_DEFEATED))
+    assert [e[2] for e in rig.events_of(EV_BOSS_DEFEATED)] == [1.0]
     assert rig.controller.gone
 
 

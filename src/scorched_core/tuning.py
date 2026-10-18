@@ -35,6 +35,9 @@ SCROLL_SPEED: Final = 0.8
 SCROLL_ACCEL: Final = 0.01  # most the scroll speed may change per step toward its target
 MIDBOSS_CRAWL_SPEED: Final = 0.2  # D-06: the terrain slows to a crawl for the mid-boss
 BOSS_CRAWL_SPEED: Final = 0.12  # D-06: and slower still for the boss
+BOSS_PHASE_SHIELD_TICKS: Final = 45  # a boss is invulnerable this long when its phase changes
+BOSS_RETREAT_SPEED: Final = 1.2  # units per step a timed-out boss rises off screen (ENMY-09)
+BOSS_TIMER_SHOW_S: Final = 20  # the boss countdown is published only inside the last 20 s
 AT_LEAD: Final = 320.0  # distance before a marker that ``?at=`` starts at: about one screen
 
 # Touch drag catch-up: the most finger movement (in units) the ship may still owe (INPT-02).

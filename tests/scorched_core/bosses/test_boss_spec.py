@@ -1,11 +1,11 @@
 import dataclasses
 
 import pytest
-from scorched_core.bosses.emitter_spec import EmitterSpec
-from scorched_core.bosses.phase_spec import PhaseSpec
 
 from scorched_core.bosses.boss_spec import BossSpec
+from scorched_core.bosses.emitter_spec import EmitterSpec
 from scorched_core.bosses.part_spec import PartSpec
+from scorched_core.bosses.phase_spec import PhaseSpec
 from scorched_core.entities.enemy_kind import EnemyKind
 
 
@@ -51,7 +51,7 @@ def test_a_spec_is_frozen() -> None:
 
 
 def test_a_spec_with_no_parts_is_valid() -> None:
-    assert make_spec(parts=()).parts == ()
+    assert make_spec(parts=(), phases=(PhaseSpec(1.0, ()),)).parts == ()
 
 
 def test_a_hull_radius_above_the_grid_limit_is_rejected() -> None:

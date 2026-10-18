@@ -26,6 +26,11 @@ PATTERNS: Final[dict[str, PatternSpec]] = {
         FirePattern.RING, count=10, speed=1.0, interval=200, phase_step_deg=18.0
     ),
     "stream3": PatternSpec(FirePattern.STREAM, speed=1.7, interval=170, burst=3, burst_gap=8),
+    # The mid-boss armored train (plan 03-14): slow, sparse, Raiden pacing.
+    "train_turret_aimed": PatternSpec(FirePattern.AIMED, speed=1.5, interval=120),
+    "train_hull_spread": PatternSpec(
+        FirePattern.SPREAD, count=5, speed=1.3, interval=170, arc_deg=60.0
+    ),
 }
 PATTERN_NAMES: Final = tuple(PATTERNS)
 PATTERN_TABLE: Final = tuple(PATTERNS.values())
