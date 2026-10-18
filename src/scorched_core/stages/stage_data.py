@@ -1,10 +1,13 @@
 """A whole stage as typed, frozen data: its length, its timeline and its named markers."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.paths.path_library import path_index
 from scorched_core.patterns.pattern_library import pattern_index
+from scorched_core.stages.city_block import CityBlock
+from scorched_core.stages.city_builder import scenery_placements
+from scorched_core.stages.city_feature import CityFeature
 from scorched_core.stages.wave_entry import WaveEntry
 
 
@@ -15,12 +18,20 @@ class StageData:
     ``waves`` is the timeline, ``markers`` the named distances (``midboss``, ``boss``) that a
     debug jump or a boss trigger can address. Both are validated on construction, so a stage
     module that imports cleanly is ordered and in range.
+
+    ``city`` (road-grid blocks) and ``features`` (the maglev, the runway lights) author the
+    scenery as data (D-34); ``seed`` seeds its expansion, which is done once here into the flat
+    ``placements`` tuple the manifest ships to the renderer.
     """
 
     number: int
     length: float
     waves: tuple[WaveEntry, ...]
     markers: tuple[tuple[str, float], ...]
+    city: tuple[CityBlock, ...] = ()
+    features: tuple[CityFeature, ...] = ()
+    seed: int = 1
+    placements: tuple[float, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Reject a timeline that is unsorted, out of range or names an unknown pattern or path."""
@@ -46,6 +57,24 @@ class StageData:
         for name, distance in self.markers:
             if not 0.0 <= distance <= self.length:
                 msg = f"marker {name!r} (at={distance}) is outside the stage [0, {self.length}]"
+                raise ValueError(msg)
+        self._check_city()
+        object.__setattr__(
+            self, "placements", scenery_placements(self.city, self.features, self.seed)
+        )
+
+    def _check_city(self) -> None:
+        """Every city block row and feature line must lie inside the stage."""
+        for index, block in enumerate(self.city):
+            if not 0.0 <= block.d <= self.length:
+                msg = f"city block {index} (d={block.d}) is outside the stage [0, {self.length}]"
+                raise ValueError(msg)
+        for index, feature in enumerate(self.features):
+            if not 0.0 <= feature.d0 <= feature.d1 <= self.length:
+                msg = (
+                    f"city feature {index} ({feature.d0} to {feature.d1}) "
+                    f"is outside the stage [0, {self.length}]"
+                )
                 raise ValueError(msg)
 
     @staticmethod

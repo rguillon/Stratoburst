@@ -36,6 +36,7 @@ from scorched_core.protocol import (
     BLAST_LARGE,
     BLAST_MEDIUM,
     BLAST_SMALL,
+    CITY_STRIDE,
     EBULLET_GAME_CAP,
     EBULLET_MAX_CAP,
     EBULLET_MIN_CAP,
@@ -134,6 +135,7 @@ from scorched_core.scoring.medal_chain import MedalChain
 from scorched_core.scoring.score_keeper import ScoreKeeper
 from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
+from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_1 import STAGE_1
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
@@ -151,11 +153,14 @@ from scorched_core.tuning import (
     BOMB_RADIUS_MAX,
     BOMB_RADIUS_MIN,
     BOMB_START_STOCK,
+    CITY_BLOCK,
+    CITY_PITCH,
     ENEMY_GROUND,
     ENEMY_POINTS,
     ENEMY_RADIUS,
     GRID_CELL,
     GROUND_SCROLL_RATIO,
+    GROUND_Y0,
     HITBOX_RADIUS,
     HITSTOP_BOMB_TICKS,
     HITSTOP_DEATH_TICKS,
@@ -521,11 +526,13 @@ class Game:
             "phases": {phase.name: phase.value for phase in PlayerPhase},
             "bomb_phases": {phase.name: phase.value for phase in BombPhase},
             "flow_states": {state.name: state.value for state in FlowState},
+            "scenery_kinds": {kind.name: kind.value for kind in SceneryKind},
             "stage": self._stage_manifest(),
             "tuning": {
                 "scroll_speed": SCROLL_SPEED,
                 "hitbox_radius": HITBOX_RADIUS,
                 "ground_scroll_ratio": GROUND_SCROLL_RATIO,
+                "ground_y0": GROUND_Y0,
                 "enemy_ground": [int(ground) for ground in ENEMY_GROUND],
                 "enemy_radius": list(ENEMY_RADIUS),
                 "bomb_radius_min": BOMB_RADIUS_MIN,
@@ -536,18 +543,33 @@ class Game:
         }
 
     def _stage_manifest(self) -> dict[str, object]:
-        """The stage the renderer plays: number, length, named markers and whether it loops.
+        """The stage the renderer plays: number, length, markers, city layout and whether it loops.
 
-        The shooting gallery is stage 0: it loops and has no markers (its length borrows stage 1's).
+        The shooting gallery is stage 0: it loops, has no markers and borrows stage 1's length and
+        city so it keeps a city under it. The city ships once here, never as a per-frame channel.
         """
         stage = self.stage
+        layout: dict[str, object] = {
+            "city_stride": CITY_STRIDE,
+            "block_pitch": CITY_PITCH,
+            "block_size": CITY_BLOCK,
+        }
         if stage is None:
-            return {"number": 0, "length": STAGE_1.length, "markers": {}, "loop": True}
+            return {
+                "number": 0,
+                "length": STAGE_1.length,
+                "markers": {},
+                "loop": True,
+                "city": list(STAGE_1.placements),
+                **layout,
+            }
         return {
             "number": stage.number,
             "length": stage.length,
             "markers": dict(stage.markers),
             "loop": False,
+            "city": list(stage.placements),
+            **layout,
         }
 
     def set_paused(self, paused: bool) -> None:

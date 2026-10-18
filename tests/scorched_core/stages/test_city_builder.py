@@ -185,7 +185,9 @@ def test_lots_inside_a_feature_corridor_are_skipped() -> None:
 def test_a_feature_leaves_lots_outside_its_distance_range_alone() -> None:
     target = block(cols=3, rows=3, col=1, d=160.0)
     far = CityFeature(SceneryKind.MAGLEV, 120.0, 1000.0, 1200.0, 100.0)
-    assert scenery_placements((target,), (far,), 3) == scenery_placements((target,), (), 3)
+    crossed = scenery_placements((target,), (far,), 3)
+    lots = [rec for rec in records(crossed) if int(rec[0]) != SceneryKind.MAGLEV]
+    assert lots == records(scenery_placements((target,), (), 3))
 
 
 def test_margin_blocks_fill_columns_minus_two_minus_one_three_and_four() -> None:
@@ -224,3 +226,12 @@ def test_every_height_stays_under_the_cap_for_every_style() -> None:
     assert all(
         rec[4] <= CITY_MAX_HEIGHT for rec in records(scenery_placements(blocks, features, 8))
     )
+
+
+def test_a_margin_building_in_a_feature_corridor_is_skipped_too() -> None:
+    target = block(col=1, cols=1, rows=1, d=0.0)
+    corridor = CityFeature(SceneryKind.MAGLEV, -120.0, 0.0, 80.0, 80.0)
+    flat = scenery_placements((target,), (corridor,), 1)
+    buildings = [rec for rec in records(flat) if int(rec[0]) != SceneryKind.MAGLEV]
+    assert -120.0 not in {rec[1] for rec in buildings}
+    assert len([rec for rec in buildings if rec[1] < 0.0 or rec[1] > 240.0]) == 3

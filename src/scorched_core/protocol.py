@@ -85,6 +85,9 @@ PICKUP_STRIDE: Final = 4  # x, y, colour index, kind
 PICKUP_CAP: Final = 40
 MISSILE_STRIDE: Final = 4  # x, y, angle, life fraction
 MISSILE_CAP: Final = 48
+# The stage's city layout is not a channel: it ships once in the manifest as flat records of
+# (scenery kind, x, distance, width, height, variant).
+CITY_STRIDE: Final = 6
 
 # Events channel: one record per event, written fresh every tick (never replayed).
 EVENT_STRIDE: Final = 6  # kind, x, y, a, b, c

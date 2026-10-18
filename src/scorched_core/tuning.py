@@ -161,6 +161,17 @@ HOVER_EXIT_SPEED: Final = 1.4  # units per step, straight down
 # aspect ratios (RESEARCH Pattern 14, about 1 / 1.065); it is exported in the manifest.
 GROUND_SCROLL_RATIO: Final = 0.94
 
+# The authored city (D-34): roads run down the screen at logical x = CITY_PITCH * c and across it
+# every CITY_PITCH distance units; the blocks between them fill the middle CITY_BLOCK of each
+# cell. GROUND_Y0 is the logical y of a ground placement when the scroll equals its distance, and
+# CITY_MAX_HEIGHT keeps every building top below the gameplay plane once the ground layer scales
+# it (the terrain sits 40 units under the plane).
+CITY_PITCH: Final = 80.0
+CITY_BLOCK: Final = 64.0
+GROUND_Y0: Final = -40.0
+CITY_MAX_HEIGHT: Final = 34.0
+CITY_CORRIDOR_HALF: Final = 6.0  # no lot is built this close to a maglev or runway line
+
 # The shooting gallery's looping spawn script (D-17), the stand-in for the Phase 3 stage
 # timeline. Entries are ``(tick, kind, x, y, motion, vx, vy, drop)`` sorted by tick: jets dive
 # in as a V from the top and sweep in from both sides, helicopters hover, carriers cruise.
