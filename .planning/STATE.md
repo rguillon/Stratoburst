@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Arcade Shooting Feel
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-10-18T03:00:29.850Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-10-18T03:08:24.967Z"
 last_activity: 2026-10-18
 last_activity_desc: Phase 02 execution started
-state_head: c960be1b4d15512ee202006a348d17d1267374b3
+state_head: ba9dc12736b1a071019fad1bc2b4f2536fd522b2
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 43
-  completed_plans: 11
+  completed_plans: 12
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 ## Current Position
 
 Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 2 of 33
+Plan: 3 of 33
 Status: Ready to execute
 Last activity: 2026-10-18 — Phase 02 execution started
 
@@ -67,6 +67,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 01 P09 | 20 min | 2 tasks | 24 files |
 | Phase 01 P10 | 30 min | 3 tasks | 2 files |
 | Phase 02 P01 | 6 min | 2 tasks | 11 files |
+| Phase 02 P02 | 12 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Plan 01-10 verdict was GO (desktop) with the phone gate deferred; phone gate (PLAT-05) then passed in Phase 1 UAT on 2026-10-17
 - [Phase 02]: 02-01: a killing blow pushes no HIT event (the EXPLOSION covers it), so a kill is exactly one event; HIT is pushed only for a surviving hit on a resting drone
 - [Phase 02]: 02-01: protocol v2 reserves header slots 14-29 for Phase 2 plans and 30-47 for Phase 3; event ids and blast classes are protocol constants exported by name through the manifest
+- [Phase 02]: 02-02: particle layers draw depthTest-off at renderOrder 4 (above terrain, below the playfield mask); explosion size never scales with tier, only particle count (1, 0.6, 0.35)
 
 ### Pending Todos
 
@@ -124,6 +126,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T03:00:29.778Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-10-18T03:08:24.899Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
