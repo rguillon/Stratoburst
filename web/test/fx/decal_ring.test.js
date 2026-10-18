@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createDecalRing } from '../../src/fx/decal_ring.js';
 
 const EVENTS = { EXPLOSION: 1, HIT: 2, STAGE_START: 20 };
-const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
+const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2, HUGE: 3 };
 const W = 240;
 const H = 320;
 const RATIO = 0.94;
@@ -75,6 +75,14 @@ describe('createDecalRing', () => {
       [60, 80, 24],
       [100, 50, 16],
     ]);
+  });
+
+  it('scorches a ground HUGE kill at 40, and an air HUGE explosion leaves nothing', () => {
+    const { ring } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.HUGE, 1, 3);
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.HUGE, 0, 3);
+    ring.update(100);
+    expect(drawn(ring)).toEqual([[100, 50, 40]]);
   });
 
   it('adds nothing for an air explosion, a SMALL blast, or another event', () => {

@@ -4,6 +4,7 @@ import {
   MAX_AMPLITUDE,
   MAX_DURATION_S,
   SHAKE_BOMB,
+  SHAKE_BOSS,
   SHAKE_DEATH,
   SHAKE_PART,
   createShake,
@@ -26,8 +27,9 @@ const EVENTS = {
   DEATHBOMB_SAVE: 11,
   SFX: 12,
   PART_DESTROYED: 15,
+  BOSS_DEFEATED: 18,
 };
-const BIG = new Set(['BOMB_DETONATE', 'PLAYER_DEATH', 'PART_DESTROYED']);
+const BIG = new Set(['BOMB_DETONATE', 'PLAYER_DEATH', 'PART_DESTROYED', 'BOSS_DEFEATED']);
 const STEP = 1 / 60;
 
 function build() {
@@ -57,6 +59,15 @@ describe('the tuned shakes', () => {
       expect(tuned.amplitude).toBeLessThanOrEqual(MAX_AMPLITUDE);
       expect(tuned.durationS).toBeLessThanOrEqual(MAX_DURATION_S);
     }
+  });
+});
+
+describe('the boss shake (D-14)', () => {
+  it('is the ceiling strength, never above it', () => {
+    expect(SHAKE_BOSS).toEqual({ amplitude: 3.0, durationS: 0.5 });
+    expect(Object.isFrozen(SHAKE_BOSS)).toBe(true);
+    expect(SHAKE_BOSS.amplitude).toBeLessThanOrEqual(MAX_AMPLITUDE);
+    expect(SHAKE_BOSS.durationS).toBeLessThanOrEqual(MAX_DURATION_S);
   });
 });
 
@@ -276,6 +287,89 @@ describe('createShake', () => {
       second.update(STEP);
       second.offset(out);
       expect(magnitude(out)).toBeCloseTo(2.0 * (1 - STEP / 0.35) ** 2, 6);
+    });
+
+    it('answers BOSS_DEFEATED with a ceiling-strength shake now and counts it', () => {
+      const shake = build();
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.BOSS_DEFEATED, 120, 84, 2, 0, 0);
+      expect(shake.active).toBe(true);
+      expect(shake.count).toBe(1);
+      shake.update(STEP);
+      shake.offset(out);
+      expect(magnitude(out)).toBeCloseTo(SHAKE_BOSS.amplitude * (1 - STEP / SHAKE_BOSS.durationS) ** 2, 6);
+    });
+
+    it('chains four ceiling-strength shakes over about 1.5 s, three more at 0.35 s intervals', () => {
+      const shake = build();
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.BOSS_DEFEATED, 120, 84, 2, 0, 0);
+      const counts = [];
+      const peaks = [];
+      let elapsed = 0;
+      let peak = 0;
+      let lastCount = shake.count;
+      for (let frame = 0; frame < 120; frame += 1) {
+        shake.update(STEP);
+        elapsed += STEP;
+        shake.offset(out);
+        peak = Math.max(peak, magnitude(out));
+        // Every trigger is clamped, so the offset never passes the amplitude ceiling.
+        expect(magnitude(out)).toBeLessThanOrEqual(MAX_AMPLITUDE + 1e-9);
+        if (shake.count !== lastCount) {
+          counts.push(elapsed);
+          peaks.push(peak);
+          lastCount = shake.count;
+        }
+      }
+      expect(shake.count).toBe(4);
+      // Triggers 2, 3 and 4 arrive at 0.35, 0.70 and 1.05 s of update time (to within a step).
+      expect(counts).toHaveLength(3);
+      counts.forEach((at, i) => expect(Math.abs(at - 0.35 * (i + 1))).toBeLessThanOrEqual(STEP + 1e-9));
+      // The last one has run out about 0.5 s after it started: the whole chain is about 1.5 s.
+      expect(shake.active).toBe(false);
+      expect(peaks.at(-1)).toBeGreaterThan(2);
+    });
+
+    it('restarts each shake in the chain at full strength', () => {
+      const shake = build();
+      const out = { x: 0, z: 0 };
+      shake.handle(EVENTS.BOSS_DEFEATED, 0, 0, 2, 0, 0);
+      shake.update(0.34);
+      shake.update(0.02); // the second trigger lands inside this step
+      shake.offset(out);
+      expect(shake.count).toBe(2);
+      expect(magnitude(out)).toBeGreaterThan(2.9);
+    });
+
+    it('holds the queued shakes while paused: a dt of 0 delays them', () => {
+      const shake = build();
+      shake.handle(EVENTS.BOSS_DEFEATED, 0, 0, 2, 0, 0);
+      shake.update(0.3);
+      for (let frame = 0; frame < 600; frame += 1) shake.update(0);
+      expect(shake.count).toBe(1);
+      shake.update(0.04);
+      expect(shake.count).toBe(1);
+      shake.update(0.02);
+      expect(shake.count).toBe(2);
+    });
+
+    it('queues the chain even when no shake is running, and a second defeat restarts the queue', () => {
+      const shake = build();
+      shake.handle(EVENTS.BOSS_DEFEATED, 0, 0, 2, 0, 0);
+      shake.update(0.7); // two triggers due; the burst keeps only the newest
+      shake.handle(EVENTS.BOSS_DEFEATED, 0, 0, 2, 0, 0);
+      for (let frame = 0; frame < 300; frame += 1) shake.update(STEP);
+      // 1 + 2 from the first chain, then 1 + 3 from the second.
+      expect(shake.count).toBe(7);
+      expect(shake.active).toBe(false);
+    });
+
+    it('never lets a very large step skip the chain: every queued shake is still counted', () => {
+      const shake = build();
+      shake.handle(EVENTS.BOSS_DEFEATED, 0, 0, 2, 0, 0);
+      shake.update(5);
+      expect(shake.count).toBe(4);
     });
 
     it('ignores PART_DESTROYED when the events table has no such event', () => {

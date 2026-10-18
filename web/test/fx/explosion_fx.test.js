@@ -20,7 +20,7 @@ import {
 
 const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, PLAYER_HIT: 6, PLAYER_DEATH: 7, MEDAL: 13 };
 const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4, MEDAL: 5 };
-const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
+const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2, HUGE: 3 };
 
 function build(options = {}) {
   const emitted = { additive: [], normal: [] };
@@ -485,5 +485,54 @@ describe('city target bursts (D-33, D-40)', () => {
   it('keeps every colour in the palette and out of the bullet band', () => {
     const palette = Object.values(PALETTE).map((entry) => entry.rgb.join());
     for (const e of CITY_SPARKS) expect(palette).toContain(e.color.join());
+  });
+});
+
+describe('the HUGE boss explosion (D-14)', () => {
+  const countOn = (recipe, layer) =>
+    recipe.filter((e) => e.layer === layer).reduce((n, e) => n + e.count, 0);
+
+  it('has a bigger core than LARGE and more particles on both layers', () => {
+    const { additive, normal } = explode(BLAST.HUGE);
+    const large = explode(BLAST.LARGE);
+    expect(additive[0].slice(7, 9)).toEqual([46, 80]);
+    expect(additive[0][7]).toBeGreaterThan(large.additive[0][7]);
+    expect(additive[0][8]).toBeGreaterThan(large.additive[0][8]);
+    expect(additive.length).toBeGreaterThan(large.additive.length);
+    expect(normal.length).toBeGreaterThan(large.normal.length);
+    expect(countOn(RECIPES.HUGE, 'additive')).toBe(additive.length);
+    expect(countOn(RECIPES.HUGE, 'normal')).toBe(normal.length);
+  });
+
+  it('throws cyan sparks, magenta embers and a white ring of 24 around the boss', () => {
+    const { additive } = explode(BLAST.HUGE);
+    const colourOf = (p) => p.slice(9, 12);
+    const has = (rgb) => additive.filter((p) => colourOf(p).join(',') === rgb.join(','));
+    expect(has(PALETTE.SPARK.rgb).length).toBeGreaterThanOrEqual(24);
+    expect(has(PALETTE.EMBER.rgb).length).toBeGreaterThanOrEqual(16);
+    const ring = has(PALETTE.HIT_SPARK.rgb);
+    expect(ring).toHaveLength(24);
+    const headings = ring
+      .map((p) => (Math.atan2(p[5], p[3]) + 2 * Math.PI) % (2 * Math.PI))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < headings.length; i += 1) {
+      expect(headings[i] - headings[i - 1]).toBeCloseTo((2 * Math.PI) / 24, 5);
+    }
+  });
+
+  it('scales the counts with the tier but never the sizes, keeping one particle per emitter', () => {
+    const full = explode(BLAST.HUGE, 1);
+    const low = explode(BLAST.HUGE, 0.35);
+    expect(low.additive.length).toBeLessThan(full.additive.length);
+    expect(low.normal.length).toBeLessThan(full.normal.length);
+    expect(low.additive[0].slice(7, 9)).toEqual(full.additive[0].slice(7, 9));
+    expect(sizeSet(low.additive)).toEqual(sizeSet(full.additive));
+    const tiny = explode(BLAST.HUGE, 0.001);
+    expect(tiny.additive.length + tiny.normal.length).toBe(RECIPES.HUGE.length);
+  });
+
+  it('is data keyed by the manifest blast name and frozen like the other recipes', () => {
+    expect(Object.isFrozen(RECIPES.HUGE)).toBe(true);
+    expect(Object.keys(RECIPES)).toContain('HUGE');
   });
 });
