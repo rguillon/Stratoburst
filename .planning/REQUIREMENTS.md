@@ -43,7 +43,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **ENMY-05**: Enemy waves follow a data-driven stage timeline
 - [ ] **ENMY-06**: Each stage ends with a multi-phase boss whose attack patterns change as it takes damage
 - [ ] **ENMY-07**: Bosses have destructible parts (turrets, wings) that can be shot off individually for points
-- [ ] **ENMY-08**: Enemies flash on hit and explode on destruction, leaving wrecks on ground units
+- [x] **ENMY-08**: Enemies flash on hit and explode on destruction, leaving wrecks on ground units
 - [ ] **ENMY-09**: Bosses have a timeout so a stage can always progress
 
 ### Stages & Campaign
@@ -51,7 +51,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **STGE-01**: Player can play a campaign of at least 3 stages, each with distinct terrain/setting (e.g. burning city, desert, coast/fleet)
 - [x] **STGE-02**: 3D terrain scrolls continuously beneath the gameplay plane, seen through a fixed tilted top-down camera
 - [ ] **STGE-03**: Ground scenery (buildings, props) can be destroyed by the player's fire
-- [ ] **STGE-04**: Explosions and destroyed units leave persistent scorch marks and burning wrecks on the terrain
+- [x] **STGE-04**: Explosions and destroyed units leave persistent scorch marks and burning wrecks on the terrain
 - [ ] **STGE-05**: Player can choose a difficulty (Easy / Normal / Hard) that changes enemy bullet speed/density and lives
 - [ ] **STGE-06**: Player can select any stage already reached to play it (stage select / practice)
 - [ ] **STGE-07**: Difficulty ramps across the campaign; stage 1 is approachable for a first-time player
@@ -170,12 +170,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENMY-05 | Phase 3 | Pending |
 | ENMY-06 | Phase 3 | Pending |
 | ENMY-07 | Phase 3 | Pending |
-| ENMY-08 | Phase 2 | Pending |
+| ENMY-08 | Phase 2 | Complete |
 | ENMY-09 | Phase 3 | Pending |
 | STGE-01 | Phase 4 | Pending |
 | STGE-02 | Phase 1 | Complete |
 | STGE-03 | Phase 3 | Pending |
-| STGE-04 | Phase 2 | Pending |
+| STGE-04 | Phase 2 | Complete |
 | STGE-05 | Phase 4 | Pending |
 | STGE-06 | Phase 4 | Pending |
 | STGE-07 | Phase 4 | Pending |
