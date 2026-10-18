@@ -4,7 +4,7 @@ from scorched_core.protocol import EV_EXPLOSION, EV_HIT, EVENT_CAP, EVENT_SOFT_C
 
 def test_a_new_ring_is_empty_and_preallocated() -> None:
     ring = EventRing()
-    assert (ring.n, ring.dropped) == (0, 0)
+    assert (ring.n, ring.dropped, ring.dropped_high) == (0, 0, 0)
     assert len(ring.buf) == EVENT_STRIDE * EVENT_CAP
     assert all(v == 0.0 for v in ring.buf)
 
@@ -64,3 +64,23 @@ def test_soft_cap_drops_stay_cumulative_across_clears() -> None:
     for _ in range(EVENT_SOFT_CAP):
         ring.push(EV_HIT, 0.0, 0.0, low=True)
     assert ring.dropped == 3
+
+
+def test_a_refused_high_priority_event_is_counted_apart_from_the_low_ones() -> None:
+    ring = EventRing()
+    for _ in range(EVENT_SOFT_CAP):
+        ring.push(EV_HIT, 0.0, 0.0, low=True)
+    assert ring.push(EV_HIT, 0.0, 0.0, low=True) is False
+    assert (ring.dropped, ring.dropped_high) == (1, 0)  # a refused spark is never a lost kill
+    for _ in range(EVENT_CAP - EVENT_SOFT_CAP):
+        ring.push(EV_EXPLOSION, 0.0, 0.0)
+    assert ring.push(EV_EXPLOSION, 0.0, 0.0) is False
+    assert (ring.dropped, ring.dropped_high) == (2, 1)
+
+
+def test_the_high_priority_drop_count_stays_cumulative_across_clears() -> None:
+    ring = EventRing()
+    for _ in range(EVENT_CAP + 2):
+        ring.push(EV_EXPLOSION, 0.0, 0.0)
+    ring.clear()
+    assert ring.dropped_high == 2

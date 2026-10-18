@@ -94,6 +94,25 @@ def test_the_forty_first_live_spawn_is_refused() -> None:
     assert pool.n == ENEMY_MAX_ALIVE < ENEMY_CAP
 
 
+def test_every_spawn_refused_at_the_alive_cap_is_counted() -> None:
+    pool = EnemyPool()
+    assert pool.refused == 0
+    for _ in range(ENEMY_MAX_ALIVE):
+        jet(pool)
+    assert pool.refused == 0  # filling the pool to the cap refuses nothing
+    assert not pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.0, 0.0)
+    assert not pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.0, 0.0)
+    assert pool.refused == 2
+
+
+def test_the_refused_count_survives_a_clear() -> None:
+    pool = EnemyPool()
+    for _ in range(ENEMY_MAX_ALIVE + 1):
+        pool.spawn(EnemyKind.JET, 100.0, 0.0, MotionKind.SWAY, 0.0, 0.0)
+    pool.clear()
+    assert pool.refused == 1
+
+
 def test_a_step_moves_down_and_follows_the_sine_sway() -> None:
     pool = EnemyPool()
     jet(pool, y=0.0)

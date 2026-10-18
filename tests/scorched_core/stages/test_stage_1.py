@@ -1,17 +1,24 @@
+import hashlib
 import itertools
 import math
 
+import pytest
+
 from scorched_core.bosses.stage_1_bosses import BOMBER_1, MIDBOSS_1
+from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.game.game import Game
+from scorched_core.input.button import Button
 from scorched_core.paths.path_library import PATHS, path_index
 from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
-from scorched_core.protocol import CITY_STRIDE, PLAYFIELD_W
+from scorched_core.protocol import CITY_STRIDE, H_NEW_RECORD, PLAYFIELD_W
 from scorched_core.stages.city_builder import target_entries
 from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.stages.stage_1 import (
     AIRBASE_AT,
@@ -32,6 +39,7 @@ from scorched_core.tuning import (
     GROUND_SCROLL_RATIO,
     SCROLL_SPEED,
 )
+from scorched_core.weapons.weapon_kind import WeaponKind
 
 ROAD_CENTRES = (80.0, 160.0)
 DISTANCE_PER_SECOND = 48.0  # 60 steps at 0.8 units each
@@ -470,3 +478,79 @@ def test_the_train_is_in_place_long_before_the_lull_after_its_marker_ends() -> N
 def test_no_wave_lies_in_the_lull_right_after_the_midboss_marker() -> None:
     midboss = STAGE_1.marker("midboss")
     assert [w for w in STAGE_1.waves if midboss <= w.at < midboss + MIDBOSS_LULL] == []
+
+
+# --- the whole stage, played through natively (plan 03-27) ---------------------------------------
+
+STAGE_BULLET_BUDGET = (
+    180  # live gameplay enemy bullets at the very most: under half the 400 cap (D-07)
+)
+FULL_STAGE_STEPS = 20000  # the play-through reaches the clear well inside this (about 17300)
+SWEEP_STEPS = 90  # the scripted ship sweeps right, then left, this many steps at a time
+PLAY_THROUGH = [
+    FlowState.INTRO,
+    FlowState.PLAY,
+    FlowState.MIDBOSS,
+    FlowState.PLAY,
+    FlowState.WARNING,
+    FlowState.BOSS,
+    FlowState.CLEAR,
+    FlowState.TALLY,
+    FlowState.STAGE_CLEAR,
+]
+
+
+def _play_the_full_stage() -> tuple[Game, list[FlowState], int, str]:
+    """God, a Lv5 laser, fire held and a left-right sweep from distance 0 until STAGE_CLEAR.
+
+    Returns the game, the flow states visited in order, the peak live gameplay enemy bullets and
+    a digest of header slots 0..49 over every tick.
+    """
+    game = Game(stage=STAGE_1, god=True, weapon=WeaponKind.LASER, level=5)
+    assert game.flow is not None
+    states: list[FlowState] = []
+    peak = 0
+    digest = hashlib.sha256()
+    header = game.buffers["header"]
+    for step in range(FULL_STAGE_STEPS):
+        sweep = 1.0 if (step // SWEEP_STEPS) % 2 == 0 else -1.0
+        game.tick(STEP_MS, Button.FIRE, sweep, 0.0, 0.0, 0.0)
+        if not states or states[-1] is not game.flow.state:
+            states.append(game.flow.state)
+        peak = max(peak, game.ebullets.n)
+        digest.update(header[: H_NEW_RECORD + 1].tobytes())
+        if game.flow.state is FlowState.STAGE_CLEAR:
+            break
+    return game, states, peak, digest.hexdigest()
+
+
+@pytest.fixture(scope="module")
+def full_stage() -> tuple[Game, list[FlowState], int, str]:
+    return _play_the_full_stage()
+
+
+def test_full_stage_plays_from_the_start_through_both_bosses_to_the_clear(
+    full_stage: tuple[Game, list[FlowState], int, str],
+) -> None:
+    _, states, _, _ = full_stage
+    assert states == PLAY_THROUGH
+
+
+def test_full_stage_refuses_no_enemy_spawn_and_drops_no_high_priority_event(
+    full_stage: tuple[Game, list[FlowState], int, str],
+) -> None:
+    game, _, _, _ = full_stage
+    assert game.enemies.refused == 0
+    assert game.events.dropped_high == 0
+
+
+def test_full_stage_keeps_raiden_pacing_in_the_bullet_count(
+    full_stage: tuple[Game, list[FlowState], int, str],
+) -> None:
+    _, _, peak, _ = full_stage
+    assert 0 < peak <= STAGE_BULLET_BUDGET
+
+
+def test_full_stage_is_deterministic(full_stage: tuple[Game, list[FlowState], int, str]) -> None:
+    _, _, _, digest = full_stage
+    assert _play_the_full_stage()[3] == digest
