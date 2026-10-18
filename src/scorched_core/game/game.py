@@ -411,6 +411,7 @@ class Game:
                 stage=stage,
                 chain=self.chain,
                 get_bombs=lambda: self.bomb.stock,  # the Bomb object is replaced by a restart
+                on_stage_restart=self._restart_stage,
             )
             if stage is not None
             else None
@@ -519,6 +520,29 @@ class Game:
         self._open_stage()
         flow.reset()
         self._pack_header(0)
+
+    def _restart_stage(self) -> None:
+        """Put stage 1 back to its start for the next loop, keeping what the player earned (D-27).
+
+        Score, lives, weapon and level, and the bomb stock stay. The scroll returns to distance 0 at
+        full speed (the ``?at=`` marker is honoured only by a game-over restart), the stage director
+        starts over, every enemy, bullet, missile and pickup pool is emptied and the ship flies in
+        again; the flow's own INTRO follows. Called by the flow as STAGE CLEAR ends.
+        """
+        director = self.director
+        if director is None:
+            msg = "the shooting gallery has no stage to restart"
+            raise ValueError(msg)
+        self.pbullets.clear()
+        self.ebullets.clear()
+        self.enemies.clear()
+        self.missiles.clear()
+        self.pickups.clear()
+        terrain = self.terrain
+        terrain.distance = 0.0
+        terrain.speed = terrain.target = SCROLL_SPEED
+        director.reset()
+        self.life.begin_fly_in(self.ship, 0)
 
     def manifest(self) -> dict[str, object]:
         """Describe the boundary layout so JS can allocate matching typed arrays."""

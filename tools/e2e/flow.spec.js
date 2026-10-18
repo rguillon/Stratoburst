@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { bootGame, readSlot } from './helpers.js';
 
-// SCOR-03 / D-18: killing the bomber leads to a four-line bonus tally that counts up on screen and adds
-// to the score. A level 5 laser held in the centre column (x 120) pierces the hull and both turrets. The
+// SCOR-03 / D-18 / D-27: killing the bomber leads to a four-line bonus tally that counts up on screen and
+// adds to the score, then a brief STAGE CLEAR, then stage 1 starts again with the score and lives kept. A level 5 laser held in the centre column (x 120) pierces the hull and both turrets. The
 // production build runs under software GL, and other specs run beside this one, so the waits are
 // generous: timing is not under test.
 
@@ -38,7 +38,7 @@ const waitForFlow = (page, name, timeout) =>
     { polling: 'raf', timeout },
   );
 
-test('the boss kill leads to a four-line bonus tally that counts up and adds to the score', async ({
+test('the boss kill leads to a counted-up tally, STAGE CLEAR, and a new loop with the score kept', async ({
   page,
 }) => {
   test.setTimeout(300_000);
@@ -84,6 +84,29 @@ test('the boss kill leads to a four-line bonus tally that counts up and adds to 
 
   // Every revealed line has been added to the score.
   const total = amounts.reduce((sum, amount) => sum + amount, 0);
-  expect(await readSlot(page, 'SCORE')).toBe(scoreBefore + total);
+  const scoreAfterTally = await readSlot(page, 'SCORE');
+  expect(scoreAfterTally).toBe(scoreBefore + total);
+
+  // STAGE CLEAR: the banner says so and the tally panel is gone.
+  await waitForFlow(page, 'STAGE_CLEAR', 30_000);
+  await page.waitForFunction(
+    () => {
+      const banner = document.getElementById('banner');
+      return !banner.hidden && banner.textContent === 'STAGE CLEAR';
+    },
+    null,
+    { polling: 'raf', timeout: 10_000 },
+  );
+  await expect(page.locator('#tally')).toBeHidden();
+  // The tally may have paid an extra ship (the 200000 threshold), so the ships are counted here.
+  const livesAtClear = await readSlot(page, 'LIVES');
+
+  // The D-27 loop: back through the intro at the start of the stage, with everything kept.
+  await waitForFlow(page, 'INTRO', 30_000);
+  expect(await readSlot(page, 'STAGE_DIST')).toBeLessThan(100);
+  expect(await readSlot(page, 'SCORE')).toBeGreaterThanOrEqual(scoreAfterTally);
+  expect(await readSlot(page, 'LIVES')).toBe(livesAtClear);
+  expect(await readSlot(page, 'TALLY_N')).toBe(0);
+  await expect(page.locator('#banner')).toHaveText('STAGE 1');
   await expect(page.locator('#error-panel')).toHaveCount(0);
 });

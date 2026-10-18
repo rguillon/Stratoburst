@@ -14,6 +14,7 @@ from scorched_core.protocol import (
     EBULLET_GAME_CAP,
     EV_BOSS_WARNING,
     EV_GAME_OVER,
+    EV_STAGE_CLEAR,
     EV_STAGE_START,
     EV_TALLY_LINE,
     PLAYFIELD_H,
@@ -33,6 +34,7 @@ from scorched_core.tuning import (
     MIDBOSS_CRAWL_SPEED,
     MIDBOSS_TRIGGER_WINDOW,
     SCROLL_SPEED,
+    STAGE_CLEAR_TICKS,
     TALLY_HOLD_TICKS,
     TALLY_LINE_TICKS,
     WARNING_TICKS,
@@ -60,6 +62,10 @@ def _no_bombs() -> int:
     return 0
 
 
+def _no_restart() -> None:
+    """Stand-in stage restart for a flow that is not wired to a game."""
+
+
 @dataclass(slots=True)
 class StageFlow:
     """INTRO, PLAY, the MIDBOSS fight inside it, the boss's WARNING, BOSS, CLEAR, TALLY, GAME_OVER.
@@ -84,7 +90,10 @@ class StageFlow:
     INTRO, the ships lost since the INTRO and the bombs ``get_bombs`` reports (a callable, because
     the game replaces its Bomb object on a restart), then reveals one line every
     ``TALLY_LINE_TICKS``, pays each through the score keeper, and after ``TALLY_HOLD_TICKS`` moves
-    on to STAGE_CLEAR. Game over wins over every one of these states.
+    on to STAGE_CLEAR. That pushes one STAGE_CLEAR event and raises ``save_requested``; after
+    ``STAGE_CLEAR_TICKS`` it calls ``on_stage_restart`` (the game puts the stage back to its start)
+    and the flow returns to the INTRO for the next loop (D-27). Game over wins over every one of
+    these states.
     """
 
     life: PlayerLife
@@ -100,6 +109,7 @@ class StageFlow:
     stage: StageData | None = None
     chain: MedalChain = field(default_factory=MedalChain)
     get_bombs: Callable[[], int] = _no_bombs
+    on_stage_restart: Callable[[], None] = _no_restart
     tally: StageTally = field(default_factory=StageTally, init=False)
     boss: BossController | None = field(default=None, init=False)
     boss_destroyed: bool = field(default=False, init=False)
@@ -173,14 +183,18 @@ class StageFlow:
                 self._count_the_clear()
             case FlowState.TALLY:
                 self._step_tally()
-            case _:  # STAGE_CLEAR holds
-                self.timer += 1
+            case _:  # STAGE_CLEAR
+                self._step_stage_clear()
 
     def reset(self) -> None:
         """Return to the INTRO with nothing requested and no fight under way (a new run)."""
+        self._rewind()
+        self.save_requested = False
+
+    def _rewind(self) -> None:
+        """Return to the INTRO with no fight under way and no tally; a request stays as it is."""
         self.state = FlowState.INTRO
         self.timer = 0
-        self.save_requested = False
         self.boss = None
         self.boss_destroyed = False
         self._midboss_done = False
@@ -291,6 +305,19 @@ class StageFlow:
         if tally.revealed == LINES and self.timer > _LAST_LINE_AT + TALLY_HOLD_TICKS:
             self.state = FlowState.STAGE_CLEAR
             self.timer = 0
+            self.events.push(EV_STAGE_CLEAR, 0.0, 0.0, self.stage_number)
+            self.save_requested = True
+
+    def _step_stage_clear(self) -> None:
+        """Count one STAGE CLEAR step; when it is over, the stage starts again from its beginning.
+
+        The game puts the world back (``on_stage_restart``), then the flow returns to the INTRO.
+        A save request raised on entering stays up for the high-score adapter to clear.
+        """
+        self.timer += 1
+        if self.timer >= STAGE_CLEAR_TICKS:
+            self.on_stage_restart()
+            self._rewind()
 
     def _game_over(self) -> None:
         """Enter GAME_OVER: one event with the final score and the record flag, one save request.
