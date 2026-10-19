@@ -1,5 +1,4 @@
 import pytest
-from scorched_core.stages.ground_entry import GroundEntry
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.pickup_kind import PickupKind
@@ -8,6 +7,7 @@ from scorched_core.stages.city_block import CityBlock
 from scorched_core.stages.city_builder import scenery_placements, target_entries
 from scorched_core.stages.city_feature import CityFeature
 from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.ground_entry import GroundEntry
 from scorched_core.stages.scenery_kind import SceneryKind
 from scorched_core.tuning import CITY_BLOCK, CITY_MAX_HEIGHT, CITY_PITCH
 

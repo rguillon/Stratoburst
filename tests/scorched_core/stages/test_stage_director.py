@@ -1,5 +1,4 @@
 import pytest
-from scorched_core.stages.ground_entry import GroundEntry
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
@@ -8,6 +7,7 @@ from scorched_core.paths.path_library import path_index
 from scorched_core.patterns.pattern_library import pattern_index
 from scorched_core.pools.enemy_pool import EnemyPool
 from scorched_core.protocol import PLAYFIELD_H
+from scorched_core.stages.ground_entry import GroundEntry
 from scorched_core.stages.stage_data import StageData
 from scorched_core.stages.stage_director import StageDirector
 from scorched_core.stages.wave_entry import WaveEntry

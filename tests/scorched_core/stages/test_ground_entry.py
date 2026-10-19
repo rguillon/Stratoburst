@@ -1,10 +1,10 @@
 import dataclasses
 
 import pytest
-from scorched_core.stages.ground_entry import GroundEntry
 
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.pickup_kind import PickupKind
+from scorched_core.stages.ground_entry import GroundEntry
 
 
 def test_an_entry_defaults_to_no_drop() -> None:

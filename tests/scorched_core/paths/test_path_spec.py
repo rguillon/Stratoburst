@@ -2,6 +2,7 @@ import dataclasses
 import math
 
 import pytest
+
 from scorched_core.paths.path_spec import PathSpec
 
 

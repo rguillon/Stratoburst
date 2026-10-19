@@ -1,8 +1,8 @@
 import dataclasses
 
 import pytest
-from scorched_core.bosses.emitter_spec import EmitterSpec
 
+from scorched_core.bosses.emitter_spec import EmitterSpec
 from scorched_core.patterns.pattern_library import pattern_index
 
 

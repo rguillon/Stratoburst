@@ -1,6 +1,6 @@
 import pytest
-from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 
+from scorched_core.bosses.stage_1_bosses import MIDBOSS_1
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.stages.city_block import CityBlock

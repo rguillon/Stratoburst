@@ -2,9 +2,9 @@ import dataclasses
 import math
 
 import pytest
-from scorched_core.patterns.pattern_spec import PatternSpec
 
 from scorched_core.patterns.fire_pattern import FirePattern
+from scorched_core.patterns.pattern_spec import PatternSpec
 from scorched_core.tuning import ENEMY_FIRE_DELAY
 
 

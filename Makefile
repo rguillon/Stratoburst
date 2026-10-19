@@ -33,8 +33,8 @@ browsers-ci: ## Download Playwright Chromium plus its system libraries (CI runne
 	npx playwright install --with-deps chromium
 
 lint: ## ruff check + ruff format --check
-	uv run ruff check .
-	uv run ruff format --check .
+	uv run ruff check --no-cache .
+	uv run ruff format --no-cache --check .
 
 format: ## Apply ruff fixes and formatting
 	uv run ruff check --fix .

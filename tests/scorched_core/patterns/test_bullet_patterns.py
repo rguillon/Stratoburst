@@ -2,11 +2,11 @@ import math
 from types import SimpleNamespace
 
 import pytest
-from scorched_core.patterns.pattern_spec import PatternSpec
 
 from scorched_core.patterns import bullet_patterns
 from scorched_core.patterns.bullet_patterns import fire_aimed, run_pattern
 from scorched_core.patterns.fire_pattern import FirePattern
+from scorched_core.patterns.pattern_spec import PatternSpec
 from scorched_core.pools.bullet_pool import BulletPool
 
 

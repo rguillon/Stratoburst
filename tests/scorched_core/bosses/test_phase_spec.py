@@ -1,9 +1,9 @@
 import dataclasses
 
 import pytest
+
 from scorched_core.bosses.emitter_spec import EmitterSpec
 from scorched_core.bosses.phase_spec import PhaseSpec
-
 from scorched_core.entities.enemy_kind import EnemyKind
 
 GUN = (EmitterSpec("train_hull_spread"),)
