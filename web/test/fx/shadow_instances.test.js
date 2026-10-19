@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/fx/palette.js';
 import { createShadowInstances } from '../../src/fx/shadow_instances.js';
-import { TERRAIN_DEPTH } from '../../src/render/terrain_ring.js';
+import { TERRAIN_DEPTH } from '../../src/render/ground_layer.js';
 
 const STRIDE = 8;
 const KINDS = { JET: 0, HELI: 1, CARRIER: 2, TANK: 3, TURRET: 4 };
@@ -97,6 +97,26 @@ describe('createShadowInstances', () => {
     expect(shadowAt(shadows.mesh, 0).scale.z).toBeCloseTo(13.5, 4);
     expect(shadowAt(shadows.mesh, 1).scale.x).toBeCloseTo(21, 4);
     expect(shadowAt(shadows.mesh, 2).scale.x).toBeCloseTo(13.5, 4);
+  });
+
+  it('sizes a kind by its sizeScale on top of the radius, so the bomber shadow matches its airframe', () => {
+    const { data, shadows } = build(6, { sizeScale: { 0: 3, 2: 2 } });
+    setEnemy(data, 0, 60, 100, 0); // JET radius 9, scaled 3
+    setEnemy(data, 1, 100, 100, 1); // HELI radius 10, no override
+    setEnemy(data, 2, 140, 100, 2); // CARRIER radius 14, scaled 2
+    shadows.update(3, 120, 280, true);
+    expect(shadowAt(shadows.mesh, 0).scale.x).toBeCloseTo(9 * 1.5 * 3, 4);
+    expect(shadowAt(shadows.mesh, 0).scale.z).toBeCloseTo(9 * 1.5 * 3, 4);
+    expect(shadowAt(shadows.mesh, 1).scale.x).toBeCloseTo(15, 4);
+    expect(shadowAt(shadows.mesh, 2).scale.x).toBeCloseTo(14 * 1.5 * 2, 4);
+    expect(shadowAt(shadows.mesh, 3).scale.x).toBeCloseTo(13.5, 4); // the ship is never scaled
+  });
+
+  it('ignores a sizeScale for a ground kind, which casts no shadow, and for a value that is not a kind', () => {
+    const { data, shadows } = build(6, { sizeScale: { 3: 3, 99: 3 } });
+    setEnemy(data, 0, 60, 100, 3); // TANK
+    shadows.update(1, 120, 280, false);
+    expect(shadows.mesh.count).toBe(0);
   });
 
   it('skips ground kinds and kinds it does not know', () => {

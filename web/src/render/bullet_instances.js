@@ -7,7 +7,7 @@ import { PALETTE } from '../fx/palette.js';
 // Styles:
 //   'flat' - a solid HDR square (the original look; `color` is HDR so it crosses the bloom threshold)
 //   'bolt' - a player tracer: an HDR streak stretched along the flight angle (aData.z, 0 = up the screen)
-//   'orb'  - the enemy bullet: hot-pink halo, white core, dark rim, LDR, drawn in the post-bloom pass
+//   'orb'  - the enemy bullet: hot orange-yellow halo, white core, dark rim, LDR, drawn in the post-bloom pass
 const ORB_RENDER_ORDER = 30;
 const BOLT_STRETCH = 2.5;
 const DEFAULT_SIZE = { orb: 6, bolt: 3 };
@@ -81,7 +81,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 
-// White core below radius 0.3, pink halo out to the rim band, near-black rim from 0.72 to the edge.
+// White core below radius 0.3, orange-yellow halo out to the rim band, near-black rim from 0.72 to the edge.
 // Hue alone never carries the bullet: the core is the brightest thing on screen and the rim is
 // darker than any fire behind it.
 const ORB_FRAGMENT = `
@@ -108,7 +108,7 @@ function buildMaterial(style, { color, size, halfW, halfH }) {
   switch (style) {
     case 'flat':
       return new THREE.ShaderMaterial({
-        uniforms: { ...base, uColor: { value: vec3(color ?? [4.0, 1.6, 0.4]) } },
+        uniforms: { ...base, uColor: { value: vec3(color ?? PALETTE.VULCAN_TRACER.rgb) } },
         vertexShader: FLAT_VERTEX,
         fragmentShader: FLAT_FRAGMENT,
         depthWrite: false,

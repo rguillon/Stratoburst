@@ -1,3 +1,4 @@
+import hashlib
 import itertools
 import math
 import random
@@ -8,31 +9,47 @@ from collections.abc import Callable
 import pytest
 
 from scorched_core.audio.sfx_id import SfxId
+from scorched_core.bosses.boss_state import BossState
+from scorched_core.bosses.stage_1_bosses import BOMBER_1, MIDBOSS_1
 from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.entities.player_phase import PlayerPhase
+from scorched_core.entities.player_ship import PlayerShip
 from scorched_core.game.fault_mode import FAULT_TICK, FaultMode
 from scorched_core.game.game import Game
 from scorched_core.input.button import Button
+from scorched_core.paths.path_library import PATHS
+from scorched_core.patterns.pattern_library import PATTERNS, pattern_index
 from scorched_core.protocol import (
+    BLAST_MEDIUM,
     EBULLET_GAME_CAP,
     EBULLET_STRIDE,
     ENEMY_CAP,
     ENEMY_STRIDE,
     EV_BOMB_DETONATE,
     EV_BOMB_LAUNCH,
+    EV_BOSS_DEFEATED,
+    EV_BOSS_PHASE,
+    EV_BOSS_RETREAT,
+    EV_BOSS_WARNING,
     EV_DEATHBOMB_SAVE,
     EV_ENEMY_FIRE,
     EV_EXPLOSION,
+    EV_EXTEND,
+    EV_GAME_OVER,
     EV_HIT,
+    EV_MEDAL,
+    EV_PART_DESTROYED,
     EV_PICKUP,
     EV_PLAYER_DEATH,
     EV_PLAYER_HIT,
     EV_RESPAWN,
     EV_SFX,
     EV_SHOT,
+    EV_STAGE_CLEAR,
+    EV_STAGE_START,
     EVENT_CAP,
     EVENT_STRIDE,
     FLAG_FIRING,
@@ -44,27 +61,47 @@ from scorched_core.protocol import (
     H_BOMB_X,
     H_BOMB_Y,
     H_BOMBS,
+    H_BOSS_ACTIVE,
+    H_BOSS_HP,
+    H_BOSS_PHASE,
+    H_BOSS_TIMER_S,
     H_DEATHS,
     H_EBULLET_N,
     H_ENEMY_N,
     H_EVENT_DROPPED,
     H_EVENT_N,
     H_FLAGS,
+    H_FLOW,
+    H_FLOW_T,
+    H_HIGH_SCORE,
     H_HITSTOP,
     H_INVULN,
     H_KILLS,
     H_LEVEL,
+    H_LIVES,
     H_MAX_BONUS,
+    H_MEDAL_CHAIN,
+    H_MEDAL_VALUE,
     H_MISSILE_N,
+    H_NEW_RECORD,
     H_PBULLET_N,
     H_PICKUP_N,
     H_PLAYER_PHASE,
+    H_SCORE,
+    H_SCROLL_RATE,
     H_SCROLL_Y,
     H_SHIP_X,
     H_SHIP_Y,
+    H_STAGE,
+    H_STAGE_DIST,
     H_STEPS,
     H_STORM_HITS,
     H_STORM_N,
+    H_TALLY_BOMBS,
+    H_TALLY_BOSS,
+    H_TALLY_MEDALS,
+    H_TALLY_N,
+    H_TALLY_NO_MISS,
     H_TICK_COUNT,
     H_WEAPON,
     HEADER_LEN,
@@ -77,8 +114,16 @@ from scorched_core.protocol import (
     PLAYFIELD_H,
     PLAYFIELD_W,
 )
+from scorched_core.stages.city_block import CityBlock
+from scorched_core.stages.city_builder import scenery_placements, target_entries
+from scorched_core.stages.city_style import CityStyle
+from scorched_core.stages.flow_state import FlowState
 from scorched_core.stages.gallery_spawner import GallerySpawner
+from scorched_core.stages.stage_1 import STAGE_1
+from scorched_core.stages.stage_data import StageData
+from scorched_core.stages.wave_entry import WaveEntry
 from scorched_core.tuning import (
+    AT_LEAD,
     BOMB_BLAST_TICKS,
     BOMB_DAMAGE,
     BOMB_INVULN_TAIL_TICKS,
@@ -86,20 +131,45 @@ from scorched_core.tuning import (
     BOMB_MAX_STOCK,
     BOMB_RADIUS_MIN,
     BOMB_START_STOCK,
+    BOSS_CRAWL_SPEED,
+    CLEAR_TICKS,
     DEATHBOMB_TICKS,
     DYING_TICKS,
     ENEMY_FIRE_DELAY,
     ENEMY_MAX_ALIVE,
+    ENEMY_POINTS,
+    EXTEND_FIRST,
     GALLERY_LOOP_TICKS,
+    GROUND_SCROLL_RATIO,
+    GROUND_Y0,
     HITSTOP_BOMB_TICKS,
+    HITSTOP_BOSS_TICKS,
     HITSTOP_DEATH_TICKS,
+    HITSTOP_PART_TICKS,
+    INTRO_TICKS,
     INVULN_RESPAWN_TICKS,
+    LIVES_CAP,
+    LIVES_START,
+    MAX_BONUS_POINTS,
+    MEDAL_RESERVE,
+    MIDBOSS_CRAWL_SPEED,
     PICKUP_RADIUS,
+    RESPAWN_START_Y,
+    SCORE_CAP,
+    SCROLL_ACCEL,
+    SCROLL_SPEED,
     SHIP_HALF_H,
     SHIP_HALF_W,
     SHIP_SPEED,
     SHIP_START_X,
     SHIP_START_Y,
+    STAGE_CLEAR_TICKS,
+    TALLY_BOMB_BONUS,
+    TALLY_BOSS_BONUS,
+    TALLY_LINE_TICKS,
+    TALLY_MEDAL_BONUS,
+    TALLY_NO_MISS_BONUS,
+    WARNING_TICKS,
 )
 from scorched_core.weapons.bomb_phase import BombPhase
 from scorched_core.weapons.pickup_outcome import PickupOutcome
@@ -108,7 +178,7 @@ from scorched_core.weapons.weapon_kind import WeaponKind
 
 def test_manifest_contract() -> None:
     manifest = Game().manifest()
-    assert manifest["protocol"] == 2
+    assert manifest["protocol"] == 3
     assert manifest["playfield"] == {"w": 240.0, "h": 320.0}
     header = manifest["header"]
     assert header["len"] == HEADER_LEN
@@ -119,7 +189,7 @@ def test_manifest_contract() -> None:
     assert not {"DRONE_N", "DRONES_DOWN"} & header["slots"].keys()
     assert header["slots"]["EVENT_N"] == 12
     assert header["slots"]["EVENT_DROPPED"] == 13
-    assert header["len"] == 48
+    assert header["len"] == 64
     assert header["slots"]["WEAPON"] == 16 == H_WEAPON
     assert header["slots"]["LEVEL"] == 17 == H_LEVEL
     assert header["slots"]["BEAM_W"] == 18 == H_BEAM_W
@@ -136,20 +206,45 @@ def test_manifest_contract() -> None:
     assert header["slots"]["BOMB_X"] == 27 == H_BOMB_X
     assert header["slots"]["BOMB_Y"] == 28 == H_BOMB_Y
     assert header["slots"]["BOMB_T"] == 29 == H_BOMB_T
-    assert len(header["slots"]) == 30
+    assert len(header["slots"]) == 50
     assert manifest["weapons"] == {"VULCAN": 0, "LASER": 1, "HOMING": 2}
     assert manifest["outcomes"] == {"RAISED": 0, "SWITCHED": 1, "MAXED": 2, "STOCKED": 3}
     assert manifest["channels"] == {
         "pbullets": {"stride": PBULLET_STRIDE, "cap": PBULLET_CAP},
         "ebullets": {"stride": EBULLET_STRIDE, "cap": 600 + EBULLET_GAME_CAP},
         "enemies": {"stride": ENEMY_STRIDE, "cap": ENEMY_CAP},
-        "pickups": {"stride": 4, "cap": 16},
+        "pickups": {"stride": 4, "cap": 40},
         "missiles": {"stride": MISSILE_STRIDE, "cap": MISSILE_CAP},
         "events": {"stride": 6, "cap": 128},
     }
-    assert manifest["pickup_kinds"] == {"RED": 0, "BLUE": 1, "PURPLE": 2, "CRYSTAL": 3, "BOMB": 4}
+    assert manifest["pickup_kinds"] == {
+        "RED": 0,
+        "BLUE": 1,
+        "PURPLE": 2,
+        "CRYSTAL": 3,
+        "BOMB": 4,
+        "MEDAL": 5,
+    }
     assert manifest["flags"] == {"PAUSED": 1, "FIRING": 2}
-    assert manifest["enemy_kinds"] == {"JET": 0, "HELI": 1, "CARRIER": 2, "TANK": 3, "TURRET": 4}
+    assert manifest["enemy_kinds"] == {
+        "JET": 0,
+        "HELI": 1,
+        "CARRIER": 2,
+        "TANK": 3,
+        "TURRET": 4,
+        "TRAIN": 5,
+        "TRAIN_TURRET": 6,
+        "TRAIN_STUMP": 7,
+        "HOUSE": 8,
+        "FUEL_TANK": 9,
+        "DEPOT": 10,
+        "BILLBOARD": 11,
+        "BOMBER": 12,
+        "BOMBER_TURRET": 13,
+        "BOMBER_ENGINE": 14,
+        "BOMBER_STUMP": 15,
+        "BOMBER_OPEN": 16,
+    }
 
 
 def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
@@ -167,8 +262,150 @@ def test_manifest_publishes_every_event_id_and_blast_class_by_name() -> None:
         "BOMB_DETONATE": 10,
         "DEATHBOMB_SAVE": 11,
         "SFX": 12,
+        "MEDAL": 13,
+        "EXTEND": 14,
+        "PART_DESTROYED": 15,
+        "BOSS_WARNING": 16,
+        "BOSS_PHASE": 17,
+        "BOSS_DEFEATED": 18,
+        "BOSS_RETREAT": 19,
+        "STAGE_START": 20,
+        "STAGE_CLEAR": 21,
+        "TALLY_LINE": 22,
+        "GAME_OVER": 23,
     }
-    assert manifest["blast"] == {"SMALL": 0, "MEDIUM": 1, "LARGE": 2}
+    assert manifest["blast"] == {"SMALL": 0, "MEDIUM": 1, "LARGE": 2, "HUGE": 3}
+
+
+def test_protocol_three_header_slots_30_to_49_carry_the_phase_three_state() -> None:
+    slots = Game().manifest()["header"]["slots"]
+    names = (
+        "SCORE",
+        "HIGH_SCORE",
+        "LIVES",
+        "FLOW",
+        "FLOW_T",
+        "STAGE",
+        "STAGE_DIST",
+        "SCROLL_RATE",
+        "BOSS_ACTIVE",
+        "BOSS_PHASE",
+        "BOSS_HP",
+        "BOSS_TIMER_S",
+        "MEDAL_VALUE",
+        "MEDAL_CHAIN",
+        "TALLY_BOSS",
+        "TALLY_MEDALS",
+        "TALLY_NO_MISS",
+        "TALLY_BOMBS",
+        "TALLY_N",
+        "NEW_RECORD",
+    )
+    assert {name: slots[name] for name in names} == {name: 30 + i for i, name in enumerate(names)}
+    assert H_NEW_RECORD == 49
+    assert HEADER_LEN == 64  # slots 50-63 are reserved for Phase 4
+
+
+def test_the_raised_caps_are_part_of_protocol_three() -> None:
+    channels = Game().manifest()["channels"]
+    assert ENEMY_CAP == 64
+    assert PICKUP_CAP == 40
+    assert EBULLET_GAME_CAP == 400
+    assert ENEMY_MAX_ALIVE == 56
+    assert channels["enemies"]["cap"] == 64
+    assert channels["pickups"]["cap"] == 40
+    assert channels["ebullets"]["cap"] == 600 + 400
+    assert Game(stress=750).manifest()["channels"]["ebullets"]["cap"] == 1150
+
+
+def test_manifest_publishes_the_flow_states_by_name() -> None:
+    assert Game().manifest()["flow_states"] == {
+        "INTRO": 0,
+        "PLAY": 1,
+        "MIDBOSS": 2,
+        "WARNING": 3,
+        "BOSS": 4,
+        "CLEAR": 5,
+        "TALLY": 6,
+        "STAGE_CLEAR": 7,
+        "GAME_OVER": 8,
+    }
+
+
+def test_manifest_stage_describes_the_stage_markers_in_stage_mode() -> None:
+    assert Game(stage=STAGE_1).manifest()["stage"] == {
+        "number": 1,
+        "length": STAGE_1.length,
+        "markers": {"midboss": 4200.0, "boss": 8640.0},
+        "loop": False,
+        "city": list(STAGE_1.placements),
+        "city_stride": 6,
+        "block_pitch": 80.0,
+        "block_size": 64.0,
+        "bosses": [
+            {"slot": 1, "name": "midboss", "phase_fracs": [0.5]},
+            {"slot": 2, "name": "boss", "phase_fracs": [0.6, 0.25]},
+        ],
+    }
+
+
+def test_manifest_stage_city_is_the_expanded_layout_of_the_stage() -> None:
+    blocks = (CityBlock(d=0.0, col=1, cols=2, rows=2, style=CityStyle.DOWNTOWN, seed=4),)
+    stage = StageData(number=2, length=100.0, waves=(), markers=(), city=blocks, seed=5)
+    city = Game(stage=stage).manifest()["stage"]["city"]
+    assert city == list(scenery_placements(blocks, (), 5))
+    assert len(city) > 0
+    assert len(city) % 6 == 0
+
+
+def test_manifest_stage_is_stage_zero_and_looping_in_the_gallery() -> None:
+    assert Game().manifest()["stage"] == {
+        "number": 0,
+        "length": STAGE_1.length,
+        "markers": {},
+        "loop": True,
+        "city": list(STAGE_1.placements),
+        "city_stride": 6,
+        "block_pitch": 80.0,
+        "block_size": 64.0,
+        "bosses": [],
+    }
+
+
+def test_manifest_publishes_the_scenery_kinds_by_name() -> None:
+    assert Game().manifest()["scenery_kinds"] == {
+        "SLUM_HOUSE": 0,
+        "LOWRISE": 1,
+        "TOWER": 2,
+        "SIGN": 3,
+        "MAGLEV": 4,
+        "HANGAR": 5,
+        "RUNWAY_LIGHT": 6,
+        "FIRE": 7,
+        "LAMP": 8,
+    }
+
+
+def test_the_stage_header_shows_stage_one_the_intro_and_a_growing_distance() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    for _ in range(10):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    header = game.buffers["header"]
+    assert header[H_STAGE] == 1
+    assert header[H_FLOW] == FlowState.INTRO
+    assert header[H_STAGE_DIST] == pytest.approx(game.terrain.distance, rel=1e-6)
+    assert header[H_STAGE_DIST] == pytest.approx(8.0, rel=1e-6)
+    assert header[H_SCROLL_RATE] == pytest.approx(game.terrain.speed, rel=1e-6)
+
+
+def test_the_gallery_header_shows_stage_zero_and_no_flow() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    header = game.buffers["header"]
+    assert header[H_STAGE] == 0
+    assert header[H_FLOW] == -1
+    assert header[H_STAGE_DIST] == 0
+    assert header[H_SCROLL_RATE] == pytest.approx(0.8, rel=1e-6)
 
 
 def test_manifest_publishes_every_sfx_id_by_name() -> None:
@@ -208,8 +445,13 @@ def test_manifest_publishes_the_tuning_the_renderer_extrapolates_with() -> None:
         "scroll_speed": 0.8,
         "hitbox_radius": 2.0,
         "ground_scroll_ratio": 0.94,
-        "enemy_ground": [0, 0, 0, 1, 1],
-        "enemy_radius": [9.0, 10.0, 14.0, 11.0, 10.0],
+        "ground_y0": -40.0,
+        "enemy_ground": [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+        "enemy_radius": [
+            *[9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0],
+            *[28.0, 10.0, 12.0, 6.0, 28.0],
+        ],
+        "enemy_wreck": [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0],
         "bomb_radius_min": 20.0,
         "bomb_radius_max": 230.0,
         "bomb_grow_ticks": 30,
@@ -1053,8 +1295,11 @@ def test_a_hit_that_does_not_kill_publishes_one_hit_event() -> None:
 def test_the_manifest_exports_the_ground_scroll_ratio_and_per_kind_radii() -> None:
     tuning = Game().manifest()["tuning"]
     assert tuning["ground_scroll_ratio"] == 0.94
-    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1]
-    assert tuning["enemy_radius"] == [9.0, 10.0, 14.0, 11.0, 10.0]
+    assert tuning["enemy_ground"] == [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+    assert tuning["enemy_radius"] == [
+        *[9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0],
+        *[28.0, 10.0, 12.0, 6.0, 28.0],
+    ]
 
 
 def test_a_ground_tank_scrolls_with_the_terrain_through_the_game_step() -> None:
@@ -1369,7 +1614,13 @@ def test_the_enemy_fire_event_reaches_the_event_ring_once() -> None:
 
 
 def test_the_manifest_publishes_the_fire_patterns_by_name() -> None:
-    assert Game().manifest()["fire_patterns"] == {"NONE": 0, "AIMED": 1, "RING": 2}
+    assert Game().manifest()["fire_patterns"] == {
+        "NONE": 0,
+        "AIMED": 1,
+        "RING": 2,
+        "SPREAD": 3,
+        "STREAM": 4,
+    }
 
 
 def _gallery_run(seed: int, steps: int) -> tuple[int, bytes]:
@@ -1430,7 +1681,13 @@ def _tick_until(game: Game, done: Callable[[Game], bool], limit: int = 600) -> i
 
 
 def test_manifest_maps_the_player_phases() -> None:
-    assert Game().manifest()["phases"] == {"ALIVE": 0, "GRACE": 1, "DYING": 2, "RESPAWN": 3}
+    assert Game().manifest()["phases"] == {
+        "ALIVE": 0,
+        "GRACE": 1,
+        "DYING": 2,
+        "RESPAWN": 3,
+        "OUT": 4,
+    }
 
 
 def test_an_enemy_bullet_on_the_hitbox_starts_the_grace_window_grace() -> None:
@@ -2572,3 +2829,1854 @@ def test_no_hitstop_on_kills_ordinary_hits_and_the_deathbomb_save_never_freeze()
     assert _header(game, H_HITSTOP) == 0
     _tick_n(game, 5)
     assert _header(game, H_HITSTOP) == 0
+
+
+def _steps_until_distance(at: float) -> int:
+    """Return how many scroll steps the accumulated distance needs to reach ``at``."""
+    distance, steps = 0.0, 0
+    while distance < at:
+        distance += SCROLL_SPEED
+        steps += 1
+    return steps
+
+
+_TARGET_KINDS = (EnemyKind.HOUSE, EnemyKind.FUEL_TANK, EnemyKind.DEPOT, EnemyKind.BILLBOARD)
+
+
+def _wave_rows(game: Game) -> list[int]:
+    """The live enemy slots that came from the timeline's waves, not the city's target rows."""
+    enemies = game.enemies
+    return [i for i in range(enemies.n) if enemies.kind[i] not in _TARGET_KINDS]
+
+
+def test_a_stage_game_spawns_the_first_entry_on_the_step_its_distance_is_reached() -> None:
+    first = STAGE_1.waves[0]
+    game = Game(stage=STAGE_1, god=True)
+    due = _steps_until_distance(first.at)
+    assert due > 1
+    for _ in range(due - 1):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        assert not _wave_rows(game)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    rows = _wave_rows(game)
+    assert rows
+    assert game.enemies.kind[rows[0]] == first.kind
+
+
+def test_a_stage_game_does_not_run_the_gallery_script() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    for _ in range(31):  # the gallery's first jet would spawn on tick 30
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 0
+
+
+def test_a_game_without_a_stage_keeps_running_the_gallery() -> None:
+    game = Game(god=True)
+    assert game.stage is None
+    assert game.director is None
+    for _ in range(31):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 1
+
+
+def test_a_stage_game_exposes_its_stage_and_director() -> None:
+    game = Game(stage=STAGE_1)
+    assert game.stage is STAGE_1
+    assert game.director is not None
+    assert game.director.stage is STAGE_1
+
+
+def _gallery_digest(ticks: int) -> str:
+    """Hash the header slots 0-29 and the live enemy rows of every tick of a fixed gallery run."""
+    game = Game(seed=1, god=True)
+    sha = hashlib.sha256()
+    for i in range(ticks):
+        game.tick(STEP_MS, Button.FIRE, math.sin(i / 40.0), 0.0, 0.0, 0.0)
+        sha.update(game.buffers["header"][:30].tobytes())
+        n = int(game.buffers["header"][H_ENEMY_N])
+        sha.update(game.buffers["enemies"][: n * ENEMY_STRIDE].tobytes())
+    return sha.hexdigest()
+
+
+def test_the_gallery_is_byte_identical_to_the_phase_two_core_over_1200_steps() -> None:
+    # Recorded from the core before the variable scroll speed and the stage director landed.
+    expected = "3cf3728aa65ef07d368e01ba7cdc355a7b12c67eb39727defb64609cc468d2b4"
+    assert _gallery_digest(1200) == expected
+
+
+def test_the_first_spread_wave_fires_count_bullets_fanned_around_the_ship_direction() -> None:
+    spec = PATTERNS["spread3"]
+    game = Game(stage=STAGE_1, god=True)
+    for _ in range(600):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        if game.ebullets.n:
+            break
+    assert game.enemies.pattern[_wave_rows(game)[0]] == pattern_index("spread3")
+    assert game.ebullets.n == spec.count == 3  # exactly the first volley, nothing else yet
+    muzzle_x, muzzle_y = game.ebullets.x[0], game.ebullets.y[0]
+    aim = math.atan2(game.ship.x - muzzle_x, -(game.ship.y - muzzle_y))
+    half = math.radians(spec.arc_deg) / 2.0
+    angles = sorted(math.remainder(game.ebullets.angle[k] - aim, math.tau) for k in range(3))
+    assert angles == pytest.approx([-half, 0.0, half], abs=1e-4)
+
+
+def _gallery_fire_digest(ticks: int) -> str:
+    """Hash the enemy-bullet floats and the event records of every tick of a fixed gallery run."""
+    game = Game(seed=1, god=True)
+    sha = hashlib.sha256()
+    for i in range(ticks):
+        game.tick(STEP_MS, Button.FIRE, math.sin(i / 40.0), math.cos(i / 55.0), 0.0, 0.0)
+        live = (game.storm_pool.n + game.ebullets.n) * EBULLET_STRIDE
+        sha.update(game.buffers["ebullets"][:live].tobytes())
+        sha.update(game.events.buf[: game.events.n * EVENT_STRIDE].tobytes())
+    return sha.hexdigest()
+
+
+def test_the_gallery_enemy_fire_matches_the_pre_pattern_digest() -> None:
+    # Recorded from the core before enemy fire became PatternSpec data (7770 bullet-steps).
+    expected = "190cd5b18ad6041f099ccc943de2f321513adf551dffa4699f4eee187bdbf3b8"
+    assert _gallery_fire_digest(1200) == expected
+
+
+def _spaced_stage() -> StageData:
+    """One row before the 1000 marker's jump, one just after it, one far after."""
+    jet = WaveEntry(at=100.0, kind=EnemyKind.JET, x=120.0)
+    return StageData(
+        number=9,
+        length=2000.0,
+        waves=(
+            jet,
+            WaveEntry(at=680.0, kind=EnemyKind.JET, x=120.0),
+            WaveEntry(at=700.0, kind=EnemyKind.HELI, x=120.0),
+        ),
+        markers=(("midboss", 500.0), ("boss", 1000.0)),
+    )
+
+
+def test_starting_at_a_marker_begins_one_lead_before_it() -> None:
+    game = Game(stage=STAGE_1, at="boss")
+    assert game.terrain.distance == STAGE_1.marker("boss") - AT_LEAD
+    midboss = Game(stage=STAGE_1, at="midboss")
+    assert midboss.terrain.distance == STAGE_1.marker("midboss") - AT_LEAD
+
+
+def test_the_header_reports_the_jumped_scroll_distance() -> None:
+    game = Game(stage=STAGE_1, at="boss")
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.buffers["header"][H_SCROLL_Y] == pytest.approx(
+        STAGE_1.marker("boss") - AT_LEAD + SCROLL_SPEED
+    )
+
+
+def test_a_jump_skips_every_entry_at_or_before_the_start_distance() -> None:
+    game = Game(stage=_spaced_stage(), at="boss", god=True)
+    assert game.terrain.distance == 1000.0 - AT_LEAD
+    assert game.director is not None
+    assert game.director.cursor == 2  # the rows at 100 and 680 are skipped, never spawned
+    for _ in range(24):  # 24 * 0.8 = 19.2 units: still short of 700
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 0
+    for _ in range(2):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 1
+    assert game.enemies.kind[0] == EnemyKind.HELI
+
+
+def test_a_marker_closer_than_one_lead_starts_at_zero_and_keeps_the_whole_timeline() -> None:
+    stage = StageData(
+        number=9,
+        length=400.0,
+        waves=(WaveEntry(at=0.0, kind=EnemyKind.JET, x=120.0),),
+        markers=(("boss", 100.0),),
+    )
+    game = Game(stage=stage, at="boss", god=True)
+    assert game.terrain.distance == 0.0
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.n == 1
+
+
+def test_at_without_a_stage_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="stage"):
+        Game(at="boss")
+
+
+def test_an_unknown_marker_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="nowhere"):
+        Game(stage=STAGE_1, at="nowhere")
+
+
+def test_ground_units_follow_the_current_scroll_speed() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    game.terrain.speed = game.terrain.target = 0.2  # a crawl
+    game.enemies.spawn(EnemyKind.TANK, 80.0, 50.0, MotionKind.GROUND, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.y[0] == pytest.approx(50.0 + 0.2 * GROUND_SCROLL_RATIO, abs=1e-4)
+
+
+def test_ground_units_slow_with_a_scroll_ramp() -> None:
+    game = Game(stage=STAGE_1, god=True)
+    game.terrain.set_target(0.0)
+    game.enemies.spawn(EnemyKind.TANK, 80.0, 50.0, MotionKind.GROUND, 0.0, 0.0)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    speed = SCROLL_SPEED - SCROLL_ACCEL
+    assert game.enemies.y[0] == pytest.approx(50.0 + speed * GROUND_SCROLL_RATIO, abs=1e-4)
+
+
+def _along(points: tuple[tuple[float, float], ...], distance: float) -> tuple[float, float]:
+    """The offset ``distance`` units along a polyline (test oracle, independent of the pool)."""
+    for (x0, y0), (x1, y1) in itertools.pairwise(points):
+        length = math.hypot(x1 - x0, y1 - y0)
+        if distance <= length:
+            return x0 + (x1 - x0) * distance / length, y0 + (y1 - y0) * distance / length
+        distance -= length
+    raise AssertionError("distance runs past the polyline")
+
+
+def _path_stage(*waves: WaveEntry) -> StageData:
+    return StageData(number=9, length=2000.0, waves=waves, markers=())
+
+
+def test_a_stage_jet_flies_its_authored_path_at_the_path_speed() -> None:
+    spec = PATHS["swoop"]
+    wave = WaveEntry(
+        at=0.0, kind=EnemyKind.JET, x=20.0, y=-16.0, motion=MotionKind.PATH, path="swoop"
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    for k in range(1, 61):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        dx, dy = _along(spec.points, k * spec.speed)
+        assert game.enemies.x[0] == pytest.approx(20.0 + dx, abs=1e-2)
+        assert game.enemies.y[0] == pytest.approx(-16.0 + dy, abs=1e-2)
+
+
+def test_a_mirrored_stage_jet_flies_the_reflected_path() -> None:
+    spec = PATHS["swoop"]
+    wave = WaveEntry(
+        at=0.0,
+        kind=EnemyKind.JET,
+        x=220.0,
+        y=-16.0,
+        motion=MotionKind.PATH,
+        path="swoop",
+        mirror=True,
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    for _ in range(40):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    dx, dy = _along(spec.points, 40 * spec.speed)
+    assert game.enemies.x[0] == pytest.approx(220.0 - dx, abs=1e-2)
+    assert game.enemies.y[0] == pytest.approx(-16.0 + dy, abs=1e-2)
+
+
+def test_a_stage_tank_drives_down_its_road_with_the_scroll() -> None:
+    spec = PATHS["road_down"]
+    wave = WaveEntry(
+        at=0.0, kind=EnemyKind.TANK, x=80.0, y=-16.0, motion=MotionKind.PATH, path="road_down"
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    for k in range(1, 31):
+        game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        ground = game.terrain.speed * GROUND_SCROLL_RATIO
+        assert game.enemies.x[0] == pytest.approx(80.0, abs=1e-3)
+        assert game.enemies.y[0] == pytest.approx(-16.0 + k * (ground + spec.speed), abs=1e-2)
+
+
+def test_a_stage_tank_on_a_road_stays_put_on_the_terrain_when_the_scroll_stops() -> None:
+    wave = WaveEntry(
+        at=0.0, kind=EnemyKind.TANK, x=80.0, y=40.0, motion=MotionKind.PATH, path="road_down"
+    )
+    game = Game(stage=_path_stage(wave), god=True)
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    game.terrain.speed = game.terrain.target = 0.0
+    before = float(game.enemies.y[0])
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert game.enemies.y[0] - before == pytest.approx(PATHS["road_down"].speed, abs=1e-4)
+
+
+def _shoot_down(game: Game, kind: EnemyKind) -> None:
+    """Park one one-hp enemy of ``kind`` above a bolt that reaches it on the next step."""
+    x, y = game.ship.x, game.ship.y - 40.0
+    game.enemies.n = 0
+    game.enemies.spawn(kind, x, y, MotionKind.SWAY, 0.0, 0.0)
+    game.enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def test_a_new_game_starts_at_zero_with_three_lives_scoring() -> None:
+    game = Game()
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_HIGH_SCORE], header[H_NEW_RECORD]) == (0.0, 0.0, 0.0)
+    assert header[H_LIVES] == LIVES_START == 3
+
+
+def test_shooting_down_a_jet_adds_exactly_three_hundred_to_the_score_scoring() -> None:
+    game = Game()
+    _shoot_down(game, EnemyKind.JET)
+    _tick(game)
+    header = game.buffers["header"]
+    assert header[H_KILLS] == 1
+    assert header[H_SCORE] == 300.0
+    assert game.score.score == 300
+
+
+@pytest.mark.parametrize("kind", list(EnemyKind))
+def test_every_kind_pays_its_fixed_points_with_no_multiplier_scoring(kind: EnemyKind) -> None:
+    game = Game()
+    _shoot_down(game, kind)
+    _tick(game)
+    assert game.buffers["header"][H_SCORE] == float(ENEMY_POINTS[kind])
+
+
+def test_two_kills_in_a_row_just_add_up_scoring() -> None:
+    game = Game()
+    _shoot_down(game, EnemyKind.HELI)
+    _tick(game)
+    _shoot_down(game, EnemyKind.TANK)
+    _tick(game)
+    assert game.buffers["header"][H_SCORE] == 800.0 + 1000.0
+
+
+def test_a_step_without_a_kill_pays_nothing_scoring() -> None:
+    game = Game()
+    _tick_n(game, 30)
+    assert game.buffers["header"][H_SCORE] == 0.0
+
+
+def test_the_high_score_follows_the_score_scoring() -> None:
+    game = Game()
+    _shoot_down(game, EnemyKind.CARRIER)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_HIGH_SCORE]) == (2000.0, 2000.0)
+
+
+def test_a_starting_high_score_is_shown_and_is_not_a_new_record_scoring() -> None:
+    game = Game(high_score=5000)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_HIGH_SCORE], header[H_NEW_RECORD]) == (5000.0, 0.0)
+
+
+def test_passing_the_starting_high_score_raises_it_and_flags_a_new_record_scoring() -> None:
+    game = Game(high_score=5000)
+    game.score.score = 4900
+    _shoot_down(game, EnemyKind.JET)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_HIGH_SCORE], header[H_NEW_RECORD]) == (
+        5200.0,
+        5200.0,
+        1.0,
+    )
+
+
+def test_a_maxed_catch_pays_the_flat_bonus_and_still_counts_scoring() -> None:
+    game = Game(level=5)
+    _drop_and_stand_on_it(game)
+    _tick(game)
+    assert game.max_bonus == 1
+    assert game.buffers["header"][H_SCORE] == float(2000 + MAX_BONUS_POINTS)
+
+
+def test_a_kill_that_reaches_two_hundred_thousand_adds_a_ship_and_one_extend_event_extend() -> None:
+    game = Game()
+    game.score.score = 199_800
+    _shoot_down(game, EnemyKind.JET)
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_SCORE], header[H_LIVES]) == (200_100.0, 4.0)
+    events = game.buffers["events"]
+    extends = [i for i in range(int(header[H_EVENT_N])) if events[i * EVENT_STRIDE] == EV_EXTEND]
+    assert len(extends) == 1
+    assert events[extends[0] * EVENT_STRIDE + 3] == 4.0  # the lives after the extend
+
+
+def test_a_maxed_catch_can_earn_an_extend_extend() -> None:
+    game = Game(level=5)
+    game.score.score = 195_000
+    _drop_and_stand_on_it(game)
+    _tick(game)
+    assert game.score.score == 195_000 + 2000 + MAX_BONUS_POINTS
+    assert game.buffers["header"][H_LIVES] == 4.0
+
+
+def test_the_header_reads_back_the_capped_score_exactly_cap() -> None:
+    game = Game()
+    game.score.score = SCORE_CAP - 100
+    _shoot_down(game, EnemyKind.CARRIER)
+    _tick(game)
+    assert game.buffers["header"][H_SCORE] == 9_999_999.0
+    assert int(game.buffers["header"][H_SCORE]) == game.score.score
+
+
+# --- lives, game over and restart (plan 03-08) -------------------------------------------------
+
+_QUIET_STAGE = StageData(number=1, length=100_000.0, waves=(), markers=())
+_RESTART_STAGE = StageData(
+    number=1,
+    length=100_000.0,
+    waves=(WaveEntry(at=2.0, kind=EnemyKind.JET, x=10.0),),
+    markers=(),
+)
+
+
+def _skip_intro(game: Game) -> Game:
+    """Put a stage game straight into PLAY with an arrived ship (the intro has its own tests)."""
+    assert game.flow is not None
+    game.flow.state = FlowState.PLAY
+    game.flow.timer = 0
+    game.life.reset()
+    game.ship = PlayerShip()
+    return game
+
+
+def _stage_game(stage: StageData = _QUIET_STAGE, **kwargs: object) -> Game:
+    """A mortal stage game; the quiet stage spawns nothing, so only what a test places can hurt."""
+    return _skip_intro(Game(stage=stage, **kwargs))
+
+
+def _run_until_out(game: Game) -> list[int]:
+    """Hit the ship, tick until PlayerLife is OUT, and return every event kind seen on the way."""
+    kinds: list[int] = []
+    _put_bullet_on_ship(game)
+
+    def out(g: Game) -> bool:
+        kinds.extend(_event_kinds(g))
+        return g.life.phase is PlayerPhase.OUT
+
+    _tick_until(game, out)
+    return kinds
+
+
+def _count_game_over_events(game: Game, steps: int) -> int:
+    count = 0
+    for _ in range(steps):
+        _tick(game)
+        count += _event_kinds(game).count(EV_GAME_OVER)
+    return count
+
+
+@pytest.mark.parametrize(
+    ("asked", "expected"), [(-3, 1), (0, 1), (1, 1), (5, 5), (9, 9), (10, 9), (99, 9)]
+)
+def test_the_starting_lives_are_clamped_to_one_to_nine_lives(asked: int, expected: int) -> None:
+    assert Game(lives=asked).score.lives == expected
+
+
+def test_a_new_game_starts_with_the_default_lives_lives() -> None:
+    assert Game().score.lives == LIVES_START
+    assert LIVES_CAP == 9
+
+
+def test_the_last_ship_lost_ends_the_run_in_game_over_lives() -> None:
+    game = Game(stage=STAGE_1, lives=1)
+    kinds = _run_until_out(game)
+    assert kinds.count(EV_PLAYER_DEATH) == 1
+    assert EV_RESPAWN not in kinds
+    assert kinds.count(EV_GAME_OVER) == 1
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.OUT
+    assert _header(game, H_FLOW) == FlowState.GAME_OVER
+    assert _header(game, H_LIVES) == 0
+    assert _header(game, H_DEATHS) == 1
+
+
+def test_the_game_over_event_carries_the_final_score_and_the_record_flag_lives() -> None:
+    game = _stage_game(lives=1, high_score=100)
+    game.score.score = 700
+    game.score.high_score = 700
+    _put_bullet_on_ship(game)
+    seen: list[tuple[float, float]] = []
+
+    def out(g: Game) -> bool:
+        for i in range(g.events.n):
+            base = i * EVENT_STRIDE
+            if g.events.buf[base] == EV_GAME_OVER:
+                seen.append((float(g.events.buf[base + 3]), float(g.events.buf[base + 4])))
+        return g.life.phase is PlayerPhase.OUT
+
+    _tick_until(game, out)
+    assert seen == [(700.0, 1.0)]
+
+
+def test_with_two_lives_the_ship_flies_back_in_and_one_life_is_left_lives() -> None:
+    game = _skip_intro(Game(stage=STAGE_1, lives=2))
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _header(game, H_LIVES) == 1
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.ALIVE)
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert EV_GAME_OVER not in _event_kinds(game)
+
+
+def test_a_life_is_taken_on_the_confirmed_death_and_not_on_the_hit_lives() -> None:
+    game = _stage_game(lives=3)
+    _put_bullet_on_ship(game)
+    _tick(game)  # the hit
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.GRACE
+    assert _header(game, H_LIVES) == 3
+    _tick_n(game, DEATHBOMB_TICKS - 1)
+    assert _header(game, H_LIVES) == 3
+    _tick(game)  # the grace window expires: the ship is destroyed
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.DYING
+    assert _header(game, H_LIVES) == 2
+
+
+def test_a_deathbomb_save_costs_no_life_and_no_game_over_follows_lives() -> None:
+    game = _stage_game(lives=1)
+    _put_bullet_on_ship(game)
+    _tick(game)
+    _press_bomb(game)  # during GRACE
+    assert game.life.phase == PlayerPhase.ALIVE
+    assert _header(game, H_LIVES) == 1
+    assert _count_game_over_events(game, 600) == 0
+    assert game.life.phase is not PlayerPhase.OUT
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _header(game, H_LIVES) == 1
+
+
+def test_the_gallery_has_infinite_lives_and_never_ends_lives() -> None:
+    game = _empty_game()
+    for _ in range(4):  # more deaths than the starting lives
+        _put_bullet_on_ship(game)
+        _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+        _tick_until(game, lambda g: g.life.vulnerable)
+    assert game.life.deaths == 4
+    assert _header(game, H_LIVES) == LIVES_START
+    assert _header(game, H_FLOW) == -1
+    assert game.life.phase is not PlayerPhase.OUT
+    assert game.flow is None
+
+
+def test_an_extend_on_the_step_the_death_is_confirmed_leads_to_a_respawn_lives() -> None:
+    game = _stage_game(lives=1)
+    game.score.score = EXTEND_FIRST - ENEMY_POINTS[EnemyKind.JET]
+    _put_bullet_on_ship(game)
+    _tick(game)  # the hit
+    _tick_n(game, DEATHBOMB_TICKS - 1)
+    _shoot_down(game, EnemyKind.JET)  # its kill lands on the step that confirms the death
+    _tick(game)
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.DYING
+    assert EV_EXTEND in _event_kinds(game)
+    assert _header(game, H_LIVES) == 1  # 1 -> 0 -> 1 within the step
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _count_game_over_events(game, 300) == 0
+    assert game.life.phase is PlayerPhase.ALIVE
+
+
+def test_an_extend_while_the_ship_is_dying_leads_to_a_respawn_lives() -> None:
+    game = _stage_game(lives=1)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    _thaw(game)
+    _tick_n(game, 10)
+    assert _header(game, H_LIVES) == 0
+    game.score.award(EXTEND_FIRST, game.events, 0.0, 0.0)
+    assert game.score.lives == 1
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert _count_game_over_events(game, 300) == 0
+    assert game.life.phase is PlayerPhase.ALIVE
+
+
+def test_the_game_over_event_is_pushed_exactly_once_over_six_hundred_steps_once() -> None:
+    game = _stage_game(lives=1)
+    kinds = _run_until_out(game)
+    assert kinds.count(EV_GAME_OVER) == 1
+    assert _count_game_over_events(game, 600) == 0
+    assert _header(game, H_FLOW) == FlowState.GAME_OVER
+
+
+def test_game_over_reaches_out_before_the_flow_changes_and_in_one_step_once() -> None:
+    game = _stage_game(lives=1)
+    _put_bullet_on_ship(game)
+    previous = game.flow.state
+    for _ in range(600):
+        _tick(game)
+        if game.life.phase is PlayerPhase.OUT:
+            break
+        assert game.flow.state is previous  # still PLAY until the step OUT is reached
+    assert game.flow.state is FlowState.GAME_OVER  # the same step that reached OUT
+    assert _event_kinds(game).count(EV_GAME_OVER) == 1
+
+
+def test_nothing_new_spawns_in_game_over_and_a_save_is_requested_once() -> None:
+    late = StageData(
+        number=1,
+        length=100_000.0,
+        waves=(WaveEntry(at=200.0, kind=EnemyKind.JET, x=10.0),),
+        markers=(),
+    )
+    game = _stage_game(late, lives=1)
+    assert game.save_requested is False
+    _run_until_out(game)
+    assert game.save_requested is True
+    _tick_n(game, 600)  # the terrain passes the wave's distance
+    assert game.terrain.distance > 200.0
+    assert game.enemies.n == 0
+    game.clear_save_request()
+    assert game.save_requested is False
+    _tick_n(game, 30)
+    assert game.save_requested is False  # not raised again
+
+
+def test_the_gallery_never_requests_a_save_lives() -> None:
+    game = Game()
+    assert game.save_requested is False
+    game.clear_save_request()
+    assert game.save_requested is False
+
+
+def test_restart_in_the_gallery_raises_lives() -> None:
+    with pytest.raises(ValueError, match="gallery"):
+        Game().restart()
+
+
+def _populate(game: Game) -> None:
+    """Leave something in every pool and some state in every part a restart must wipe."""
+    game.enemies.spawn(EnemyKind.TANK, 50.0, 60.0, MotionKind.SWAY, 0.0, 0.0)
+    game.pbullets.spawn(10.0, 20.0, 0.0, -8.0)
+    game.ebullets.spawn(30.0, 40.0, 0.0, 1.0)
+    game.missiles.spawn(70.0, 80.0, 0.0, 1)
+    game.pickups.spawn_crystal(90.0, 100.0)
+    game.max_bonus = 2
+    game.enemies.kills = 7
+
+
+def test_restart_starts_a_fresh_run_and_keeps_the_high_score_restart() -> None:
+    game = _stage_game(
+        _RESTART_STAGE,
+        lives=2,
+        weapon=WeaponKind.LASER,
+        level=3,
+        bombs=5,
+        high_score=1000,
+    )
+    game.score.award(4000, game.events, 0.0, 0.0)
+    game.bomb.stock = 0
+    game.life.deaths = 0
+    game.score.lives = 0
+    _run_until_out(game)
+    _populate(game)
+    game.terrain.set_target(0.25)
+    assert game.flow.state is FlowState.GAME_OVER
+    game.restart()
+    header = game.buffers["header"]
+    assert header[H_SCORE] == 0.0
+    assert header[H_LIVES] == 2.0
+    assert header[H_DEATHS] == 0.0
+    assert header[H_HIGH_SCORE] == 4000.0
+    assert header[H_NEW_RECORD] == 0.0
+    assert header[H_WEAPON] == float(WeaponKind.LASER)
+    assert header[H_LEVEL] == 3.0
+    assert header[H_BOMBS] == 5.0
+    assert header[H_PLAYER_PHASE] == float(PlayerPhase.RESPAWN)  # D-26: the intro fly-in
+    assert header[H_FLOW] == float(FlowState.INTRO)
+    assert header[H_INVULN] == 0.0
+    assert header[H_KILLS] == 0.0
+    assert header[H_MAX_BONUS] == 0.0
+    assert header[H_HITSTOP] == 0.0
+    assert header[H_ENEMY_N] == header[H_PBULLET_N] == header[H_MISSILE_N] == 0.0
+    assert header[H_PICKUP_N] == header[H_EBULLET_N] == 0.0
+    assert header[H_SCROLL_Y] == 0.0
+    assert header[H_SCROLL_RATE] == pytest.approx(SCROLL_SPEED)
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, RESPAWN_START_Y)
+    assert game.events.n == 0
+    assert game.save_requested is False
+    assert game.bomb.phase is BombPhase.NONE
+    assert game.life.phase is PlayerPhase.RESPAWN
+
+
+def test_after_a_restart_the_run_plays_again_and_can_end_again_restart() -> None:
+    game = _stage_game(_RESTART_STAGE, lives=1)
+    _tick_n(game, 4)
+    assert game.enemies.n == 1  # the wave at 2.0 spawned
+    _run_until_out(game)
+    game.restart()
+    _skip_intro(game)
+    assert game.enemies.n == 0
+    _tick_n(game, 4)
+    assert game.enemies.n == 1  # the director starts from the top of the timeline again
+    assert game.flow.state is FlowState.PLAY
+    kinds = _run_until_out(game)
+    assert kinds.count(EV_GAME_OVER) == 1
+    assert game.save_requested is True
+
+
+def test_restart_forgets_a_pending_hitstop_and_a_latched_bomb_press_restart() -> None:
+    game = _stage_game(lives=3)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    assert game.hitstop.ticks > 0
+    game.tick(0.0, Button.BOMB, 0.0, 0.0, 0.0, 0.0)  # latched: no step ran
+    game.restart()
+    assert game.hitstop.ticks == 0
+    _tick_n(game, 5)
+    assert game.bomb.phase is BombPhase.NONE
+    assert game.bomb.stock == BOMB_START_STOCK
+
+
+def test_restart_resets_the_scroll_speed_and_its_target_restart() -> None:
+    game = _stage_game()
+    game.terrain.set_target(0.25)
+    _tick_n(game, 400)
+    assert game.terrain.speed < SCROLL_SPEED
+    game.restart()
+    assert (game.terrain.distance, game.terrain.speed, game.terrain.target) == (
+        0.0,
+        SCROLL_SPEED,
+        SCROLL_SPEED,
+    )
+
+
+def test_restart_resets_the_weapon_cooldowns_and_the_laser_beam_restart() -> None:
+    game = _stage_game(weapon=WeaponKind.LASER, level=2)
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+    assert game.laser.half_width > 0.0
+    game.vulcan.cooldown = 4
+    game.homing.cooldown = 4
+    game.restart()
+    assert (game.laser.half_width, game.laser.timer) == (0.0, 0)
+    assert (game.vulcan.cooldown, game.homing.cooldown) == (0, 0)
+
+
+def test_restart_returns_a_moved_ship_to_its_start_and_drops_owed_drag_restart() -> None:
+    game = _stage_game()
+    game.ship.x, game.ship.y = 10.0, 20.0
+    game.ship.add_drag(5.0, 5.0)
+    game.restart()
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, RESPAWN_START_Y)
+    assert (game.ship.pending_x, game.ship.pending_y) == (0.0, 0.0)
+
+
+def test_restart_replays_the_at_marker_jump_restart() -> None:
+    game = Game(stage=STAGE_1, at="boss", lives=2)
+    start = STAGE_1.marker("boss") - AT_LEAD
+    _tick_n(game, 50)
+    assert game.terrain.distance > start
+    game.restart()
+    assert game.terrain.distance == start
+    assert game.director is not None
+    assert game.director.cursor > 0
+    game.director.step(game.terrain.distance, game.enemies)
+    assert not _wave_rows(game)  # skipped waves stay skipped; only on-screen targets respawn
+
+
+def test_restart_without_a_marker_starts_at_the_top_of_the_stage_restart() -> None:
+    game = Game(stage=STAGE_1)
+    _tick_n(game, 50)
+    game.restart()
+    assert game.terrain.distance == 0.0
+    assert game.director is not None
+    assert game.director.cursor == 0
+
+
+def test_restart_while_paused_leaves_the_game_paused_restart() -> None:
+    game = _stage_game()
+    game.set_paused(True)
+    game.restart()
+    assert game.paused is True
+    assert game.buffers["header"][H_FLAGS] == float(FLAG_PAUSED)
+
+
+def test_a_stage_opens_with_the_intro_and_the_ship_flying_in() -> None:
+    game = Game(stage=STAGE_1)
+    header = game.buffers["header"]
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert header[H_FLOW] == FlowState.INTRO
+    assert header[H_PLAYER_PHASE] == PlayerPhase.RESPAWN
+    assert header[H_FLOW_T] == pytest.approx(1 / INTRO_TICKS, rel=1e-6)
+    assert game.ship.y > SHIP_START_Y
+    assert _event_kinds(game).count(EV_STAGE_START) == 1
+
+
+def test_the_intro_flows_into_play_with_an_arrived_ship_and_no_blink() -> None:
+    game = Game(stage=STAGE_1)
+    seen = 0
+    for _ in range(INTRO_TICKS):
+        _tick(game)
+        seen += _event_kinds(game).count(EV_STAGE_START)
+        assert _header(game, H_INVULN) == 0
+    assert seen == 1
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_FLOW_T) == 0
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+
+
+def test_the_gallery_has_no_intro_and_starts_alive_at_the_start_position() -> None:
+    game = Game()
+    game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+    assert _header(game, H_FLOW) == -1
+    assert _header(game, H_FLOW_T) == 0
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert (game.ship.x, game.ship.y) == (SHIP_START_X, SHIP_START_Y)
+    assert EV_STAGE_START not in _event_kinds(game)
+
+
+def test_a_restart_opens_with_the_intro_and_the_fly_in_again() -> None:
+    game = Game(stage=STAGE_1, lives=1)
+    _tick_n(game, INTRO_TICKS)
+    _run_until_out(game)
+    game.restart()
+    header = game.buffers["header"]
+    assert header[H_FLOW] == FlowState.INTRO
+    assert header[H_PLAYER_PHASE] == PlayerPhase.RESPAWN
+    assert header[H_FLOW_T] == 0
+    assert game.ship.y > SHIP_START_Y
+    _tick(game)
+    assert _event_kinds(game).count(EV_STAGE_START) == 1
+    _tick_n(game, INTRO_TICKS - 1)
+    assert _header(game, H_FLOW) == FlowState.PLAY
+    assert _header(game, H_PLAYER_PHASE) == PlayerPhase.ALIVE
+    assert _header(game, H_INVULN) == 0
+
+
+# --- medals (plan 03-11) -----------------------------------------------------------------------
+
+
+def _kill_tank_carrying(game: Game, drop: int, x: float = 80.0, y: float = 120.0) -> None:
+    """Park a one-hp tank carrying ``drop`` just above a bolt that reaches it next step."""
+    enemies = game.enemies
+    enemies.n = 0
+    enemies.spawn(EnemyKind.TANK, x, y, MotionKind.GROUND, 0.0, 0.0, drop)
+    enemies.hp[0] = 1
+    game.pbullets.spawn(x, y + 10.0, 0.0, -8.0)
+
+
+def _drop_a_medal(game: Game) -> None:
+    game.ship.x, game.ship.y = 200.0, 280.0  # away from where the medal falls
+    _kill_tank_carrying(game, PickupKind.MEDAL)
+    _tick(game)
+
+
+def _stand_on_the_medal(game: Game) -> None:
+    game.ship.x = game.pickups.x[0]
+    game.ship.y = game.pickups.y[0]
+
+
+def test_a_killed_medal_tank_leaves_a_medal_at_its_kill_position() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    pickups = game.pickups
+    assert pickups.n == 1
+    assert pickups.kind[0] == PickupKind.MEDAL
+    assert pickups.x[0] == pytest.approx(80.0, abs=0.5)
+    assert pickups.y[0] == pytest.approx(120.0, abs=2.0)
+    assert (pickups.vx[0], pickups.vy[0]) == (0.0, 0.0)
+
+
+def test_a_medal_drifts_down_with_the_scroll_at_the_ground_speed() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    y = game.pickups.y[0]
+    _tick(game)
+    assert game.pickups.y[0] - y == pytest.approx(0.8 * 0.94, abs=1e-4)
+    assert game.pickups.x[0] == pytest.approx(80.0, abs=0.5)
+
+
+def test_catching_a_medal_pays_the_chain_value_and_pushes_one_medal_event() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    _stand_on_the_medal(game)
+    before = game.score.score
+    _tick(game)
+    header = game.buffers["header"]
+    assert header[H_SCORE] == before + 100
+    assert (header[H_MEDAL_VALUE], header[H_MEDAL_CHAIN]) == (200.0, 1.0)
+    kinds = _event_kinds(game)
+    assert kinds.count(EV_MEDAL) == 1
+    assert EV_PICKUP not in kinds
+    events = game.buffers["events"]
+    slots = [i * EVENT_STRIDE for i in range(game.events.n)]
+    at = next(slot for slot in slots if events[slot] == EV_MEDAL)
+    assert (events[at + 3], events[at + 4]) == (100.0, 1.0)
+    assert events[at + 1] == pytest.approx(game.ship.x, abs=1.0)
+    assert game.pickups.n == 0
+
+
+def test_a_fresh_game_offers_the_base_medal_value_and_no_chain() -> None:
+    game = Game()
+    _tick(game)
+    header = game.buffers["header"]
+    assert (header[H_MEDAL_VALUE], header[H_MEDAL_CHAIN]) == (100.0, 0.0)
+
+
+def test_the_medal_chain_climbs_with_each_catch() -> None:
+    game = Game(god=True)
+    for expected in (100, 200, 500):
+        _drop_a_medal(game)
+        _stand_on_the_medal(game)
+        before = game.score.score
+        _tick(game)
+        assert game.score.score - before == expected
+    assert game.buffers["header"][H_MEDAL_CHAIN] == 3.0
+
+
+def test_the_medal_tier_packed_for_the_renderer_is_the_chain_tier() -> None:
+    game = Game(god=True)
+    _drop_a_medal(game)
+    out = game.buffers["pickups"]
+    assert (out[2], out[3]) == (0.0, float(PickupKind.MEDAL))
+    _stand_on_the_medal(game)
+    _tick(game)
+    _drop_a_medal(game)
+    assert game.buffers["pickups"][2] == 1.0
+
+
+def _catch_medals(game: Game, count: int) -> None:
+    for _ in range(count):
+        _drop_a_medal(game)
+        _stand_on_the_medal(game)
+        _tick(game)
+
+
+def test_seven_catches_pay_the_whole_ladder_and_an_eighth_pays_the_cap_again() -> None:
+    game = Game(god=True)
+    paid = []
+    for _ in range(8):
+        _drop_a_medal(game)
+        _stand_on_the_medal(game)
+        before = game.score.score
+        _tick(game)
+        paid.append(game.score.score - before)
+    assert paid == [100, 200, 500, 1000, 2000, 5000, 10000, 10000]
+    assert _header(game, H_MEDAL_VALUE) == 10000
+    assert _header(game, H_MEDAL_CHAIN) == 8
+
+
+def test_a_medal_scrolling_off_the_bottom_resets_the_chain_to_the_base_value() -> None:
+    game = Game(god=True)
+    _catch_medals(game, 3)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (1000, 3)
+    game.ship.x, game.ship.y = 200.0, 100.0
+    game.pickups.spawn_medal(20.0, PLAYFIELD_H + 15.9)
+    _tick(game)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+    assert game.pickups.medals_missed == 0  # drained
+    _drop_a_medal(game)
+    _stand_on_the_medal(game)
+    before = game.score.score
+    _tick(game)
+    assert game.score.score - before == 100
+    assert _header(game, H_MEDAL_CHAIN) == 1
+
+
+def test_a_medal_caught_on_the_step_another_scrolls_off_pays_before_the_reset() -> None:
+    game = Game(god=True)
+    _catch_medals(game, 2)
+    _drop_a_medal(game)
+    _stand_on_the_medal(game)
+    game.pickups.spawn_medal(20.0, PLAYFIELD_H + 15.9)  # leaves on the very step of the catch
+    before = game.score.score
+    _tick(game)
+    assert game.score.score - before == 500  # the catch paid the climbing value
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+
+
+def test_dying_resets_the_chain_but_the_stage_count_keeps_its_catches() -> None:
+    game = _empty_game(god=False)
+    _catch_medals(game, 2)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (500, 2)
+    game.ship.x, game.ship.y = 120.0, 272.0
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.DYING)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+    assert game.chain.collected == 2
+
+
+def test_a_hit_inside_the_grace_window_does_not_reset_the_chain() -> None:
+    game = _empty_game(god=False)
+    _catch_medals(game, 2)
+    game.ship.x, game.ship.y = 120.0, 272.0
+    _put_bullet_on_ship(game)
+    _tick(game)
+    assert game.life.phase is PlayerPhase.GRACE
+    assert _header(game, H_MEDAL_CHAIN) == 2
+
+
+def test_a_medal_the_pool_refused_is_never_counted_as_a_miss() -> None:
+    game = Game(god=True)
+    _catch_medals(game, 1)
+    for _ in range(PICKUP_CAP - MEDAL_RESERVE):
+        game.pickups.spawn(PickupKind.CRYSTAL, 30.0, 30.0, 0.0, 0.0)
+    _kill_tank_carrying(game, PickupKind.MEDAL)
+    _tick(game)
+    assert game.pickups.n == PICKUP_CAP - MEDAL_RESERVE  # the medal was refused
+    _tick_n(game, 5)
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (200, 1)
+
+
+def test_a_restart_starts_the_chain_and_the_stage_count_over() -> None:
+    game = Game(stage=STAGE_1, lives=1)
+    _tick_n(game, INTRO_TICKS)
+    game.chain.collect()
+    game.chain.collect()
+    _run_until_out(game)
+    assert game.chain.chain == 0
+    assert game.chain.collected == 2
+    game.restart()
+    assert game.chain.collected == 0
+    assert (_header(game, H_MEDAL_VALUE), _header(game, H_MEDAL_CHAIN)) == (100, 0)
+
+
+# --- destructible city targets (plan 03-15) ----------------------------------------------------
+
+_HOUSE_X = 120.0  # the centre of the only lot of a one-lot block in column 1
+_HOUSE_AT = 40.0  # block row d=0: inset 8 plus half the 64-unit lot
+
+
+def _house_stage() -> StageData:
+    """A stage whose only city lot is a house that drops a medal."""
+    city = (
+        CityBlock(
+            d=0.0,
+            col=1,
+            cols=1,
+            rows=1,
+            style=CityStyle.SLUMS,
+            seed=3,
+            targets=((0, EnemyKind.HOUSE, PickupKind.MEDAL),),
+        ),
+    )
+    return StageData(
+        number=1, length=2000.0, waves=(), markers=(), city=city, ground=target_entries(city)
+    )
+
+
+def _tick_until_house(game: Game) -> None:
+    _tick_until(game, lambda g: g.enemies.n == 1)
+
+
+def _fire_until_a_kill(game: Game, limit: int = 900) -> None:
+    for _ in range(limit):
+        game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+        if game.buffers["header"][H_KILLS] > 0:
+            return
+    pytest.fail("nothing was killed")
+
+
+def test_a_flagged_house_spawns_on_its_block_aligned_with_the_scenery() -> None:
+    game = _stage_game(_house_stage(), god=True)
+    _tick_until_house(game)
+    enemies = game.enemies
+    assert enemies.kind[0] == EnemyKind.HOUSE
+    assert enemies.x[0] == pytest.approx(_HOUSE_X)
+    drawn = GROUND_Y0 + GROUND_SCROLL_RATIO * (game.terrain.distance - _HOUSE_AT)
+    assert enemies.y[0] == pytest.approx(drawn, abs=1.0)  # within the one step it just scrolled
+    assert game.enemies.motion[0] == MotionKind.GROUND
+    assert game.enemies.drop[0] == PickupKind.MEDAL
+
+
+def test_a_house_stays_glued_to_its_block_while_the_terrain_scrolls() -> None:
+    game = _stage_game(_house_stage(), god=True)
+    _tick_until_house(game)
+    offset = game.enemies.y[0] - (
+        GROUND_Y0 + GROUND_SCROLL_RATIO * (game.terrain.distance - _HOUSE_AT)
+    )
+    for _ in range(60):
+        _tick(game)
+        drawn = GROUND_Y0 + GROUND_SCROLL_RATIO * (game.terrain.distance - _HOUSE_AT)
+        assert game.enemies.y[0] - drawn == pytest.approx(offset, abs=1e-3)
+
+
+def test_destroying_a_house_pays_500_leaves_a_medal_and_explodes_as_a_ground_kill() -> None:
+    game = _stage_game(_house_stage(), weapon=WeaponKind.LASER, god=True)
+    _tick_until_house(game)
+    _fire_until_a_kill(game)
+    assert game.score.score == 500
+    assert game.buffers["header"][H_SCORE] == 500.0
+    assert game.pickups.n == 1
+    assert game.pickups.kind[0] == PickupKind.MEDAL
+    assert game.pickups.x[0] == pytest.approx(_HOUSE_X, abs=0.5)
+    events = game.buffers["events"]
+    slots = [i * EVENT_STRIDE for i in range(game.events.n)]
+    at = next(slot for slot in slots if events[slot] == EV_EXPLOSION)
+    assert (events[at + 3], events[at + 4], events[at + 5]) == (
+        float(BLAST_MEDIUM),
+        1.0,
+        float(EnemyKind.HOUSE),
+    )
+    assert events[at + 1] == pytest.approx(_HOUSE_X)
+    assert game.pickups.y[0] == pytest.approx(events[at + 2], abs=1.5)
+
+
+def test_the_manifest_lists_which_kinds_leave_a_wreck() -> None:
+    assert Game().manifest()["tuning"]["enemy_wreck"] == [
+        *[0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+        *[0, 0, 0, 0, 0],  # the bomber is air: it burns up and leaves nothing on the ground
+    ]
+
+
+# --- the mid-boss (plan 03-17) ---------------------------------------------------------------
+
+
+def _midboss_game(**kwargs: object) -> Game:
+    """Stage 1 one screen before the train, a god-mode level-5 laser that pierces every part."""
+    options: dict[str, object] = {
+        "stage": STAGE_1,
+        "at": "midboss",
+        "god": True,
+        "weapon": WeaponKind.LASER,
+        "level": 5,
+    }
+    return Game(**(options | kwargs))
+
+
+def _fire_tick(game: Game) -> None:
+    game.tick(STEP_MS, Button.FIRE, 0.0, 0.0, 0.0, 0.0)
+
+
+def _event_records(game: Game, kind: int) -> list[list[float]]:
+    buf = game.buffers["events"]
+    return [
+        [float(buf[i * EVENT_STRIDE + k]) for k in range(EVENT_STRIDE)]
+        for i in range(game.events.n)
+        if buf[i * EVENT_STRIDE] == kind
+    ]
+
+
+def _fight_started(game: Game) -> bool:
+    return (
+        game.flow is not None
+        and game.flow.boss is not None
+        and (game.flow.boss.state is BossState.FIGHT)
+    )
+
+
+def test_the_midboss_arrives_is_taken_apart_and_play_resumes() -> None:
+    game = _midboss_game()
+    header = game.buffers["header"]
+    assert header[H_BOSS_ACTIVE] == 0
+    parts: list[list[float]] = []
+    defeated = 0
+    up = False
+    for _ in range(4000):
+        _fire_tick(game)
+        if header[H_BOSS_ACTIVE] == 1:
+            assert header[H_FLOW] == FlowState.MIDBOSS
+            up = True
+        new_parts = _event_records(game, EV_PART_DESTROYED)
+        if new_parts:
+            assert header[H_HITSTOP] == HITSTOP_PART_TICKS
+        parts += new_parts
+        if _event_records(game, EV_BOSS_DEFEATED):
+            defeated += 1
+            assert header[H_HITSTOP] == HITSTOP_BOSS_TICKS
+        if defeated and header[H_BOSS_ACTIVE] == 0:
+            break
+    assert up
+    assert [record[3] for record in parts] == [5000.0, 5000.0]
+    assert sorted(record[4] for record in parts) == [0.0, 1.0]  # each turret once
+    assert all(record[5] == 1.0 for record in parts)  # from the mid-boss slot
+    assert defeated == 1
+    assert header[H_BOSS_HP] == 0
+    assert header[H_SCORE] >= 30000  # 2 x 5000 for the turrets, 20000 for the hull
+    assert header[H_FLOW] == FlowState.PLAY
+    assert game.flow is not None
+    assert game.flow.boss is None
+    for _ in range(80):
+        _tick(game)
+    assert header[H_SCROLL_RATE] == pytest.approx(SCROLL_SPEED, rel=1e-6)
+    assert header[H_FLOW] == FlowState.PLAY
+
+
+def test_the_train_comes_in_while_the_terrain_crawls_beneath_it() -> None:
+    game = _midboss_game()
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=2000)
+    assert header[H_FLOW] == FlowState.MIDBOSS
+    for _ in range(80):
+        _tick(game)
+    assert header[H_SCROLL_RATE] == pytest.approx(MIDBOSS_CRAWL_SPEED, rel=1e-6)
+    assert game.terrain.target == MIDBOSS_CRAWL_SPEED
+
+
+def test_the_boss_header_slots_follow_the_hull_while_the_midboss_is_up() -> None:
+    game = _midboss_game()
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    hull = game.enemies.index_of_uid(game.flow.boss.hull_uid)
+    game.enemies.hp[hull] = 300
+    _tick(game)
+    assert header[H_BOSS_ACTIVE] == 1
+    assert header[H_BOSS_PHASE] == 1
+    assert header[H_BOSS_HP] == pytest.approx(300 / 500)
+    assert header[H_BOSS_HP] == pytest.approx(game.enemies.hp[hull] / game.enemies.hp_max[hull])
+    assert header[H_BOSS_TIMER_S] == -1
+
+
+def test_the_boss_slots_read_quiet_when_no_boss_is_up() -> None:
+    for game in (Game(stage=STAGE_1, god=True), Game()):
+        _tick(game)
+        header = game.buffers["header"]
+        assert (
+            header[H_BOSS_ACTIVE],
+            header[H_BOSS_PHASE],
+            header[H_BOSS_HP],
+            header[H_BOSS_TIMER_S],
+        ) == (0, 0, 0, -1)
+
+
+def test_the_manifest_lists_the_boss_bar_thresholds_of_every_boss_the_stage_has() -> None:
+    stage = StageData(
+        number=2,
+        length=100.0,
+        waves=(),
+        markers=(("midboss", 10.0), ("boss", 90.0)),
+        midboss=MIDBOSS_1,
+        boss=MIDBOSS_1,
+    )
+    assert Game(stage=stage).manifest()["stage"]["bosses"] == [
+        {"slot": 1, "name": "midboss", "phase_fracs": [0.5]},
+        {"slot": 2, "name": "boss", "phase_fracs": [0.5]},
+    ]
+
+
+# --- the mid-boss timeout, countdown, phase change and the run ending around it ---------------
+
+_MIDBOSS_ONLY_STAGE = StageData(
+    number=1,
+    length=10_000.0,
+    waves=(),
+    markers=(("midboss", 500.0),),
+    midboss=MIDBOSS_1,
+)
+
+
+def _quiet_midboss_game(**kwargs: object) -> Game:
+    """Only the train on a quiet stage, so nothing but the train can hurt the ship."""
+    return Game(stage=_MIDBOSS_ONLY_STAGE, at="midboss", **kwargs)
+
+
+def _hull_index(game: Game) -> int:
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    return game.enemies.index_of_uid(game.flow.boss.hull_uid)
+
+
+def test_an_unshot_midboss_counts_down_its_last_twenty_seconds_then_retreats_unpaid() -> None:
+    game = _quiet_midboss_game(god=True)
+    header = game.buffers["header"]
+    countdown: list[int] = []
+    retreats = 0
+    hull_ys: list[float] = []
+    boss = None
+    for _ in range(6000):
+        _tick(game)
+        boss = game.flow.boss if game.flow.boss is not None else boss
+        timer = int(header[H_BOSS_TIMER_S])
+        if timer >= 0:
+            if not countdown:
+                assert boss.fight_ticks == MIDBOSS_1.timeout_ticks - 20 * 60  # 20 s left, no sooner
+            if not countdown or countdown[-1] != timer:
+                countdown.append(timer)
+        if _event_records(game, EV_BOSS_RETREAT):
+            retreats += 1
+        if retreats and boss.active:
+            hull_ys.append(float(game.enemies.y[_hull_index(game)]))
+        if retreats and header[H_BOSS_ACTIVE] == 0:
+            break
+    assert countdown == list(range(20, 0, -1))
+    assert retreats == 1
+    assert hull_ys == sorted(hull_ys, reverse=True)  # the train leaves upward
+    assert hull_ys[0] - hull_ys[-1] > 50.0
+    assert header[H_FLOW] == FlowState.PLAY
+    assert header[H_BOSS_ACTIVE] == 0
+    assert header[H_SCORE] == 0  # nobody was paid for a train that got away
+    assert not [k for k in game.enemies.kind[: game.enemies.n] if k == EnemyKind.TRAIN]
+    assert game.terrain.target == SCROLL_SPEED
+
+
+def test_the_countdown_is_hidden_until_twenty_seconds_remain() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    header = game.buffers["header"]
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    game.flow.boss.fight_ticks = MIDBOSS_1.timeout_ticks - 20 * 60 - 2
+    _tick(game)
+    assert header[H_BOSS_TIMER_S] == -1
+    _tick(game)
+    assert header[H_BOSS_TIMER_S] == 20
+
+
+def test_pause_and_hitstop_freeze_the_fight_timer() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    boss = game.flow.boss
+    before = boss.fight_ticks
+    game.set_paused(True)
+    _tick_n(game, 100)
+    assert boss.fight_ticks == before
+    game.set_paused(False)
+    game.hitstop.trigger(10)
+    _tick_n(game, 10)
+    assert boss.fight_ticks == before
+    _tick(game)
+    assert boss.fight_ticks == before + 1
+
+
+def test_both_turrets_gone_pushes_one_phase_two_event_and_the_hull_opens_fire() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow is not None
+    assert game.flow.boss is not None
+    boss = game.flow.boss
+    for k in range(len(MIDBOSS_1.parts)):
+        game.enemies.hp[game.enemies.index_of_uid(boss.part_uid(k))] = 0
+    phases: list[list[float]] = []
+    fired_from: list[float] = []
+    for _ in range(400):
+        _tick(game)
+        phases += _event_records(game, EV_BOSS_PHASE)
+        hull_y = float(game.enemies.y[_hull_index(game)])
+        fired_from += [abs(record[2] - hull_y) for record in _event_records(game, EV_ENEMY_FIRE)]
+    assert [(record[3], record[4]) for record in phases] == [(2.0, 1.0)]
+    assert game.enemies.hp[_hull_index(game)] == MIDBOSS_1.hull_hp  # untouched, still above half
+    assert boss.phase_number == 2
+    assert game.buffers["header"][H_BOSS_PHASE] == 2
+    assert fired_from  # the hull fires its spread
+    assert max(fired_from) < 0.5  # from the hull itself, the turrets are stumps
+
+
+def test_a_player_death_does_not_stop_the_midboss() -> None:
+    game = _quiet_midboss_game(lives=5)
+    _tick_until(game, _fight_started, limit=2000)
+    _put_bullet_on_ship(game)
+    _tick_until(game, lambda g: g.life.deaths == 1)
+    _tick_until(game, lambda g: g.life.phase is PlayerPhase.RESPAWN)
+    assert game.flow is not None
+    assert game.flow.state == FlowState.MIDBOSS
+    assert game.flow.boss is not None
+    assert game.flow.boss.active
+    assert game.buffers["header"][H_BOSS_ACTIVE] == 1
+
+
+def test_game_over_during_the_midboss_ends_the_run_and_the_fight_stays_over() -> None:
+    game = _quiet_midboss_game(lives=1)
+    _tick_until(game, _fight_started, limit=2000)
+    _run_until_out(game)
+    header = game.buffers["header"]
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert header[H_BOSS_ACTIVE] == 0
+    assert game.flow is not None
+    assert game.flow.boss is None
+    _tick_n(game, 300)
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert game.flow.state == FlowState.GAME_OVER
+    assert game.terrain.target == MIDBOSS_CRAWL_SPEED  # no MIDBOSS -> PLAY transition afterwards
+
+
+def test_a_restart_during_the_midboss_clears_the_fight_and_it_triggers_again() -> None:
+    game = _quiet_midboss_game(god=True)
+    _tick_until(game, _fight_started, limit=2000)
+    old = game.flow.boss
+    game.restart()
+    header = game.buffers["header"]
+    assert game.flow.boss is None
+    assert game.enemies.n == 0
+    assert (header[H_BOSS_ACTIVE], header[H_BOSS_HP], header[H_BOSS_TIMER_S]) == (0, 0, -1)
+    assert game.terrain.target == SCROLL_SPEED
+    _tick_until(game, _fight_started, limit=2000)
+    assert game.flow.boss is not old
+    assert game.flow.boss.fight_ticks < 10
+    assert header[H_FLOW] == FlowState.MIDBOSS
+
+
+def test_a_restart_after_the_midboss_triggers_it_again_at_the_marker() -> None:
+    game = _quiet_midboss_game(god=True, weapon=WeaponKind.LASER, level=5)
+    header = game.buffers["header"]
+    for _ in range(4000):
+        _fire_tick(game)
+        if header[H_SCORE] >= 30000 and header[H_BOSS_ACTIVE] == 0:
+            break
+    assert header[H_SCORE] >= 30000
+    assert header[H_FLOW] == FlowState.PLAY
+    game.restart()
+    assert header[H_SCORE] == 0
+    assert game.flow.boss is None
+    _tick_until(game, _fight_started, limit=2000)
+    assert header[H_BOSS_ACTIVE] == 1
+
+
+# --- the boss: WARNING, the giant bomber and the CLEAR state (plan 03-19) ---------------------
+
+_BOMBER_ONLY_STAGE = StageData(
+    number=1,
+    length=10_000.0,
+    waves=(),
+    markers=(("boss", 500.0),),
+    boss=BOMBER_1,
+)
+
+
+def _boss_game(**kwargs: object) -> Game:
+    """Stage 1 one screen before the bomber, a god-mode level-5 laser that pierces the hull."""
+    options: dict[str, object] = {
+        "stage": STAGE_1,
+        "at": "boss",
+        "god": True,
+        "weapon": WeaponKind.LASER,
+        "level": 5,
+    }
+    return Game(**(options | kwargs))
+
+
+def _quiet_boss_game(**kwargs: object) -> Game:
+    """Only the bomber on a quiet stage, so nothing but the bomber can hurt the ship."""
+    return Game(stage=_BOMBER_ONLY_STAGE, at="boss", **kwargs)
+
+
+def _warning(game: Game) -> bool:
+    return game.flow is not None and game.flow.state is FlowState.WARNING
+
+
+def test_the_warning_shows_the_boss_bar_full_and_the_flow_clock_rising() -> None:
+    game = _quiet_boss_game(god=True)
+    header = game.buffers["header"]
+    warnings = 0
+    flow_t: list[float] = []
+    for _ in range(800):
+        _tick(game)
+        warnings += len(_event_records(game, EV_BOSS_WARNING))
+        if _warning(game):
+            assert (header[H_BOSS_ACTIVE], header[H_BOSS_PHASE]) == (2, 1)
+            assert (header[H_BOSS_HP], header[H_BOSS_TIMER_S]) == (1.0, -1)
+            flow_t.append(float(header[H_FLOW_T]))
+        elif flow_t:
+            break
+    assert warnings == 1
+    assert len(flow_t) == WARNING_TICKS
+    assert flow_t == sorted(flow_t)
+    assert flow_t[0] == 0.0
+    assert flow_t[-1] == pytest.approx((WARNING_TICKS - 1) / WARNING_TICKS)
+    assert header[H_FLOW] == FlowState.BOSS
+    assert header[H_BOSS_ACTIVE] == 2
+
+
+def test_the_scroll_slows_to_the_boss_crawl_and_keeps_moving() -> None:
+    game = _quiet_boss_game(god=True)
+    header = game.buffers["header"]
+    _tick_until(game, _warning, limit=800)
+    assert game.terrain.target == BOSS_CRAWL_SPEED
+    assert BOSS_CRAWL_SPEED > 0.0  # D-06: it crawls, it does not stop
+    before = float(header[H_SCROLL_Y])
+    _tick_until(game, lambda g: g.flow.state is FlowState.BOSS, limit=400)
+    assert header[H_SCROLL_RATE] == pytest.approx(BOSS_CRAWL_SPEED, rel=1e-6)
+    assert header[H_SCROLL_Y] > before
+    _tick_n(game, 60)
+    assert header[H_SCROLL_Y] > before + 60 * BOSS_CRAWL_SPEED * 0.9
+
+
+def test_nothing_new_spawns_from_the_warning_on() -> None:
+    wave = WaveEntry(at=520.0, kind=EnemyKind.JET, x=120.0)
+    stage = StageData(
+        number=1, length=10_000.0, waves=(wave,), markers=(("boss", 500.0),), boss=BOMBER_1
+    )
+    game = Game(stage=stage, at="boss", god=True)
+    assert game.director is not None
+    _tick_until(game, _warning, limit=800)
+    cursor = game.director.cursor
+    assert game.terrain.distance < 520.0  # the wave is still ahead of the scroll
+    _tick_n(game, 400)
+    assert game.terrain.distance > 520.0  # the scroll passed it during the warning and the fight
+    assert game.director.cursor == cursor
+    assert not [k for k in game.enemies.kind[: game.enemies.n] if k == EnemyKind.JET]
+
+
+def test_the_bomber_descends_shielded_then_fights_with_phase_one_fire() -> None:
+    game = _quiet_boss_game(god=True)
+    header = game.buffers["header"]
+    _tick_until(game, lambda g: g.flow.state is FlowState.BOSS, limit=1200)
+    boss = game.flow.boss
+    assert boss is not None
+    assert boss.state is BossState.ENTER
+    hull = game.enemies.index_of_uid(boss.hull_uid)
+    assert game.enemies.shield[hull] != 0  # shielded on the way in
+    assert game.enemies.y[hull] < BOMBER_1.hold_y
+    _tick_until(game, _fight_started, limit=400)
+    assert game.enemies.shield[game.enemies.index_of_uid(boss.hull_uid)] == 0
+    assert game.enemies.y[game.enemies.index_of_uid(boss.hull_uid)] == pytest.approx(
+        BOMBER_1.hold_y
+    )
+    assert header[H_BOSS_PHASE] == 1
+    fired = 0
+    for _ in range(200):
+        _tick(game)
+        fired += len(_event_records(game, EV_ENEMY_FIRE))
+    assert fired > 0  # the turrets and the nose ring open fire
+
+
+def test_the_boss_header_follows_the_hull_while_the_bomber_is_up() -> None:
+    game = _quiet_boss_game(god=True)
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=1500)
+    hull = _hull_index(game)
+    game.enemies.hp[hull] = 1000
+    _tick(game)
+    assert header[H_BOSS_ACTIVE] == 2
+    assert header[H_BOSS_HP] == pytest.approx(1000 / 1400)
+    assert header[H_FLOW] == FlowState.BOSS
+
+
+def test_the_four_parts_pay_their_points_and_become_stumps() -> None:
+    game = _quiet_boss_game(god=True)
+    _tick_until(game, _fight_started, limit=1500)
+    boss = game.flow.boss
+    assert boss is not None
+    for k in range(len(BOMBER_1.parts)):
+        game.enemies.hp[game.enemies.index_of_uid(boss.part_uid(k))] = 0
+    _tick(game)
+    parts = _event_records(game, EV_PART_DESTROYED)
+    assert sorted((record[3], record[4]) for record in parts) == [
+        (6000.0, 2.0),
+        (6000.0, 3.0),
+        (8000.0, 0.0),
+        (8000.0, 1.0),
+    ]
+    assert all(record[5] == 2.0 for record in parts)  # from the boss slot
+    assert game.buffers["header"][H_SCORE] == 28000
+    kinds = [int(game.enemies.kind[game.enemies.index_of_uid(boss.part_uid(k))]) for k in range(4)]
+    assert kinds == [EnemyKind.BOMBER_STUMP] * 4
+
+
+def test_the_bomber_is_destroyed_by_the_laser_and_the_stage_goes_on_to_clear() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    seen: list[int] = []
+    warnings = defeated = 0
+    for _ in range(6000):
+        _fire_tick(game)
+        state = int(header[H_FLOW])
+        if not seen or seen[-1] != state:
+            seen.append(state)
+        warnings += len(_event_records(game, EV_BOSS_WARNING))
+        defeated += len(_event_records(game, EV_BOSS_DEFEATED))
+        if state == FlowState.BOSS:
+            assert header[H_BOSS_ACTIVE] == 2
+        if state == FlowState.CLEAR:
+            break
+    assert seen[-4:] == [FlowState.PLAY, FlowState.WARNING, FlowState.BOSS, FlowState.CLEAR]
+    assert warnings == 1
+    assert defeated == 1
+    flow = game.flow
+    assert flow is not None
+    assert flow.boss_destroyed is True
+    assert flow.boss is None
+    assert header[H_BOSS_ACTIVE] == 0
+    assert game.enemies.n == 0  # the bomber's rows are gone and so is everything else
+    assert game.ebullets.n == 0
+    for _ in range(CLEAR_TICKS - 1):  # CLEAR holds, and nothing can hit the ship while it plays
+        _fire_tick(game)
+        assert header[H_FLOW] == FlowState.CLEAR
+        assert game.enemies.n == 0
+        assert game.ebullets.n == 0
+
+
+def test_game_over_during_the_warning_wins_and_no_bomber_ever_comes() -> None:
+    game = _quiet_boss_game(lives=1)
+    _tick_until(game, _warning, limit=800)
+    _run_until_out(game)
+    header = game.buffers["header"]
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert (header[H_BOSS_ACTIVE], header[H_BOSS_HP]) == (0, 0)
+    _tick_n(game, WARNING_TICKS + 100)
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert game.flow.boss is None
+    assert game.enemies.n == 0
+
+
+def test_game_over_during_the_boss_fight_is_never_replaced_by_clear() -> None:
+    game = _quiet_boss_game(lives=1)
+    _tick_until(game, _fight_started, limit=1500)
+    _run_until_out(game)
+    header = game.buffers["header"]
+    assert header[H_FLOW] == FlowState.GAME_OVER
+    assert header[H_BOSS_ACTIVE] == 0
+    assert game.flow.boss is None
+    _tick_n(game, 300)
+    assert header[H_FLOW] == FlowState.GAME_OVER
+
+
+def test_a_restart_during_the_warning_starts_the_run_over_and_it_warns_again() -> None:
+    game = _quiet_boss_game(god=True)
+    _tick_until(game, _warning, limit=800)
+    game.restart()
+    header = game.buffers["header"]
+    assert game.flow.state == FlowState.INTRO
+    assert (header[H_BOSS_ACTIVE], header[H_BOSS_HP], header[H_BOSS_TIMER_S]) == (0, 0, -1)
+    assert game.terrain.target == SCROLL_SPEED
+    _tick_until(game, _warning, limit=800)
+    assert header[H_BOSS_ACTIVE] == 2
+
+
+def test_a_restart_after_the_clear_triggers_the_whole_boss_again() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    for _ in range(6000):
+        _fire_tick(game)
+        if header[H_FLOW] == FlowState.CLEAR:
+            break
+    assert game.flow.boss_destroyed is True
+    game.restart()
+    assert game.flow.boss_destroyed is False
+    assert header[H_FLOW] == FlowState.INTRO
+    _tick_until(game, _warning, limit=800)
+    assert header[H_BOSS_ACTIVE] == 2
+
+
+@pytest.mark.parametrize(("side", "turret", "engine"), [(-1.0, 0, 2), (1.0, 1, 3)])
+def test_a_level_one_vulcan_reaches_a_wing_turret_and_an_engine_pod(
+    side: float, turret: int, engine: int
+) -> None:
+    # Bolts stop at the first row they touch and the hull spawns first. The turrets stand clear of
+    # the hull circle and each engine pod pokes past it, so plain bolts can still take the parts
+    # (the laser and the bomb pierce and reach them anyway).
+    game = _quiet_boss_game(god=True, weapon=WeaponKind.VULCAN, level=1)
+    _tick_until(game, _fight_started, limit=1500)
+    boss = game.flow.boss
+    assert boss is not None
+    hull = _hull_index(game)
+    turret_row = game.enemies.index_of_uid(boss.part_uid(turret))
+    engine_row = game.enemies.index_of_uid(boss.part_uid(engine))
+    for _ in range(900):
+        game.ship.x = float(game.enemies.x[hull]) + side * 40.0
+        _fire_tick(game)
+    assert game.enemies.kind[turret_row] == EnemyKind.BOMBER_STUMP  # shot off
+    assert game.enemies.hp[engine_row] < BOMBER_1.parts[engine].hp  # and the pod is dented
+
+
+def test_an_unshot_bomber_counts_down_its_last_twenty_seconds_then_retreats_unpaid() -> None:
+    game = _quiet_boss_game(god=True)
+    header = game.buffers["header"]
+    countdown: list[int] = []
+    retreats = 0
+    hull_ys: list[float] = []
+    boss = None
+    for _ in range(8000):
+        _tick(game)
+        boss = game.flow.boss if game.flow.boss is not None else boss
+        timer = int(header[H_BOSS_TIMER_S])
+        if timer >= 0:
+            if not countdown:
+                assert boss.fight_ticks == BOMBER_1.timeout_ticks - 20 * 60  # 20 s left, no sooner
+            if not countdown or countdown[-1] != timer:
+                countdown.append(timer)
+        retreating = len(_event_records(game, EV_BOSS_RETREAT))
+        retreats += retreating
+        if retreats and boss.active:
+            hull_ys.append(float(game.enemies.y[_hull_index(game)]))
+        if retreating:
+            assert boss.fight_ticks == BOMBER_1.timeout_ticks == 6000
+        if header[H_FLOW] == FlowState.CLEAR:
+            break
+    assert countdown == list(range(20, 0, -1))
+    assert retreats == 1
+    assert hull_ys == sorted(hull_ys, reverse=True)  # the bomber leaves upward
+    assert hull_ys[0] - hull_ys[-1] > 50.0
+    assert header[H_FLOW] == FlowState.CLEAR
+    assert game.flow.boss_destroyed is False  # the tally's boss line will be 0
+    assert header[H_BOSS_ACTIVE] == 0
+    assert header[H_SCORE] == 0  # nobody was paid for a bomber that got away
+    assert game.enemies.n == 0
+
+
+def test_shooting_the_bomber_down_pays_only_its_parts_not_the_kill() -> None:
+    game = _quiet_boss_game(god=True, weapon=WeaponKind.LASER, level=5)
+    header = game.buffers["header"]
+    _tick_until(game, _fight_started, limit=1500)
+    boss = game.flow.boss
+    assert boss is not None
+    for k in range(len(BOMBER_1.parts)):  # shoot all four parts off at once
+        game.enemies.hp[game.enemies.index_of_uid(boss.part_uid(k))] = 0
+    _tick(game)
+    assert header[H_SCORE] == 28000
+    assert header[H_BOSS_PHASE] == 2  # all four parts gone: the core opens (D-11)
+    for _ in range(4000):
+        _fire_tick(game)
+        if header[H_FLOW] == FlowState.CLEAR:
+            break
+    assert game.flow.boss_destroyed is True
+    assert header[H_SCORE] == 28000  # the hull kill itself pays nothing (D-18)
+
+
+# --- the stage-clear tally (plan 03-21) -------------------------------------------------------
+
+_TALLY_SLOTS = (H_TALLY_BOSS, H_TALLY_MEDALS, H_TALLY_NO_MISS, H_TALLY_BOMBS)
+
+
+def _tally_header(game: Game) -> list[int]:
+    header = game.buffers["header"]
+    return [int(header[slot]) for slot in (*_TALLY_SLOTS, H_TALLY_N)]
+
+
+def test_the_tally_slots_are_zero_before_the_boss_and_in_the_gallery() -> None:
+    game = _boss_game()
+    _tick_n(game, 5)
+    assert _tally_header(game) == [0, 0, 0, 0, 0]
+    gallery = Game()
+    _tick_n(gallery, 5)
+    assert _tally_header(gallery) == [0, 0, 0, 0, 0]
+
+
+def test_the_boss_kill_leads_to_clear_then_a_tally_that_adds_four_lines_to_the_score() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    states: list[int] = []
+    for _ in range(9000):
+        _fire_tick(game)
+        state = int(header[H_FLOW])
+        if not states or states[-1] != state:
+            states.append(state)
+        if state == FlowState.TALLY:
+            break
+    assert states[-2:] == [FlowState.CLEAR, FlowState.TALLY]
+    assert _tally_header(game)[4] == 0  # nothing revealed on the first TALLY step
+    medals = game.chain.collected
+    expected = [
+        TALLY_BOSS_BONUS,
+        medals * TALLY_MEDAL_BONUS,
+        TALLY_NO_MISS_BONUS,
+        game.bomb.stock * TALLY_BOMB_BONUS,
+    ]
+    assert _tally_header(game)[:4] == expected
+    before = int(header[H_SCORE])
+    revealed: list[int] = []
+    for _ in range(3 * TALLY_LINE_TICKS + 1):
+        _fire_tick(game)
+        n = int(header[H_TALLY_N])
+        if not revealed or revealed[-1] != n:
+            revealed.append(n)
+    assert revealed == [1, 2, 3, 4]
+    assert int(header[H_SCORE]) == before + sum(expected)
+    assert int(header[H_FLOW]) == FlowState.TALLY
+
+
+def test_the_tally_slots_return_to_zero_when_the_run_restarts() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    for _ in range(9000):
+        _fire_tick(game)
+        if header[H_FLOW] == FlowState.TALLY:
+            break
+    _tick_n(game, TALLY_LINE_TICKS + 5)
+    assert _tally_header(game)[4] >= 1
+    game.restart()
+    assert _tally_header(game) == [0, 0, 0, 0, 0]
+    assert game.flow.tally.revealed == 0
+
+
+def _one_tick_from_the_end_of_stage_clear() -> Game:
+    """A run started at the boss marker, its state all set, one step before STAGE CLEAR ends."""
+    game = _skip_intro(Game(stage=STAGE_1, at="boss", weapon=WeaponKind.HOMING, level=3, bombs=2))
+    flow = game.flow
+    assert flow is not None
+    assert game.director is not None
+    assert game.terrain.distance > 0.0
+    game.score.score = 123_456
+    game.score.lives = 2
+    game.bomb.stock = 2
+    game.terrain.speed = game.terrain.target = BOSS_CRAWL_SPEED
+    game.director.cursor = 5
+    game.director.ground_cursor = 3
+    _populate(game)
+    flow.state = FlowState.STAGE_CLEAR
+    flow.timer = STAGE_CLEAR_TICKS - 1
+    flow.boss_destroyed = True
+    return game
+
+
+def test_when_stage_clear_ends_stage_one_restarts_and_the_ship_flies_in_again() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    header = game.buffers["header"]
+    _tick(game)
+    assert header[H_FLOW] == FlowState.INTRO
+    assert game.terrain.distance == 0.0  # the start of the stage, never the ?at marker
+    assert game.terrain.speed == game.terrain.target == SCROLL_SPEED
+    assert game.director is not None
+    assert (game.director.cursor, game.director.ground_cursor) == (0, 0)
+    assert header[H_PLAYER_PHASE] == PlayerPhase.RESPAWN
+    assert game.ship.y > SHIP_START_Y
+    assert header[H_BOSS_ACTIVE] == 0
+    assert _tally_header(game) == [0, 0, 0, 0, 0]
+    _tick(game)
+    assert _event_kinds(game).count(EV_STAGE_START) == 1
+
+
+def test_stage_clear_empties_the_enemy_bullet_missile_and_pickup_pools() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    assert game.enemies.n == 1
+    _tick(game)
+    pools = (game.enemies, game.ebullets, game.pbullets, game.missiles, game.pickups)
+    assert [pool.n for pool in pools] == [0, 0, 0, 0, 0]
+    header = game.buffers["header"]
+    assert [header[slot] for slot in (H_ENEMY_N, H_EBULLET_N, H_PBULLET_N, H_MISSILE_N)] == [0] * 4
+    assert header[H_PICKUP_N] == 0
+
+
+def test_the_loop_keeps_score_lives_weapon_level_and_bombs() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    bomb = game.bomb
+    _tick(game)
+    header = game.buffers["header"]
+    assert header[H_SCORE] == 123_456
+    assert header[H_LIVES] == 2
+    assert (header[H_WEAPON], header[H_LEVEL]) == (WeaponKind.HOMING, 3)
+    assert header[H_BOMBS] == 2
+    assert game.bomb is bomb
+
+
+def test_the_loop_starts_the_next_tally_counting_from_zero() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    game.chain.collected = 8
+    game.life.deaths = 3
+    _tick(game)
+    _tick(game)  # the first INTRO step re-bases the counters
+    assert game.chain.collected == 0
+    assert game.flow is not None
+    assert game.flow._deaths_at_start == 3
+
+
+def test_the_midboss_comes_again_in_the_next_loop() -> None:
+    game = _one_tick_from_the_end_of_stage_clear()
+    assert game.flow is not None
+    game.flow._midboss_done = True
+    _tick(game)
+    assert game.flow._midboss_done is False
+
+
+def test_the_stage_restart_needs_a_stage_run() -> None:
+    with pytest.raises(ValueError, match="gallery"):
+        Game()._restart_stage()
+
+
+def test_the_boss_kill_runs_through_the_tally_and_stage_clear_back_to_the_intro() -> None:
+    game = _boss_game()
+    header = game.buffers["header"]
+    clear_events = starts_after = 0
+    saved = False
+    at_clear: tuple[float, ...] | None = None
+    for _ in range(20_000):
+        _fire_tick(game)
+        clear_events += _event_kinds(game).count(EV_STAGE_CLEAR)
+        saved = saved or game.save_requested
+        if at_clear is not None:
+            starts_after += _event_kinds(game).count(EV_STAGE_START)
+        if at_clear is None and header[H_FLOW] == FlowState.STAGE_CLEAR:
+            at_clear = (header[H_SCORE], header[H_LIVES], header[H_WEAPON], header[H_LEVEL])
+        if at_clear is not None and header[H_FLOW] == FlowState.INTRO:
+            break
+    assert at_clear is not None
+    assert header[H_FLOW] == FlowState.INTRO
+    assert clear_events == 1
+    assert saved is True
+    assert (header[H_SCORE], header[H_LIVES], header[H_WEAPON], header[H_LEVEL]) == at_clear
+    assert header[H_STAGE_DIST] < 100.0
+    _fire_tick(game)
+    starts_after += _event_kinds(game).count(EV_STAGE_START)
+    assert starts_after == 1

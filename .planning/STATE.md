@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 02
-current_phase_name: Arcade Shooting Feel
-status: verifying
-stopped_at: Completed 02-33-PLAN.md
-last_updated: "2026-10-18T12:22:10.487Z"
+current_phase: 03
+current_phase_name: Stage 1 Vertical Slice
+status: executing
+stopped_at: Completed 03-26-PLAN.md
+last_updated: "2026-10-19T05:09:18.524Z"
 last_activity: 2026-10-18
-last_activity_desc: Phase 02 execution started
-state_head: 983af3973126f021b970c385a8804c988d093aba
+last_activity_desc: Phase 03 execution started
+state_head: 2da5f0a26d43e5187346957dcaf4be31fce51359
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 43
-  completed_plans: 43
-  percent: 25
+  completed_phases: 2
+  total_plans: 71
+  completed_plans: 70
+  percent: 50
 ---
 
 # Project State
@@ -23,21 +23,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-17)
 
 **Core value:** Shooting feels great: tight, responsive ship control and punchy 3D feedback (hits, explosions, screen shake) at a smooth framerate in the browser.
-**Current focus:** Phase 02 — Arcade Shooting Feel
+**Current focus:** Phase 03 — Stage 1 Vertical Slice
 
 ## Current Position
 
-Phase: 02 (Arcade Shooting Feel) — EXECUTING
-Plan: 33 of 33
-Status: Phase complete — ready for verification
-Last activity: 2026-10-18 — Phase 02 execution started
+Phase: 03 (Stage 1 Vertical Slice) — EXECUTING
+Plan: 28 of 28
+Status: Ready to execute
+Last activity: 2026-10-18 — Phase 03 execution started
 
-Progress: [███░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 43
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -46,6 +46,7 @@ Progress: [███░░░░░░░] 25%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 10 | - | - |
+| 2 | 33 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -99,6 +100,33 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P31 | 18 min | 2 tasks | 10 files |
 | Phase 02 P32 | 14 min | 3 tasks | 11 files |
 | Phase 02 P33 | 30min | 3 tasks | 3 files |
+| Phase 03 P01 | 25 min | 2 tasks | 15 files |
+| Phase 03 P02 | 12 min | 2 tasks | 11 files |
+| Phase 03 P03 | 50min | 3 tasks | 33 files |
+| Phase 03 P04 | 13 min | 2 tasks | 17 files |
+| Phase 03 P05 | 8 min | 2 tasks | 21 files |
+| Phase 03 P06 | 16min | 2 tasks | 20 files |
+| Phase 03 P07 | 9 min | 2 tasks | 12 files |
+| Phase 03 P08 | 9 min | 2 tasks | 24 files |
+| Phase 03 P09 | 12 min | 2 tasks | 7 files |
+| Phase 03 P10 | 11 min | 2 tasks | 18 files |
+| Phase 03 P11 | 25 min | 2 tasks | 21 files |
+| Phase 03 P12 | 12 min | 2 tasks | 19 files |
+| Phase 03 P13 | 25 min | 2 tasks | 19 files |
+| Phase 03 P14 | 15 min | 2 tasks | 24 files |
+| Phase 03 P15 | 7 min | 2 tasks | 17 files |
+| Phase 03 P16 | 7 min | 2 tasks | 12 files |
+| Phase 03 P17 | 6 min | 2 tasks | 11 files |
+| Phase 03 P18 | 29 min | 2 tasks | 16 files |
+| Phase 03 P19 | 12 min | 2 tasks | 17 files |
+| Phase 03 P20 | 16 min | 2 tasks | 21 files |
+| Phase 03 P21 | 25 min | 2 tasks | 14 files |
+| Phase 03 P22 | 14 min | 2 tasks | 7 files |
+| Phase 03 P24 | 12 min | 2 tasks | 7 files |
+| Phase 03 P25 | 32 min | 2 tasks | 12 files |
+| Phase 03 P27 | 8 min | 2 tasks | 8 files |
+| Phase 03 P23 | 30min | 2 tasks | 5 files |
+| Phase 03 P26 | 45min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -188,6 +216,70 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-32: the laser hum is one dedicated looped source outside the 20 voice slots; voices steal by lowest priority then oldest, a request nothing outranks is dropped, and the cooldown restarts only when a voice starts
 - [Phase 02]: 02-32: the iOS keepalive sets audioSession to playback and resumes a suspended or interrupted context on later gestures with a pending-resume guard cleared on settle or statechange; the device report gains an audio: line
 - [Phase 02]: Plan 02-33: user waived the Android criterion for Phase 2 (no Android device); verdict GO for desktop + iPhone, Android not measured, carried forward as UAT
+- [Phase 03]: StageData validates ordering and ranges in __post_init__ (stage modules are valid at import)
+- [Phase 03]: StageDirector.jump skips rows with at <= distance; a clamped ?at= start (distance 0) keeps rows at 0.0
+- [Phase 03]: Gallery parity guarded by SHA-256 over header slots 0-29 and live enemy rows of a 1200-step run
+- [Phase 03]: 03-02: moon light takes the old sun position so rig.sun and air-shadow displacement are unchanged; light count fixed at three
+- [Phase 03]: 03-02: bloomStrength is a TIERS property (high 0.6, mid 0.5, low 0.5) published as bloomPass.baseStrength; bomb pulse reads the live base
+- [Phase 03]: Hit flash multiplier raised 6 to 10 so dark gunmetal still blooms on a hit
+- [Phase 03]: Colour scan covers fillStyle and CSS color/background text in web/src plus index.html; position arrays with negative channels are not colours
+- [Phase 03]: Enemy bullet hue 39 (orange-yellow) reserved by test; fire red, ember magenta, spark cyan, bomb pickup acid green
+- [Phase 03]: Protocol 3 is fixed in protocol.py: header slots 30-49 carry the Phase 3 state and 50-63 are reserved for Phase 4; events 13-23, BLAST_HUGE 3, ENEMY_CAP 64, PICKUP_CAP 40, 400 gameplay enemy bullets, ENEMY_MAX_ALIVE 56
+- [Phase 03]: 03-04: create_game builds STAGE_1 unless gallery is a real True; ?at= is allow-listed to midboss and boss in JS and Python and ignored in the gallery
+- [Phase 03]: 03-04: bootGame appends gallery unless a spec asks for the stage, every perf run passes gallery true, and the renderer extrapolates with the live SCROLL_RATE slot
+- [Phase 03]: 03-05: enemy fire is data: PatternSpec registry, one run_pattern runner, per-row pattern/volley/burst_left columns, and a _COLUMNS-driven swap-remove checked against the dataclass fields
+- [Phase 03]: 03-05: ring phase is (volley * phase_step_deg) % (360 / count) from a per-row volley counter; AIMED without offset keeps fire_aimed for bit parity and the gallery fire digest matched the pre-change code
+- [Phase 03]: 03-06: road_bend runs at 0.8 units/step (road_down stays a 0.25 crawl) because path offsets ride the scrolling terrain; at crawl speed the turn would be off screen
+- [Phase 03]: 03-06: EnemyPool.spawn raises ValueError for PATH motion without a valid path index; only PATH rows have a top exit, SCRIPTED rows skip every exit
+- [Phase 03]: 03-06: formations are functions expanding to WaveEntry tuples; stage 1 sections merge with a stable sort on at; MIDBOSS_LULL 420 and BOSS_QUIET 240 are pinned constants
+- [Phase 03]: 03-07: kill payout runs through Game._settle_kills (remove_dead, award, drop pickups) to keep _step under the statement limit; later score sources call game.score.award so extends and the 9,999,999 cap apply uniformly
+- [Phase 03]: 03-07: score is a Python int clamped at 9,999,999 and extends use the int; lives icons are cyan U+25B2 capped at 9; reset_run makes the running high score the new best at start
+- [Phase 03]: 03-08: a life is taken on the confirmed death step in stage mode only; life.final mirrors score.lives == 0 before every PlayerLife step, so an extend before the last DYING step restores a ship
+- [Phase 03]: 03-08: on the game-over step OUT is reached, then FLOW becomes GAME_OVER with one GAME_OVER event and a save request; Game.restart() resets in place, keeps the high score and replays ?at=
+- [Phase 03]: 03-09: the game-over overlay is state-driven from header FLOW, arms after 800 ms on the frame clock, and restarts through the held restart proxy on a fresh fire keydown or a tap whose pointerdown came after the arm
+- [Phase 03]: 03-09: #game-over sits outside #app at z-index 8 (below #paused) and carries data-no-steer; restart keys are the KEY_BINDINGS fire keys
+- [Phase 03]: 03-10: a stage run (and every restart) opens with the respawn fly-in via PlayerLife.begin_fly_in(ship, 0), so the intro grants no invulnerability while a death respawn keeps 150; StageFlow starts in INTRO, pushes STAGE_START once and reaches PLAY after INTRO_TICKS (120); header FLOW_T is the intro progress
+- [Phase 03]: 03-10: wreck and scorch rings clear on events.STAGE_START (guarded for older events tables) because the scroll restarts at 0; the banner overlay is state-driven from FLOW, STAGE and FLOW_T
+- [Phase 03]: 03-11: a medal stores no velocity; PickupPool.step(ground_speed) drifts it by the live ground speed, and only a medal leaving the playfield increments medals_missed (a refused spawn or an eviction is never a miss)
+- [Phase 03]: 03-11: Game._step_pickups drains medals_missed into chain.miss() after the catch callbacks, a confirmed death calls chain.miss(), stage_reset() zeroes only the stage catch count; the wreck ring takes only ground kinds with a JS model (hasModel)
+- [Phase 03]: 03-12: the city is road-grid data (CityBlock rows plus MAGLEV/RUNWAY_LIGHT CityFeature lines) expanded once in StageData into stride-6 placements that ship in the manifest; a feature corridor of 6 units skips any overlapping building, margin blocks fill columns -2, -1, 3 and 4, and stage 1 has 2609 placements under the 3000 cap
+- [Phase 03]: 03-13: the city and its road grid are children of the ground-layer group, streamed from the manifest through one fixed terrain window (8 aspects) with per-kind capacities; NDC identity with ground units is unit-tested at four aspects and terrain_ring.js is gone
+- [Phase 03]: 03-13: SIGN, TOWER, LOWRISE and RUNWAY_LIGHT glows are white and tinted per instance from PALETTE neon hues by variant; only boxes at least 0.2 thick are rounded to hold the high tier near 320k triangles
+- [Phase 03]: 03-13: the road grid scrolls by texture offset only (groundUv, wrapped to [0,1)); a looping stage whose length is not a multiple of the 80 pitch reports seamAligned false (the gallery's 9300) instead of throwing
+- [Phase 03]: 03-14: the BossController keeps the hull's logical position and writes it into the rows; rows are found by uid and a vanished row is skipped, so a boss always ends through the timeout
+- [Phase 03]: 03-14: phase thresholds compare as integer hit points so an exact fraction (0.6 of 500) triggers; settle order is parts, hull death, timeout, phase, so a kill on the timeout step counts as destroyed
+- [Phase 03]: 03-14: settle() returns the points to award (train kinds pay 0 in the pool); plan 03-17 must add the return value to the score and keep boss parts outside the hull circle so bolts reach them
+- [Phase 03]: 03-15: fires burn only non-target lots, and a debug jump keeps ground targets still on screen so a ?at= start has no holes
+- [Phase 03]: 03-15: stage 1 flags the middle lot of every 6th-7th block per section, skipping feature corridors and the BOSS_QUIET window (44 targets, 30 with medals)
+- [Phase 03]: 03-16: city rubble and flicker kinds are Sets of manifest kind values (the cityKinds Set shared with the explosion fx); the hit flash holds a damaged building's glow at full instead of multiplying the neon
+- [Phase 03]: 03-16: wreck kinds come from wreckKindsFor(groundKindNames, manifest enemy_wreck, hasModel); all four city kinds share one rubble pile through the wreck ring's rubble option
+- [Phase 03]: 03-17: the mid-boss starts once when the scroll is inside MIDBOSS_TRIGGER_WINDOW (80 units) past its marker, so a ?at=boss jump never starts a fight it skipped; StageFlow owns the BossController (slot 1) and drops it on end or game over
+- [Phase 03]: 03-17: MIDBOSS_1 keeps the plan's turret offsets (dx 0, dy -22/+22); the aft turret is shadowed from bolts and missiles by the hull circle, only the laser and the bomb reach it (fore turret verified hit by a real Lv1 vulcan)
+- [Phase 03]: 03-17: boss points from settle() go through score.award at the spec's x / hold_y; header BOSS_ACTIVE carries the boss slot (1 for the mid-boss), BOSS_HP the hull fraction and BOSS_TIMER_S -1 when quiet; manifest stage.bosses lists slot, name and phase_fracs for midboss and boss data
+- [Phase 03]: 03-18: the train stays at ground level with wide-set guns (barrels at x +-4.4), because the elevated maglev deck (6 wide, about 20 units up) hides a narrow centred gun from the camera and lifting the train would break its footprint alignment with the hit circle
+- [Phase 03]: 03-18: the boss bar is a pure function of the header (BOSS_ACTIVE shows, BOSS_HP scales the fill, BOSS_TIMER_S >= 0 shows ceil seconds), with phase ticks built once per boss from manifest stage.bosses and every DOM write guarded by a cached value
+- [Phase 03]: 03-18: stump smoulder keeps one clock per effect and a round of puffs from every live stump row (no flame window, reset while no stump exists so a new stump never bursts); SHAKE_PART is 2.0 / 0.35 s inside the 3.0 / 0.5 s ceilings
+- [Phase 03]: 03-18: the train hull now leaves a charred wreck on death (ENEMY_WRECK marks it, and it finally has a model); gun cars and stumps leave none
+- [Phase 03]: 03-19: the bomber keeps the plan's part geometry; engine pods are reachable by plain bolts only through a narrow gap (measured), laser and bomb pierce - revisit at the 03-28 gate
+- [Phase 03]: 03-19: a phase jump keeps the deepest hull_kind named so far, and CLEAR yields to GAME_OVER when the ship is OUT
+- [Phase 03]: 03-20: The WARNING flash is a soft 0.5 s opacity pulse (2 Hz) with prefers-reduced-motion off; a unit test reads index.html and asserts a period of at least 0.34 s
+- [Phase 03]: 03-20: The boss death shake is a chain of four ceiling-strength shakes (3.0, 0.5 s) queued 0.35 s apart in update time inside createShake, never a raised ceiling
+- [Phase 03]: 03-20: Bomber shadows use sizeScale 3 (126 units) to match the 120-unit airframe; the boss sweep silhouette repeats the wing outline of bomber.js
+- [Phase 03]: 03-21: first tally line is paid on the first TALLY step, then one per 60 steps; 120 steps hold after the fourth
+- [Phase 03]: 03-21: the stage loop keeps save_requested up (only reset() for a new run clears it) so the STAGE_CLEAR high-score save cannot be lost
+- [Phase 03]: 03-21: the D-27 loop restarts at distance 0 even for an ?at=boss run (only a game-over restart honours ?at)
+- [Phase 03]: 03-22: a save request is always acknowledged by WebGame, with or without a store
+- [Phase 03]: 03-22: any truthy gameplay test flag (gallery, god, weapon, level, bombs, lives, at, stress, crash) makes the high-score store read-only; ?debug alone still saves
+- [Phase 03]: 03-22: storage values are trusted only as 1-8 ASCII digits clamped to SCORE_CAP; every storage access is inside a try
+- [Phase 03]: 03-24: stage sounds WARNING/EXTEND/BOSS_DEFEAT/STAGE_CLEAR/GAME_OVER get voice priority 11-13, above the Phase 2 maximum of 10; TALLY_TICK cooldown 120 ms, MEDAL 60 ms
+- [Phase 03]: 03-25: sign flicker is chosen by an integer placement hash below 0.15 (a sign's variant is a 0-5 hue index, so 'variant below 0.15' would flicker only cyan signs) and runs from the effect clock
+- [Phase 03]: 03-25: wet-street reflections are one dim (0.3) additive InstancedMesh per glowing kind laid flat on the road and stretched along +z, sharing the glow's geometry and instanceColor; shown for the prewarm and set by applyAtmosphere so a tier change never compiles
+- [Phase 03]: 03-25: the rain quad is built in view space and drawn DoubleSide (its winding flips with the streak direction, FrontSide culled every streak while rainCount read 600); fire plumes take an optional getDrift so puffs ride the ground
+- [Phase 03]: 27: stage perf runs carry no stress storm by default (stress 0 for --stage 1, 500 for the gallery); the gate measures the stage's own content
+- [Phase 03]: 27: the mortal perf run parks the ship (the sweep never dies) and fails if no death was seen; game-over ticks stay in its average
+- [Phase 03]: 27: native full-stage play-through reaches STAGE_CLEAR at about step 17300 with a peak of 58 gameplay enemy bullets (budget 180), no refused spawn, no lost high-priority event; stage data needed no tuning
+- [Phase 03]: 03-23: Press Start 2P (latin 400, OFL-1.1) vendored from the user-approved @fontsource/press-start-2p@5.3.0 tarball after a sha512 match; --hud-font stack with monospace fallback, font-display block
+- [Phase 03]: 03-26: HUD blocks placed by transform from layoutHud anchors; bottom-right block right-aligned and hops above the touch bomb button on overlap; boss bar follows the top band through --hud-top
 
 ### Pending Todos
 
@@ -211,6 +303,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T12:22:10.383Z
-Stopped at: Completed 02-33-PLAN.md
+Last session: 2026-10-19T05:09:18.287Z
+Stopped at: Completed 03-26-PLAN.md
 Resume file: None

@@ -24,15 +24,24 @@ describe('SFX_TABLE', () => {
     expect(large.params[RELEASE]).toBeGreaterThan(medium.params[RELEASE]);
   });
 
+  it('the huge explosion is longer and lower than the large one', () => {
+    const { EXPLODE_LARGE: large, EXPLODE_HUGE: huge } = SFX_TABLE;
+    const FREQUENCY = 2;
+    const RELEASE = 5;
+
+    expect(huge.params[FREQUENCY]).toBeLessThan(large.params[FREQUENCY]);
+    expect(huge.params[RELEASE]).toBeGreaterThan(large.params[RELEASE]);
+  });
+
   it('explosions are noisy', () => {
     const NOISE = 13;
-    for (const name of ['EXPLODE_SMALL', 'EXPLODE_MEDIUM', 'EXPLODE_LARGE']) {
+    for (const name of ['EXPLODE_SMALL', 'EXPLODE_MEDIUM', 'EXPLODE_LARGE', 'EXPLODE_HUGE']) {
       expect(SFX_TABLE[name].params[NOISE]).toBeGreaterThan(0);
     }
   });
 });
 
-// The 18 names of the Python SfxId enum (src/scorched_core/audio/sfx_id.py), in value order.
+// The 28 names of the Python SfxId enum (src/scorched_core/audio/sfx_id.py), in value order.
 const SFX_ID_NAMES = [
   'EXPLODE_SMALL',
   'EXPLODE_MEDIUM',
@@ -52,7 +61,19 @@ const SFX_ID_NAMES = [
   'DEATHBOMB',
   'ENEMY_FIRE',
   'LASER_HUM',
+  'EXPLODE_HUGE',
+  'WARNING',
+  'EXTEND',
+  'MEDAL',
+  'PART_DESTROY',
+  'BOSS_PHASE',
+  'BOSS_DEFEAT',
+  'TALLY_TICK',
+  'STAGE_CLEAR',
+  'GAME_OVER',
 ];
+// The Phase 2 gameplay sounds (values 0-17): the stage sounds below are mixed against these.
+const GAMEPLAY_NAMES = SFX_ID_NAMES.slice(0, 18);
 const ATTACK = 3;
 const RELEASE = 5;
 
@@ -80,10 +101,10 @@ describe('SFX_TABLE covers every sound', () => {
     expect(Math.max(...quiet)).toBeLessThan(Math.min(...loud));
   });
 
-  it('death, bomb blast and player hit have the highest priority', () => {
+  it('death, bomb blast and player hit have the highest gameplay priority', () => {
     const top = ['DEATH', 'BOMB_BLAST', 'PLAYER_HIT'];
     const topMin = Math.min(...top.map((n) => SFX_TABLE[n].priority));
-    const others = SFX_ID_NAMES.filter((n) => !top.includes(n));
+    const others = GAMEPLAY_NAMES.filter((n) => !top.includes(n));
 
     for (const name of others) expect(SFX_TABLE[name].priority).toBeLessThan(topMin);
   });
@@ -97,11 +118,11 @@ describe('SFX_TABLE covers every sound', () => {
     expect(new Set(lowest.map((n) => SFX_TABLE[n].priority)).size).toBe(1);
   });
 
-  it('the bomb blast is the longest sound and its launch rises', () => {
+  it('the bomb blast is the longest gameplay sound and its launch rises', () => {
     const SLIDE = 8;
     const length = (name) => SFX_TABLE[name].params[RELEASE];
 
-    for (const name of SFX_ID_NAMES.filter((n) => n !== 'BOMB_BLAST')) {
+    for (const name of GAMEPLAY_NAMES.filter((n) => n !== 'BOMB_BLAST')) {
       expect(length('BOMB_BLAST')).toBeGreaterThanOrEqual(length(name));
     }
     expect(SFX_TABLE.BOMB_LAUNCH.params[SLIDE]).toBeGreaterThan(0);
@@ -113,6 +134,87 @@ describe('SFX_TABLE covers every sound', () => {
   });
 });
 
+
+describe('the stage sounds', () => {
+  const FREQUENCY = 2;
+  const SUSTAIN = 4;
+  const RELEASE_AT = 5;
+  const PITCH_JUMP = 10;
+  const REPEAT_TIME = 12;
+  const seconds = (name) => {
+    const p = SFX_TABLE[name].params;
+    return p[3] + p[SUSTAIN] + p[RELEASE_AT] + p[18] + p[16];
+  };
+
+  it('the WARNING is a two-tone siren that repeats for about a second', () => {
+    const { params } = SFX_TABLE.WARNING;
+
+    expect(params[REPEAT_TIME]).toBeGreaterThan(0);
+    expect(params[PITCH_JUMP]).not.toBe(0);
+    expect(seconds('WARNING')).toBeGreaterThanOrEqual(0.8);
+    expect(seconds('WARNING')).toBeLessThanOrEqual(1.5);
+  });
+
+  it('the EXTEND chime rises: a positive pitch jump', () => {
+    expect(SFX_TABLE.EXTEND.params[PITCH_JUMP]).toBeGreaterThan(0);
+  });
+
+  it('the boss defeat has a longer tail than the huge explosion', () => {
+    expect(seconds('BOSS_DEFEAT')).toBeGreaterThan(seconds('EXPLODE_HUGE'));
+  });
+
+  it('the TALLY_TICK is a crisp tick, shorter than a quarter of a second', () => {
+    expect(seconds('TALLY_TICK')).toBeLessThan(0.25);
+  });
+
+  it('the PART_DESTROY crunch is noisy and the BOSS_PHASE whoosh rises', () => {
+    const NOISE = 13;
+    const SLIDE = 8;
+
+    expect(SFX_TABLE.PART_DESTROY.params[NOISE]).toBeGreaterThan(0);
+    expect(SFX_TABLE.BOSS_PHASE.params[SLIDE]).toBeGreaterThan(0);
+  });
+
+  it('the GAME_OVER sting falls: a negative slide or pitch jump', () => {
+    const { params } = SFX_TABLE.GAME_OVER;
+
+    expect(Math.min(params[8], params[PITCH_JUMP])).toBeLessThan(0);
+    expect(params[FREQUENCY]).toBeGreaterThan(0);
+  });
+});
+
+// The least time between two voices of a sound; TALLY_LINE_TICKS is 60 steps, one second, per line.
+const TALLY_LINE_MS = 1000;
+
+describe('the stage sounds keep their place in the mix', () => {
+  const BIG_MOMENTS = ['WARNING', 'EXTEND', 'BOSS_DEFEAT', 'STAGE_CLEAR', 'GAME_OVER'];
+
+  it.each(BIG_MOMENTS)('%s has a priority strictly above every gameplay sound', (name) => {
+    const loudestGameplay = Math.max(...GAMEPLAY_NAMES.map((n) => SFX_TABLE[n].priority));
+
+    expect(SFX_TABLE[name].priority).toBeGreaterThan(loudestGameplay);
+  });
+
+  it('EXPLODE_HUGE has at least the priority of the large explosion', () => {
+    expect(SFX_TABLE.EXPLODE_HUGE.priority).toBeGreaterThanOrEqual(SFX_TABLE.EXPLODE_LARGE.priority);
+  });
+
+  it('every stage sound outranks the shots, hits and enemy fire in priority', () => {
+    const noise = Math.max(...['VULCAN', 'MISSILE', 'HIT', 'ENEMY_FIRE'].map((n) => SFX_TABLE[n].priority));
+
+    for (const name of SFX_ID_NAMES.slice(18)) {
+      expect(SFX_TABLE[name].priority).toBeGreaterThan(noise);
+    }
+  });
+
+  it('the TALLY_TICK cooldown is below one tally line so every line ticks', () => {
+    expect(SFX_TABLE.TALLY_TICK.cooldownMs).toBeLessThan(TALLY_LINE_MS);
+  });
+
+  it('two medal catches 100 ms apart both play', () => {
+    expect(SFX_TABLE.MEDAL.cooldownMs).toBeLessThanOrEqual(100);
+  });
+});
 
 describe('every SFX_TABLE sound renders', () => {
   it.each(SFX_ID_NAMES)('%s synthesizes finite, audible samples', (name) => {

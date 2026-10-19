@@ -12,6 +12,9 @@ describe('parseUrlFlags', () => {
       level: null,
       god: false,
       bombs: null,
+      lives: null,
+      gallery: false,
+      at: null,
     });
   });
 
@@ -88,10 +91,45 @@ describe('parseUrlFlags', () => {
     expect(parseUrlFlags(query).bombs).toBe(expected);
   });
 
+  it.each([
+    ['?lives=1', 1],
+    ['?lives=5', 5],
+    ['?lives=9', 9],
+    ['?lives=12', 9],
+    ['?lives=0', 1],
+    ['?lives=-3', 1],
+    ['?lives=2.9', 2],
+    ['?lives=abc', null],
+    ['?lives=', null],
+    ['?lives=Infinity', null],
+    ['', null],
+  ])('%s gives lives %s', (query, expected) => {
+    expect(parseUrlFlags(query).lives).toBe(expected);
+  });
+
   it('detects god as a bare flag', () => {
     expect(parseUrlFlags('?god').god).toBe(true);
     expect(parseUrlFlags('?debug&god=1').god).toBe(true);
     expect(parseUrlFlags('?debug').god).toBe(false);
+  });
+
+  it('detects gallery as a bare flag', () => {
+    expect(parseUrlFlags('?gallery').gallery).toBe(true);
+    expect(parseUrlFlags('?debug&gallery=0').gallery).toBe(true);
+    expect(parseUrlFlags('?debug').gallery).toBe(false);
+    expect(parseUrlFlags('').gallery).toBe(false);
+  });
+
+  it.each([
+    ['?at=boss', 'boss'],
+    ['?at=midboss', 'midboss'],
+    ['?at=BOSS', null],
+    ['?at=final', null],
+    ['?at=', null],
+    ['?at=boss%20', null],
+    ['', null],
+  ])('%s gives at %s', (query, expected) => {
+    expect(parseUrlFlags(query).at).toBe(expected);
   });
 
   it('ignores unknown parameters', () => {
@@ -104,6 +142,9 @@ describe('parseUrlFlags', () => {
       level: null,
       god: false,
       bombs: null,
+      lives: null,
+      gallery: false,
+      at: null,
     });
   });
 

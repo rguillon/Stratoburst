@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
+import { PALETTE, saturationOf } from '../../src/fx/palette.js';
 import { createShipModel, hullVisibleFor } from '../../src/render/ship_model.js';
+import { colours } from '../helpers/vertex_colours.js';
 
 function meshesOf(root) {
   const meshes = [];
@@ -155,6 +157,36 @@ describe('createShipModel', () => {
     });
   });
 
+  describe('faction colours (D-38)', () => {
+    const ship = createShipModel({ detail: 'high' });
+    const fuselage = ship.getObjectByName('fuselage');
+
+    it('has a near-white hull family: every channel at least 0.6 and saturation below 0.15', () => {
+      for (const rgb of colours(fuselage.geometry)) {
+        expect(Math.min(...rgb), `${rgb}`).toBeGreaterThanOrEqual(0.6);
+        expect(saturationOf(rgb), `${rgb}`).toBeLessThan(0.15);
+      }
+    });
+
+    it('glows cyan: the engine takes NEON_CYAN', () => {
+      const { r, g, b } = ship.getObjectByName('engine-glow').material.color;
+      expect([r, g, b].map((v) => Math.fround(v))).toEqual(PALETTE.NEON_CYAN.rgb.map(Math.fround));
+    });
+
+    it('has a cyan trim glow mesh: an unlit HDR NEON_CYAN strip set on the wings and spine', () => {
+      const trim = ship.getObjectByName('cyan-trim');
+      expect(trim.isMesh).toBe(true);
+      expect(trim.material.isMeshBasicMaterial).toBe(true);
+      for (const rgb of colours(trim.geometry)) {
+        expect(rgb.map((v) => Math.fround(v))).toEqual(PALETTE.NEON_CYAN.rgb.map(Math.fround));
+      }
+      trim.geometry.computeBoundingBox();
+      const { min, max } = trim.geometry.boundingBox;
+      expect(max.x - min.x).toBeGreaterThan(10); // the wing leading edges
+      expect(max.z - min.z).toBeGreaterThan(5); // the spine
+    });
+  });
+
   describe('engine glow', () => {
     it('is an HDR colour (one channel above 1.0) so it crosses the bloom threshold', () => {
       const glow = createShipModel().getObjectByName('engine-glow');
@@ -227,9 +259,9 @@ describe('createShipModel', () => {
   });
 
   describe('the respawn blink (PLYR-10, Pitfall 9)', () => {
-    const hull = ['fuselage', 'canopy', 'engine-glow'];
+    const hull = ['fuselage', 'canopy', 'engine-glow', 'cyan-trim'];
 
-    it('setHullVisible(false) hides the hull, the canopy and the engine glow', () => {
+    it('setHullVisible(false) hides the hull, the canopy, the engine glow and the cyan trim', () => {
       const ship = createShipModel();
       ship.userData.setHullVisible(false);
       for (const name of hull) expect(ship.getObjectByName(name).visible, name).toBe(false);

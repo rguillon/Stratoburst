@@ -2,9 +2,14 @@ import math
 
 import pytest
 
+from scorched_core.clock.fixed_step_runner import STEP_MS
 from scorched_core.game.fault_mode import FaultMode
-from scorched_core.tuning import BOMB_START_STOCK
+from scorched_core.protocol import H_FLOW
+from scorched_core.stages.flow_state import FlowState
+from scorched_core.stages.stage_1 import STAGE_1
+from scorched_core.tuning import AT_LEAD, BOMB_START_STOCK, LIVES_START
 from scorched_core.weapons.weapon_kind import WeaponKind
+from scorched_web.bridge.high_score_store import KEY
 from scorched_web.entrypoint import create_game
 from scorched_web.web_game import WebGame
 
@@ -19,17 +24,17 @@ class FakeJsOptions:
 def test_dict_options() -> None:
     web = create_game({"seed": 5, "stress": 100})
     assert isinstance(web, WebGame)
-    assert web.manifest()["channels"]["ebullets"]["cap"] == 800
+    assert web.manifest()["channels"]["ebullets"]["cap"] == 1000
 
 
 def test_options_with_to_py() -> None:
     web = create_game(FakeJsOptions())
-    assert web.manifest()["channels"]["ebullets"]["cap"] == 950
+    assert web.manifest()["channels"]["ebullets"]["cap"] == 1150
 
 
 def test_none_options_use_defaults() -> None:
-    assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 800
-    assert create_game().manifest()["protocol"] == 2
+    assert create_game(None).manifest()["channels"]["ebullets"]["cap"] == 1000
+    assert create_game().manifest()["protocol"] == 3
 
 
 def test_no_crash_option_means_no_fault() -> None:
@@ -148,6 +153,49 @@ def test_no_bombs_option_means_the_default_stock() -> None:
 
 
 @pytest.mark.parametrize(
+    ("lives", "expected"),
+    [
+        (1, 1),
+        (0, 1),
+        (5, 5),
+        ("4", 4),
+        (9, 9),
+        (99, 9),
+        (-2, 1),
+        (2.9, 2),
+        ("6.8", 6),
+        (math.nan, 3),
+        (math.inf, 3),
+        (-math.inf, 3),
+        ("nan", 3),
+        ("x", 3),
+        ("", 3),
+        (None, 3),
+        (True, 3),
+        ([5], 3),
+    ],
+)
+def test_the_lives_option_is_truncated_and_clamped_and_junk_means_three(
+    lives: object, expected: int
+) -> None:
+    game = create_game({"lives": lives})._game
+    assert game.score.lives == expected
+    assert game.flow is not None
+    assert game.flow.state is FlowState.INTRO
+
+
+def test_no_lives_option_means_three_lives() -> None:
+    assert create_game({"seed": 1})._game.score.lives == LIVES_START
+
+
+def test_the_lives_option_is_what_a_restart_returns_to() -> None:
+    web = create_game({"lives": 2})
+    web._game.score.lives = 0
+    web._game.restart()
+    assert web._game.score.lives == 2
+
+
+@pytest.mark.parametrize(
     ("god", "expected"),
     [(True, True), (False, False), (1, False), ("yes", False), ("true", False), (None, False)],
 )
@@ -157,3 +205,148 @@ def test_the_god_option_is_a_real_boolean_true_or_nothing(god: object, expected:
 
 def test_no_god_option_means_a_mortal_ship() -> None:
     assert create_game({"seed": 1})._game.god is False
+
+
+def test_no_options_build_stage_one() -> None:
+    for web in (create_game(), create_game({}), create_game(None)):
+        manifest = web.manifest()
+        assert web._game.stage is STAGE_1
+        assert manifest["stage"]["number"] == 1
+        web._game.tick(STEP_MS, 0, 0.0, 0.0, 0.0, 0.0)
+        assert web._game.buffers["header"][H_FLOW] == FlowState.INTRO
+
+
+def test_the_gallery_option_builds_the_phase_two_gallery() -> None:
+    game = create_game({"gallery": True})._game
+    assert game.stage is None
+    assert game.director is None
+
+
+@pytest.mark.parametrize("value", [1, "yes", "true", None, False, 0, [True]])
+def test_a_gallery_value_that_is_not_a_real_true_builds_the_stage(value: object) -> None:
+    assert create_game({"gallery": value})._game.stage is STAGE_1
+
+
+@pytest.mark.parametrize("marker", ["midboss", "boss"])
+def test_the_at_option_starts_the_stage_just_before_the_marker(marker: str) -> None:
+    game = create_game({"at": marker})._game
+    assert game.stage is STAGE_1
+    assert game.terrain.distance == STAGE_1.marker(marker) - AT_LEAD
+
+
+@pytest.mark.parametrize("value", ["nowhere", "BOSS", "", 3, None, ["boss"], True])
+def test_an_at_value_that_is_not_an_allow_listed_marker_starts_at_zero(value: object) -> None:
+    game = create_game({"at": value})._game
+    assert game.stage is STAGE_1
+    assert game.terrain.distance == 0.0
+
+
+def test_the_gallery_ignores_the_at_option() -> None:
+    game = create_game({"gallery": True, "at": "boss"})._game
+    assert game.stage is None
+    assert game.terrain.distance == 0.0
+
+
+class FakeStorage:
+    """A localStorage stand-in recording every write."""
+
+    def __init__(self, items: dict[str, object] | None = None) -> None:
+        self.items: dict[str, object] = dict(items or {})
+        self.writes: list[tuple[str, str]] = []
+
+    def getItem(self, key: str) -> object:  # noqa: N802 - the JS name
+        return self.items.get(key)
+
+    def setItem(self, key: str, value: str) -> None:  # noqa: N802 - the JS name
+        self.writes.append((key, value))
+        self.items[key] = value
+
+
+def test_the_stored_best_is_the_starting_high_score() -> None:
+    web = create_game({}, lambda: FakeStorage({KEY: "4200"}))
+    assert web._game.score.high_score == 4200
+
+
+def test_with_nothing_stored_the_starting_high_score_is_zero() -> None:
+    assert create_game({}, FakeStorage)._game.score.high_score == 0
+
+
+def test_a_flag_free_run_saves_its_best_when_the_game_pauses() -> None:
+    storage = FakeStorage()
+    web = create_game({}, lambda: storage)
+    web._game.score.score = 800
+    web._game.score.high_score = 800
+    web.set_paused(True)
+    assert storage.writes == [(KEY, "800")]
+
+
+def test_the_default_storage_getter_is_the_browser_one_and_never_breaks_a_native_game() -> None:
+    web = create_game({})
+    assert web._game.score.high_score == 0
+    web.set_paused(True)
+
+
+TEST_FLAG_RUNS = [
+    {"gallery": True},
+    {"god": True},
+    {"weapon": "laser"},
+    {"weapon": "bogus"},
+    {"level": 2},
+    {"bombs": 5},
+    {"lives": 2},
+    {"at": "boss"},
+    {"stress": 100},
+    {"crash": "py"},
+    {"debug": True, "seed": 4, "god": True},
+]
+
+
+@pytest.mark.parametrize("opts", TEST_FLAG_RUNS, ids=",".join)
+def test_a_run_with_any_test_flag_is_read_only_and_never_writes_a_best(
+    opts: dict[str, object],
+) -> None:
+    storage = FakeStorage({KEY: "100"})
+    web = create_game(opts, lambda: storage)
+    assert web._game.score.high_score == 100
+    web._game.score.high_score = 90_000
+    web.set_paused(True)
+    assert storage.writes == []
+
+
+@pytest.mark.parametrize(
+    "opts",
+    [
+        {"debug": True},
+        {"seed": 7},
+        {"god": False, "gallery": False, "stress": 0, "weapon": None, "level": None},
+        {"bombs": None, "lives": None, "at": None, "crash": None, "tier": "low"},
+        {"weapon": "", "at": ""},
+    ],
+)
+def test_debug_and_unset_flags_alone_keep_writes_enabled(opts: dict[str, object]) -> None:
+    storage = FakeStorage()
+    web = create_game(opts, lambda: storage)
+    web._game.score.high_score = 640
+    web.set_paused(True)
+    assert storage.writes == [(KEY, "640")]
+
+
+def test_the_only_key_ever_written_holds_a_digits_only_string() -> None:
+    storage = FakeStorage()
+    web = create_game({"debug": True}, lambda: storage)
+    web._game.score.high_score = 1234
+    web.set_paused(True)
+    web._game.score.high_score = 5678
+    web.set_paused(True)
+    assert [(key, value.isdigit()) for key, value in storage.writes] == [(KEY, True), (KEY, True)]
+
+
+def test_a_broken_storage_never_stops_a_game_from_starting_or_pausing() -> None:
+    def blocked() -> object:
+        msg = "localStorage is disabled"
+        raise RuntimeError(msg)
+
+    web = create_game({}, blocked)
+    assert web._game.score.high_score == 0
+    web._game.score.high_score = 10
+    web.set_paused(True)

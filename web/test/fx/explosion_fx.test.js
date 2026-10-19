@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTE } from '../../src/fx/palette.js';
+import {
+  BULLET_EXCLUSION_DEGREES,
+  BULLET_MIN_SATURATION,
+  PALETTE,
+  hueDistance,
+  hueOf,
+  saturationOf,
+} from '../../src/fx/palette.js';
 import {
   HIT_RECIPE,
   PICKUP_RECIPE,
   PLAYER_DEATH_RECIPE,
   PLAYER_HIT_RECIPE,
+  CITY_SPARKS,
   RECIPES,
   createExplosionFx,
   mulberry32,
 } from '../../src/fx/explosion_fx.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, PLAYER_HIT: 6, PLAYER_DEATH: 7 };
-const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4 };
-const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, PLAYER_HIT: 6, PLAYER_DEATH: 7, MEDAL: 13 };
+const PICKUP_KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4, MEDAL: 5 };
+const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2, HUGE: 3 };
 
 function build(options = {}) {
   const emitted = { additive: [], normal: [] };
@@ -222,19 +230,7 @@ describe('unknown blast class', () => {
   });
 });
 
-describe('recipe colours (D-23)', () => {
-  function hue([r, g, b]) {
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    if (max === min) return 0;
-    const d = max - min;
-    let h;
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    return (h * 60 + 360) % 360;
-  }
-
+describe('recipe colours (D-39)', () => {
   it('take every colour from the palette, with no inline literals', () => {
     const emitters = [
       ...Object.values(RECIPES).flat(),
@@ -248,7 +244,7 @@ describe('recipe colours (D-23)', () => {
     }
   });
 
-  it('stay out of the hot-pink band reserved for enemy bullets', () => {
+  it('stay out of the orange-yellow band reserved for enemy bullets', () => {
     const emitters = [
       ...Object.values(RECIPES).flat(),
       ...HIT_RECIPE,
@@ -257,8 +253,9 @@ describe('recipe colours (D-23)', () => {
     ];
     expect(emitters.length).toBeGreaterThan(10);
     for (const e of emitters) {
-      const h = hue(e.color);
-      expect(h < 310 || h > 350).toBe(true);
+      const saturated = saturationOf(e.color) >= BULLET_MIN_SATURATION;
+      const distance = hueDistance(hueOf(e.color), hueOf(PALETTE.ENEMY_BULLET_HALO.rgb));
+      expect(!saturated || distance >= BULLET_EXCLUSION_DEGREES, e.color.join(',')).toBe(true);
     }
   });
 });
@@ -402,5 +399,140 @@ describe('the player ship recipes (PLYR-06)', () => {
     const { fx, emitted } = build();
     fx.handle(EVENTS.EXPLOSION, 130, 170, BLAST.SMALL, 0, 0);
     expect(emitted.additive).toHaveLength(27);
+  });
+});
+
+describe('the MEDAL sparkle', () => {
+  function catchMedal({ scale = 1, value = 100, chain = 1 } = {}) {
+    const built = build({ getScale: () => scale });
+    built.fx.handle(EVENTS.MEDAL, 130, 170, value, chain, 0);
+    return built.emitted;
+  }
+
+  it('throws the pickup sparkle at the catch position in the medal palette colour', () => {
+    const { additive, normal } = catchMedal();
+    expect(additive).toHaveLength(10);
+    expect(normal).toHaveLength(0);
+    for (const p of additive) {
+      expect(p.slice(0, 3)).toEqual([10, 0, 10]); // toWorld(130, 170), on the plane
+      expect(p.slice(9, 12)).toEqual(PALETTE.MEDAL.rgb);
+    }
+  });
+
+  it('scales the count with the tier, never below one', () => {
+    expect(catchMedal({ scale: 0.6 }).additive).toHaveLength(6);
+    expect(catchMedal({ scale: 0.01 }).additive).toHaveLength(1);
+  });
+
+  it('does not sparkle for the other events', () => {
+    const built = build();
+    built.fx.handle(14, 130, 170, 4, 0, 0);
+    expect(built.emitted.additive).toHaveLength(0);
+  });
+});
+
+describe('city target bursts (D-33, D-40)', () => {
+  const HOUSE = 8;
+  const TANK = 3;
+
+  function burstOf(kind, options = {}) {
+    const built = build({ cityKinds: new Set([HOUSE]), ...options });
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, kind);
+    return built;
+  }
+
+  it('adds cyan sparks, magenta embers and a white flash on top of the blast recipe for a city kind', () => {
+    const plain = burstOf(TANK);
+    const city = burstOf(HOUSE);
+    const extra = CITY_SPARKS.reduce((sum, e) => sum + e.count, 0);
+    expect(city.emitted.additive).toHaveLength(plain.emitted.additive.length + extra);
+    expect(city.emitted.normal).toHaveLength(plain.emitted.normal.length);
+    const rgbs = city.emitted.additive.map((p) => p.slice(9, 12));
+    expect(rgbs).toContainEqual(PALETTE.SPARK.rgb);
+    expect(rgbs).toContainEqual(PALETTE.EMBER.rgb);
+    expect(rgbs).toContainEqual(PALETTE.FIRE_CORE.rgb);
+  });
+
+  it('bursts the extra sparks where the blast is, in the ground layer when the kill was on the ground', () => {
+    const { emitted } = burstOf(HOUSE);
+    const sparks = emitted.additive.filter((p) => p.slice(9, 12).join() === PALETTE.SPARK.rgb.join());
+    expect(sparks.length).toBeGreaterThan(0);
+    for (const p of sparks) expect(p.slice(0, 3)).toEqual([1000, -40, 160 - 160]);
+  });
+
+  it('counts a city burst and leaves other kinds, and the default, at zero', () => {
+    const none = build();
+    none.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, HOUSE);
+    expect(none.fx.cityBursts).toBe(0);
+
+    const built = build({ cityKinds: new Set([HOUSE]) });
+    expect(built.fx.cityBursts).toBe(0);
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, TANK);
+    expect(built.fx.cityBursts).toBe(0);
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.MEDIUM, 1, HOUSE);
+    built.fx.handle(EVENTS.EXPLOSION, 120, 160, BLAST.LARGE, 1, HOUSE);
+    expect(built.fx.cityBursts).toBe(2);
+  });
+
+  it('scales the spark counts with the tier like every recipe, never below one per emitter', () => {
+    const full = burstOf(HOUSE).emitted.additive.length;
+    const small = burstOf(HOUSE, { getScale: () => 0.35 }).emitted.additive.length;
+    expect(small).toBeLessThan(full);
+    const tiny = burstOf(HOUSE, { getScale: () => 0.001 }).emitted.additive;
+    expect(tiny.length).toBeGreaterThanOrEqual(CITY_SPARKS.length);
+  });
+
+  it('keeps every colour in the palette and out of the bullet band', () => {
+    const palette = Object.values(PALETTE).map((entry) => entry.rgb.join());
+    for (const e of CITY_SPARKS) expect(palette).toContain(e.color.join());
+  });
+});
+
+describe('the HUGE boss explosion (D-14)', () => {
+  const countOn = (recipe, layer) =>
+    recipe.filter((e) => e.layer === layer).reduce((n, e) => n + e.count, 0);
+
+  it('has a bigger core than LARGE and more particles on both layers', () => {
+    const { additive, normal } = explode(BLAST.HUGE);
+    const large = explode(BLAST.LARGE);
+    expect(additive[0].slice(7, 9)).toEqual([46, 80]);
+    expect(additive[0][7]).toBeGreaterThan(large.additive[0][7]);
+    expect(additive[0][8]).toBeGreaterThan(large.additive[0][8]);
+    expect(additive.length).toBeGreaterThan(large.additive.length);
+    expect(normal.length).toBeGreaterThan(large.normal.length);
+    expect(countOn(RECIPES.HUGE, 'additive')).toBe(additive.length);
+    expect(countOn(RECIPES.HUGE, 'normal')).toBe(normal.length);
+  });
+
+  it('throws cyan sparks, magenta embers and a white ring of 24 around the boss', () => {
+    const { additive } = explode(BLAST.HUGE);
+    const colourOf = (p) => p.slice(9, 12);
+    const has = (rgb) => additive.filter((p) => colourOf(p).join(',') === rgb.join(','));
+    expect(has(PALETTE.SPARK.rgb).length).toBeGreaterThanOrEqual(24);
+    expect(has(PALETTE.EMBER.rgb).length).toBeGreaterThanOrEqual(16);
+    const ring = has(PALETTE.HIT_SPARK.rgb);
+    expect(ring).toHaveLength(24);
+    const headings = ring
+      .map((p) => (Math.atan2(p[5], p[3]) + 2 * Math.PI) % (2 * Math.PI))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < headings.length; i += 1) {
+      expect(headings[i] - headings[i - 1]).toBeCloseTo((2 * Math.PI) / 24, 5);
+    }
+  });
+
+  it('scales the counts with the tier but never the sizes, keeping one particle per emitter', () => {
+    const full = explode(BLAST.HUGE, 1);
+    const low = explode(BLAST.HUGE, 0.35);
+    expect(low.additive.length).toBeLessThan(full.additive.length);
+    expect(low.normal.length).toBeLessThan(full.normal.length);
+    expect(low.additive[0].slice(7, 9)).toEqual(full.additive[0].slice(7, 9));
+    expect(sizeSet(low.additive)).toEqual(sizeSet(full.additive));
+    const tiny = explode(BLAST.HUGE, 0.001);
+    expect(tiny.additive.length + tiny.normal.length).toBe(RECIPES.HUGE.length);
+  });
+
+  it('is data keyed by the manifest blast name and frozen like the other recipes', () => {
+    expect(Object.isFrozen(RECIPES.HUGE)).toBe(true);
+    expect(Object.keys(RECIPES)).toContain('HUGE');
   });
 });

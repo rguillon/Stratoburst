@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mulberry32 } from './explosion_fx.js';
+import { PALETTE } from './palette.js';
 
 // Charred wrecks of ground units (STGE-04, ENMY-08). A fixed ring: the oldest wreck is overwritten
 // when it is full, one InstancedMesh per ground kind is allocated once, and update() allocates
@@ -26,7 +27,7 @@ const FLAME_WINDOW = 6;
 const MAX_DT = 0.25;
 // Emitter looks, as in the explosion recipes: HDR flame, dark smoke that rises (negative gravity).
 const SMOKE_COLOR = [0.14, 0.13, 0.12];
-const FLAME_COLOR = [3.4, 1.6, 0.4];
+const FLAME_COLOR = PALETTE.FIRE.rgb;
 const SMOKE_GRAVITY = -0.15;
 
 // Module-level scratch objects: update() runs every frame and must not allocate.
@@ -38,9 +39,21 @@ const color = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const spot = new THREE.Vector3();
 
+// The wreck kinds of a stage, from data: the ground kinds whose `enemy_wreck` table entry is 1 and
+// that have a JS model. A train turret or a stump has a model but no wreck entry, so it never leaves
+// a second wreck under the boss; a kind Python adds before its model exists is skipped, because the
+// ring builds a hull per kind it is given. `groundKindNames` is name -> kind value.
+export function wreckKindsFor(groundKindNames, enemyWreck, hasModel) {
+  return Object.fromEntries(
+    Object.entries(groundKindNames).filter(([name, value]) => enemyWreck[value] === 1 && hasModel(name)),
+  );
+}
+
 // `kinds` maps the ground kind names to their channel values; `geometryFor(kindName, detail)`
 // returns the model whose `body` is the wreck's shape. `getScroll()` is the terrain scroll at the
 // moment an event is handled, and `ratio` is the ground scroll ratio of the living units.
+// `rubble` ({ kinds: Set of kind values, geometry }) draws those kinds as a charred rubble pile
+// instead of their low-detail body, which is how a destroyed building stops looking intact.
 // `layers` ({ additive, normal } particle layers), `getScale()` (the tier's particleScale) and
 // `toWorld(x, y, out)` (the ground layer's) drive the smoulder; without `layers` there is none.
 export function createWreckRing({
@@ -56,6 +69,7 @@ export function createWreckRing({
   getScale = () => 1,
   toWorld = null,
   rng = mulberry32(0x77ec4),
+  rubble = null,
 }) {
   const group = new THREE.Group();
   group.name = 'wreck-ring';
@@ -67,7 +81,8 @@ export function createWreckRing({
   const meshByKind = [];
   const meshes = [];
   for (const [name, value] of Object.entries(kinds)) {
-    const mesh = new THREE.InstancedMesh(geometryFor(name, 'low').body, material, capacity);
+    const geometry = rubble?.kinds.has(value) ? rubble.geometry : geometryFor(name, 'low').body;
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
     mesh.name = `wreck-${name.toLowerCase()}`;
     mesh.frustumCulled = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -93,8 +108,23 @@ export function createWreckRing({
   let live = 0;
   let clock = 0; // the effect clock of the latest update
 
-  // Only a ground-anchored kill (EXPLOSION with b == 1) leaves a wreck; air kills add nothing.
+  // A stage start restarts the scroll at 0, so every stored wreck would jump to a wrong place:
+  // forget them all (RESEARCH Pattern 1). The lifetime `spawned` count is left alone.
+  function clear() {
+    wreckKind.fill(-1);
+    smokeDue.fill(0);
+    flameDue.fill(0);
+    next = 0;
+    live = 0;
+  }
+
+  // Only a ground-anchored kill (EXPLOSION with b == 1) leaves a wreck; air kills add nothing. A
+  // STAGE_START event clears the ring (an events table without it keeps the old behaviour).
   function handle(type, x, y, a, b, c) {
+    if (events.STAGE_START !== undefined && type === events.STAGE_START) {
+      clear();
+      return;
+    }
     if (type !== events.EXPLOSION || b !== 1 || meshByKind[c] === undefined) return;
     wreckX[next] = x;
     wreckY[next] = y;

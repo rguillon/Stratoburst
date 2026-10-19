@@ -15,12 +15,16 @@ class PlayerLife:
 
     Every window counts simulation steps, never frames or milliseconds. ``invuln`` is the
     number of ALIVE steps the ship still cannot be hit; ``deaths`` counts destroyed ships.
+    ``arrival_invuln`` is what the current fly-in grants on arrival: the death respawn default,
+    or the window a stage intro asked for (it falls back to the default once granted).
     """
 
     phase: PlayerPhase = PlayerPhase.ALIVE
     timer: int = 0
     invuln: int = 0
     deaths: int = 0
+    final: bool = False
+    arrival_invuln: int = INVULN_RESPAWN_TICKS
 
     @property
     def can_control(self) -> bool:
@@ -44,6 +48,16 @@ class PlayerLife:
         one counter.
         """
         self.invuln = max(self.invuln, ticks)
+
+    def begin_fly_in(self, ship: PlayerShip, invuln: int) -> None:
+        """Start a fly-in from below the playfield that grants ``invuln`` steps on arrival.
+
+        The stage intro passes 0 (the ship does not blink at stage start); a death respawn keeps
+        the default window. No event is pushed: the caller owns the announcement.
+        """
+        ship.respawn_start()
+        self.phase = PlayerPhase.RESPAWN
+        self.arrival_invuln = invuln
 
     def try_deathbomb(self) -> bool:
         """Cancel a fatal hit while the grace window is open; False in any other phase (D-11).
@@ -87,14 +101,29 @@ class PlayerLife:
             case PlayerPhase.DYING:
                 self.timer -= 1
                 if self.timer <= 0:
-                    ship.respawn_start()
-                    self.phase = PlayerPhase.RESPAWN
-                    events.push(EV_RESPAWN, ship.x, ship.y)
+                    if self.final:
+                        self.phase = PlayerPhase.OUT
+                    else:
+                        ship.respawn_start()
+                        self.phase = PlayerPhase.RESPAWN
+                        events.push(EV_RESPAWN, ship.x, ship.y)
             case PlayerPhase.RESPAWN:
                 if ship.fly_in():
                     self.phase = PlayerPhase.ALIVE
-                    self.grant_invuln(INVULN_RESPAWN_TICKS)
+                    self.grant_invuln(self.arrival_invuln)
+                    self.arrival_invuln = INVULN_RESPAWN_TICKS
+            case PlayerPhase.OUT:
+                pass  # terminal: nothing moves until the run is restarted
             case unknown:
                 msg = f"unknown player phase {unknown}"
                 raise ValueError(msg)
         return destroyed
+
+    def reset(self) -> None:
+        """Return to a fresh ALIVE ship: no timer, no invulnerability, no deaths (a new run)."""
+        self.phase = PlayerPhase.ALIVE
+        self.timer = 0
+        self.invuln = 0
+        self.deaths = 0
+        self.final = False
+        self.arrival_invuln = INVULN_RESPAWN_TICKS

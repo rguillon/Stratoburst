@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { createPostPipeline } from '../../src/render/post_pipeline.js';
+import { TIERS } from '../../src/quality/tiers.js';
 
 // EffectComposer only asks the renderer for its size and pixel ratio when it is built, so a stub is
 // enough to inspect the pass list without a GL context.
@@ -46,5 +47,29 @@ describe('createPostPipeline', () => {
     pipeline.setTier({ bloom: 'half' });
     expect(pipeline.enabled).toBe(true);
     expect(pipeline.bloomPass.scale).toBe(0.5);
+  });
+
+  it('seeds the live base strength from the constructor strength', () => {
+    expect(build().bloomPass.baseStrength).toBe(0.45);
+    expect(build({ strength: 0.7 }).bloomPass.baseStrength).toBe(0.7);
+  });
+
+  it('applies the tier bloom strength to both the pass and its base', () => {
+    const pipeline = build();
+    pipeline.setTier(TIERS.mid);
+    expect(pipeline.bloomPass.strength).toBe(0.5);
+    expect(pipeline.bloomPass.baseStrength).toBe(0.5);
+    pipeline.setTier(TIERS.high);
+    expect(pipeline.bloomPass.strength).toBe(0.6);
+    expect(pipeline.bloomPass.baseStrength).toBe(0.6);
+  });
+
+  it('leaves the pass disabled on the low tier and does not touch the strength', () => {
+    const pipeline = build();
+    pipeline.setTier(TIERS.high);
+    pipeline.setTier(TIERS.low);
+    expect(pipeline.enabled).toBe(false);
+    expect(pipeline.bloomPass.strength).toBe(0.6);
+    expect(pipeline.bloomPass.baseStrength).toBe(0.6);
   });
 });

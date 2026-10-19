@@ -5,8 +5,8 @@
 import { copyReport } from '../debug/report.js';
 
 const BUTTON_STYLE =
-  'padding:12px 20px;margin-right:12px;font:600 15px system-ui,sans-serif;color:#1a0b08;' +
-  'background:#ff9a5c;border:0;border-radius:4px;cursor:pointer;';
+  'padding:12px 20px;margin-right:12px;font:600 15px system-ui,sans-serif;color:#0b0a1a;' +
+  'background:#1bd7ff;border:0;border-radius:4px;cursor:pointer;';
 
 // Errors that are not ours: browser extensions inject scripts into the page, and a cross-origin
 // script failure reaches window.onerror as an opaque "Script error." with no error object.
@@ -68,10 +68,10 @@ export function installErrorPanel(doc = document) {
     panel.setAttribute('role', 'alert');
     panel.style.cssText =
       'position:fixed;inset:0;z-index:2147483647;overflow:auto;box-sizing:border-box;' +
-      'padding:16px;background:#1a0b08;color:#ffd9c7;font:13px/1.4 monospace;';
+      'padding:16px;background:#0b0a1a;color:#e6ebff;font:13px/1.4 monospace;';
     const heading = doc.createElement('h1');
     heading.textContent = 'Scorched crashed';
-    heading.style.cssText = 'margin:0 0 12px;font-size:18px;color:#ff7b4a;';
+    heading.style.cssText = 'margin:0 0 12px;font-size:18px;color:#ff4d6d;';
     const buttons = doc.createElement('div');
     buttons.style.cssText = 'margin:0 0 12px;';
     buttons.append(
@@ -102,7 +102,7 @@ export function installErrorPanel(doc = document) {
       notice.setAttribute('role', 'status');
       notice.style.cssText =
         'position:fixed;top:0;left:0;right:0;z-index:2147483646;box-sizing:border-box;' +
-        'padding:10px 16px;background:#5a2a10;color:#ffe9d9;font:14px system-ui,sans-serif;' +
+        'padding:10px 16px;background:#3a1030;color:#e6ebff;font:14px system-ui,sans-serif;' +
         'text-align:center;';
       doc.body.append(notice);
     }

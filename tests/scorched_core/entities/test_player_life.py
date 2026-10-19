@@ -225,3 +225,120 @@ def test_a_deathbomb_outside_grace_is_refused_and_changes_nothing(phase: PlayerP
     life = PlayerLife(phase=phase, timer=7, invuln=5, deaths=2)
     assert not life.try_deathbomb()
     assert (life.phase, life.timer, life.invuln, life.deaths) == (phase, 7, 5, 2)
+
+
+def test_a_final_death_ends_in_out_with_no_respawn() -> None:
+    life, ship, events = _to_dying()
+    life.final = True
+    ship.x, ship.y = 33.0, 44.0
+    for _ in range(DYING_TICKS):
+        life.step(ship, events)
+    assert life.phase == PlayerPhase.OUT
+    assert (ship.x, ship.y) == (33.0, 44.0)  # respawn_start never ran
+    assert EV_RESPAWN not in _kinds(events)
+
+
+def test_a_non_final_death_still_respawns() -> None:
+    life, ship, events = _to_dying()
+    assert life.final is False
+    for _ in range(DYING_TICKS):
+        life.step(ship, events)
+    assert life.phase == PlayerPhase.RESPAWN
+    assert _kinds(events)[-1] == EV_RESPAWN
+
+
+def test_final_only_matters_when_the_dying_window_expires() -> None:
+    life, ship, events = _to_dying()
+    life.final = True
+    for _ in range(DYING_TICKS - 1):
+        life.step(ship, events)
+    assert life.phase == PlayerPhase.DYING
+    life.final = False  # an extend landed in time
+    life.step(ship, events)
+    assert life.phase == PlayerPhase.RESPAWN
+
+
+def _to_out() -> tuple[PlayerLife, PlayerShip, EventRing]:
+    life, ship, events = _to_dying()
+    life.final = True
+    for _ in range(DYING_TICKS):
+        life.step(ship, events)
+    return life, ship, events
+
+
+def test_out_cannot_be_controlled_cannot_fire_and_is_not_vulnerable() -> None:
+    life, _, _ = _to_out()
+    assert not life.can_control
+    assert not life.can_fire
+    assert not life.vulnerable
+
+
+def test_a_step_in_out_changes_nothing() -> None:
+    life, ship, events = _to_out()
+    snapshot = (life.phase, life.timer, life.invuln, life.deaths, events.n, ship.x, ship.y)
+    assert not life.step(ship, events)
+    assert (life.phase, life.timer, life.invuln, life.deaths, events.n, ship.x, ship.y) == snapshot
+
+
+def test_a_hit_in_out_changes_nothing() -> None:
+    life, ship, events = _to_out()
+    count = events.n
+    assert not life.hit(ship.x, ship.y, events)
+    assert life.phase == PlayerPhase.OUT
+    assert events.n == count
+
+
+def test_reset_returns_to_a_fresh_alive_life() -> None:
+    life, _, _ = _to_out()
+    life.invuln = 50
+    life.final = True
+    life.reset()
+    assert life.phase == PlayerPhase.ALIVE
+    assert (life.timer, life.invuln, life.deaths) == (0, 0, 0)
+    assert life.final is False
+    assert life.vulnerable
+
+
+def test_a_fly_in_start_puts_the_ship_below_the_playfield_without_an_event() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 0)
+    assert life.phase == PlayerPhase.RESPAWN
+    assert (ship.x, ship.y) == (SHIP_START_X, RESPAWN_START_Y)
+    assert not life.can_control
+    assert events.n == 0
+
+
+def test_the_stage_intro_fly_in_grants_no_invulnerability_on_arrival() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 0)
+    for _ in range(100):
+        life.step(ship, events)
+        if life.phase == PlayerPhase.ALIVE:
+            break
+    assert life.phase == PlayerPhase.ALIVE
+    assert life.invuln == 0
+    assert life.vulnerable
+
+
+def test_a_fly_in_can_grant_a_custom_arrival_window_once() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 30)
+    while life.phase == PlayerPhase.RESPAWN:
+        life.step(ship, events)
+    assert life.invuln == 30
+    assert life.arrival_invuln == INVULN_RESPAWN_TICKS
+
+
+def test_a_death_respawn_after_the_intro_still_grants_the_blink() -> None:
+    life, ship, events = PlayerLife(), PlayerShip(), EventRing()
+    life.begin_fly_in(ship, 0)
+    while life.phase == PlayerPhase.RESPAWN:
+        life.step(ship, events)
+    assert life.invuln == 0
+    assert life.hit(ship.x, ship.y, events)
+    for _ in range(DEATHBOMB_TICKS + DYING_TICKS):
+        life.step(ship, events)
+    assert life.phase == PlayerPhase.RESPAWN
+    while life.phase == PlayerPhase.RESPAWN:
+        life.step(ship, events)
+    assert life.invuln == INVULN_RESPAWN_TICKS

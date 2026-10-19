@@ -65,7 +65,19 @@ describe('TANK', () => {
   });
 });
 
-const MANIFEST_KINDS = ['JET', 'HELI', 'CARRIER', 'TANK', 'TURRET'];
+const CITY_KINDS = ['HOUSE', 'FUEL_TANK', 'DEPOT', 'BILLBOARD'];
+const TRAIN_KINDS = ['TRAIN', 'TRAIN_TURRET', 'TRAIN_STUMP'];
+const BOMBER_KINDS = ['BOMBER', 'BOMBER_TURRET', 'BOMBER_ENGINE', 'BOMBER_STUMP', 'BOMBER_OPEN'];
+const MANIFEST_KINDS = [
+  'JET',
+  'HELI',
+  'CARRIER',
+  'TANK',
+  'TURRET',
+  ...TRAIN_KINDS,
+  ...CITY_KINDS,
+  ...BOMBER_KINDS,
+];
 
 describe('the manifest roster', () => {
   it('has a builder for every manifest kind, so no primitive shape is drawn', () => {
@@ -81,6 +93,76 @@ describe('the manifest roster', () => {
     for (const name of ['TANK', 'TURRET']) {
       for (const detail of ['high', 'mid', 'low']) expect(enemyModel(name, detail).top).not.toBeNull();
     }
+  });
+});
+
+describe('the mid-boss train', () => {
+  it('registers TRAIN, TRAIN_TURRET and TRAIN_STUMP', () => {
+    for (const name of TRAIN_KINDS) expect(hasModel(name)).toBe(true);
+  });
+
+  it('gives the gun car a top that follows the aim angle at every detail, and the hull and stump none', () => {
+    for (const detail of ['high', 'mid', 'low']) {
+      expect(enemyModel('TRAIN_TURRET', detail).top).not.toBeNull();
+      expect(enemyModel('TRAIN', detail).top).toBeNull();
+      expect(enemyModel('TRAIN_STUMP', detail).top).toBeNull();
+    }
+  });
+
+  it('caches each kind per detail', () => {
+    for (const name of TRAIN_KINDS) expect(enemyModel(name, 'mid')).toBe(enemyModel(name, 'mid'));
+  });
+
+  it('warms the three names', () => {
+    expect(warmModels(TRAIN_KINDS)).toEqual(TRAIN_KINDS);
+  });
+});
+
+describe('the giant bomber', () => {
+  it('registers BOMBER, BOMBER_TURRET, BOMBER_ENGINE, BOMBER_STUMP and BOMBER_OPEN', () => {
+    for (const name of BOMBER_KINDS) expect(hasModel(name)).toBe(true);
+  });
+
+  it('gives the wing turret a top that follows the aim angle, and the other four none', () => {
+    for (const detail of ['high', 'mid', 'low']) {
+      expect(enemyModel('BOMBER_TURRET', detail).top).not.toBeNull();
+      for (const name of ['BOMBER', 'BOMBER_ENGINE', 'BOMBER_STUMP', 'BOMBER_OPEN']) {
+        expect(enemyModel(name, detail).top).toBeNull();
+      }
+    }
+  });
+
+  it('draws the open hull from a different model than the closed one', () => {
+    expect(enemyModel('BOMBER_OPEN', 'mid')).not.toBe(enemyModel('BOMBER', 'mid'));
+  });
+
+  it('caches each kind per detail', () => {
+    for (const name of BOMBER_KINDS) expect(enemyModel(name, 'mid')).toBe(enemyModel(name, 'mid'));
+  });
+
+  it('warms the five names', () => {
+    expect(warmModels(BOMBER_KINDS)).toEqual(BOMBER_KINDS);
+  });
+});
+
+describe('the city targets', () => {
+  it('registers HOUSE, FUEL_TANK, DEPOT and BILLBOARD', () => {
+    for (const name of CITY_KINDS) expect(hasModel(name)).toBe(true);
+  });
+
+  it('returns the fuel tank for FUEL_TANK, cached per detail, without a turning top', () => {
+    for (const detail of ['high', 'mid', 'low']) {
+      const model = enemyModel('FUEL_TANK', detail);
+      expect(model).toBe(enemyModel('FUEL_TANK', detail));
+      expect(model.top).toBeNull();
+    }
+    expect(vertexCount(enemyModel('FUEL_TANK', 'high').body)).toBeGreaterThan(
+      vertexCount(enemyModel('FUEL_TANK', 'low').body),
+    );
+  });
+
+  it('warms the four names', () => {
+    expect(warmModels(CITY_KINDS)).toEqual(CITY_KINDS);
   });
 });
 

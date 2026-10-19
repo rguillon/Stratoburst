@@ -18,13 +18,21 @@ import { createBulletInstances } from './render/bullet_instances.js';
 import { createEnemyInstances } from './render/enemy_instances.js';
 import { createMissileInstances } from './render/missile_instances.js';
 import { createPickupInstances } from './render/pickup_instances.js';
-import { enemyModel, warmModels } from './render/models/enemy_models.js';
+import { createCityLayer } from './render/city_layer.js';
+import { createRainLayer } from './render/rain_layer.js';
+import { createCityGround } from './render/city_ground.js';
+import { warmScenery } from './render/models/scenery_models.js';
+import { enemyModel, hasModel, warmModels } from './render/models/enemy_models.js';
+import { CITY_TARGET_KINDS, buildRubble } from './render/models/city_targets.js';
 import { createParticleLayer } from './fx/particle_system.js';
 import { createExplosionFx } from './fx/explosion_fx.js';
-import { createWreckRing } from './fx/wreck_ring.js';
+import { createWreckRing, wreckKindsFor } from './fx/wreck_ring.js';
+import { createStumpFx, stumpKindsFor } from './fx/stump_fx.js';
+import { createFirePlumes } from './fx/fire_plumes.js';
 import { createDecalRing } from './fx/decal_ring.js';
 import { createLightPool } from './fx/light_pool.js';
 import { createShadowInstances } from './fx/shadow_instances.js';
+import { createBossSweep } from './fx/boss_sweep.js';
 import { createBeamMesh } from './fx/beam_mesh.js';
 import { createBombFx } from './fx/bomb_fx.js';
 import { createShake, effectClockDelta, withCameraOffset } from './fx/shake.js';
@@ -36,6 +44,12 @@ import { installAudioKeepalive } from './audio/audio_keepalive.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
+import { layoutHud } from './ui/hud_layout.js';
+import { createGameOverOverlay } from './ui/game_over_overlay.js';
+import { createScorePopups } from './ui/score_popups.js';
+import { createBannerOverlay } from './ui/banner_overlay.js';
+import { createBossBar } from './ui/boss_bar.js';
+import { createTallyPanel } from './ui/tally_panel.js';
 import { createDebugSession } from './debug/debug_session.js';
 import { buildReport } from './debug/report.js';
 import * as THREE from 'three';
@@ -94,7 +108,7 @@ async function main() {
   const touchPrimary = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
   const tier0 = initialTier({ forced: flags.tier, touchPrimary });
   rig.applyTier(TIERS[tier0]);
-  rig.prewarm(); // terrain and both render paths compile while the runtime downloads
+  rig.prewarm(); // both render paths compile while the runtime downloads
   rig.render();
 
   const pyodide = await runtimeP;
@@ -111,10 +125,39 @@ async function main() {
     detail: TIERS[tier0].modelDetail,
   });
   rig.scene.add(ship);
+  // Every (kind, detail) scenery model is generated now, behind the loading screen.
+  warmScenery(Object.keys(manifest.scenery_kinds));
+  // The road grid under the blocks: one plane in the same group, scrolled by the same mapping.
+  const cityGround = createCityGround({
+    ratio: manifest.tuning.ground_scroll_ratio,
+    y0: manifest.tuning.ground_y0,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+    pitch: manifest.stage.block_pitch,
+    block: manifest.stage.block_size,
+    length: manifest.stage.length,
+    loop: manifest.stage.loop,
+  });
+  rig.groundLayer.group.add(cityGround.group);
+  // The city (D-34): the layout Python shipped in the manifest, drawn in the ground layer so it
+  // shares one frame with the ground units, wrecks and scorch marks (RESEARCH Pattern 5).
+  const city = createCityLayer({
+    layout: manifest.stage.city,
+    stride: manifest.stage.city_stride,
+    kinds: manifest.scenery_kinds,
+    ratio: manifest.tuning.ground_scroll_ratio,
+    y0: manifest.tuning.ground_y0,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+    loop: manifest.stage.loop,
+    length: manifest.stage.length,
+    detail: TIERS[tier0].modelDetail,
+  });
+  rig.groundLayer.group.add(city.group);
   // Everything whose model detail follows the tier. A tier change only swaps cached geometries.
-  // rig.terrain was created inside the rig at its default detail; the starting tier is applied
-  // below, before the first frame.
-  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }, rig.terrain];
+  // The city was created at the starting tier's detail; every detail is applied below, before the
+  // first frame.
+  const detailViews = [{ setDetail: (detail) => ship.userData.setDetail(detail) }, city];
   const applyModelDetail = (tierName) => {
     for (const view of detailViews) view.setDetail(TIERS[tierName].modelDetail);
   };
@@ -150,6 +193,10 @@ async function main() {
       groundKindNames[name] = value;
     }
   }
+  // The destructible city targets (D-34): they spark when destroyed, leave rubble and flicker when damaged.
+  const cityKinds = new Set(
+    CITY_TARGET_KINDS.filter((name) => name in manifest.enemy_kinds).map((name) => manifest.enemy_kinds[name]),
+  );
   // Instanced meshes per gallery kind, all added before the second prewarm.
   const enemies = createEnemyInstances({
     data: bridge.channels.enemies,
@@ -160,6 +207,7 @@ async function main() {
     detail: TIERS[tier0].modelDetail,
     groundKinds,
     groundGroup: rig.groundLayer.group,
+    flickerKinds: cityKinds,
   });
   detailViews.push(enemies);
   for (const mesh of enemies.airMeshes) rig.scene.add(mesh);
@@ -181,12 +229,18 @@ async function main() {
       ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
     getScale: () => TIERS[currentTier].particleScale,
     groundKinds,
+    cityKinds,
   });
   // Terrain scroll this frame (steps plus the sub-step alpha); the wrecks read it at a kill.
   let scrollNow = 0;
   // Charred wrecks of ground kills live in the ground layer and scroll away with the terrain.
+  // Which ground kills leave a wreck is data (manifest `enemy_wreck`) and needs a JS model: train
+  // turrets and stumps have a model but no wreck, and a kind Python adds before its model exists has
+  // neither. A destroyed city target is drawn as a charred rubble pile, never as its intact building.
+  const wreckKinds = wreckKindsFor(groundKindNames, manifest.tuning.enemy_wreck, hasModel);
   const wrecks = createWreckRing({
-    kinds: groundKindNames,
+    kinds: wreckKinds,
+    rubble: { kinds: cityKinds, geometry: buildRubble() },
     events: manifest.events,
     geometryFor: enemyModel,
     ratio: manifest.tuning.ground_scroll_ratio,
@@ -199,6 +253,27 @@ async function main() {
     toWorld: (x, y, out) => rig.groundLayer.toWorld(x, y, out),
   });
   rig.groundLayer.group.add(wrecks.group);
+  // A boss part shot off leaves a stump (D-14) that smokes and burns for the rest of the fight; the
+  // stump kinds are the manifest names ending in _STUMP, and it reads the same enemies channel.
+  const stumpFx = createStumpFx({
+    data: bridge.channels.enemies,
+    capacity: manifest.channels.enemies.cap,
+    stumpKinds: stumpKindsFor(manifest.enemy_kinds),
+    groundKinds,
+    layers: fxLayers,
+    getScale: () => TIERS[currentTier].particleScale,
+    toWorld: (x, y, ground, out) =>
+      ground ? rig.groundLayer.toWorld(x, y, out) : rig.toWorld(x, y, out),
+  });
+  // Burning ruins send up fire and smoke (D-33, D-36) through the same particle layers, from the
+  // fire placements the city layer lists each frame. The puffs ride with the ground's speed.
+  const plumes = createFirePlumes({
+    layers: fxLayers,
+    getScale: () => TIERS[currentTier].particleScale,
+    toWorld: (x, y, out) => rig.groundLayer.toWorld(x, y, out),
+    getDrift: () =>
+      header[slots.SCROLL_RATE] * 60 * manifest.tuning.ground_scroll_ratio * rig.groundLayer.k,
+  });
   // Scorch marks of ground kills lie on the terrain below the shadows and the dim mask.
   const decals = createDecalRing({
     events: manifest.events,
@@ -230,11 +305,24 @@ async function main() {
     kinds: manifest.enemy_kinds,
     groundKinds,
     radii: manifest.tuning.enemy_radius,
+    // The giant bomber's shadow is sized to its 120-unit airframe, not to its 28-unit hit circle (D-09).
+    sizeScale: { [manifest.enemy_kinds.BOMBER]: 3, [manifest.enemy_kinds.BOMBER_OPEN]: 3 },
     sunPosition: rig.sun.position,
     playfieldW: manifest.playfield.w,
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(shadows.mesh);
+  // The boss WARNING (D-13): the bomber's shadow sweeps over the city from the bottom of the playfield
+  // to the top, driven by FLOW_T. Shown once here (mid-way across) while the shaders compile, then
+  // the frame loop shows it only during the WARNING.
+  const bossSweep = createBossSweep({
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+    flowStates: manifest.flow_states,
+    sunPosition: rig.sun.position,
+  });
+  rig.scene.add(bossSweep.mesh);
+  bossSweep.update(manifest.flow_states.WARNING, 0.5);
   // The blue laser beam: Python publishes only its half-width (0 when off). It is shown once while
   // the shaders compile (hidden again below) so the first shot never pays a compile.
   const beam = createBeamMesh({
@@ -265,7 +353,9 @@ async function main() {
     playfieldH: manifest.playfield.h,
   });
   rig.scene.add(pickups.mesh);
+  rig.scene.add(pickups.medalMesh);
   pickups.mesh.count = 1;
+  pickups.medalMesh.count = 1;
   // The nuke: a rising missile, then a fireball that fills the screen, with one burst, one light, one
   // scorch and one bloom pulse at the detonation. Python owns the bomb; this only draws it. Added
   // before the second prewarm so its shaders compile at load.
@@ -284,8 +374,24 @@ async function main() {
   });
   rig.scene.add(bombFx.group);
   bombFx.showAll(true);
-  // Screen shake: only the big events (a bomb detonation, the ship's death) move the camera, and only
-  // around the render call. The freeze itself is Python's hitstop.
+  // The rain (D-32, D-36): one instanced streak draw in the main scene, so it comes before the
+  // post-bloom enemy-bullet pass and never covers a bullet. It is created at full capacity so the
+  // shader compiles with the prewarm; the tier below only sets how many streaks are drawn.
+  const rain = createRainLayer({
+    capacity: TIERS.high.rain,
+    playfieldW: manifest.playfield.w,
+    playfieldH: manifest.playfield.h,
+  });
+  rig.scene.add(rain.mesh);
+  // The rain-soaked atmosphere follows the tier (D-36): counts and visibility only, never a rebuild.
+  const applyAtmosphere = (tierName) => {
+    const tier = TIERS[tierName];
+    rain.setCount(tier.rain);
+    city.setReflections(tier.reflections);
+    plumes.setEnabled(tier.plumes);
+  };
+  // Screen shake: only the big events (a bomb detonation, the ship's death, a boss part blowing off and the
+  // boss's end, a chain) move the camera, and only around the render call. The freeze itself is Python's hitstop.
   const shake = createShake({ events: manifest.events });
   const fx = createFxDispatcher({
     handlers: [explosionFx, wrecks, decals, lightPool, bombFx, shake],
@@ -293,7 +399,9 @@ async function main() {
   let fxTime = 0;
   let hitstopFrames = 0; // frames drawn while Python held the simulation frozen (e2e reads it)
 
-  // Compile and render through both paths now, so a tier switch never compiles a shader.
+  // Compile and render through both paths now, so a tier switch never compiles a shader. The wet-street
+  // reflections are shown for the compile (they are hidden on the low tier) and set by the tier below.
+  city.setReflections(true);
   rig.prewarm();
   const controller = createQualityController({
     initialTier: tier0,
@@ -314,6 +422,7 @@ async function main() {
   }
   applyDecalLimit(currentTier);
   applyLights(currentTier);
+  applyAtmosphere(currentTier);
   // Upload every detail level's geometry now, behind the loading screen, so a tier change
   // during play never uploads or compiles anything.
   for (const { modelDetail } of Object.values(TIERS)) {
@@ -323,6 +432,7 @@ async function main() {
   applyModelDetail(currentTier);
   rig.render();
   beam.update(0, 0, 0, 0); // compiled and rendered through both paths: hidden until the laser fires
+  bossSweep.update(-1, 0); // and the boss shadow until the WARNING
   missiles.update(0, 0); // likewise hidden until a missile launches
   pickups.update(0, 0); // and hidden until a crystal drops
   bombFx.showAll(false); // and the missile and fireball until a bomb flies
@@ -342,7 +452,34 @@ async function main() {
     maxed: manifest.outcomes.MAXED,
   });
   readout.show();
-  fx.add(readout); // the MAX flash listens for the MAXED pickup events
+  // Shown while FLOW is GAME_OVER; a fire key or a tap calls the held restart proxy (Pitfall 9).
+  const gameOver = createGameOverOverlay({
+    flowStates: manifest.flow_states,
+    onRestart: () => bridge.restart(),
+  });
+  // Shown while FLOW is INTRO (the stage start, D-26): STAGE n fading as the ship flies in.
+  const banner = createBannerOverlay({ flowStates: manifest.flow_states, events: manifest.events });
+  // The boss HP bar (D-25): state-driven from BOSS_ACTIVE, with a tick at each phase threshold of the
+  // stage's bosses, which Python ships in the manifest.
+  const bossBar = createBossBar({ bosses: manifest.stage.bosses });
+  // The stage-clear tally (SCOR-03): four bonus lines counting up while FLOW is TALLY, state-driven.
+  const tallyPanel = createTallyPanel({ flowStates: manifest.flow_states });
+  fx.add(readout); // the MAX flash listens for the MAXED pickup events and the lives pulse for EXTEND
+  fx.add(banner); // the EXTEND banner
+  // A medal catch pops its value up where the medal was (D-20). The projection reuses one vector and
+  // one result object, so a catch allocates nothing here.
+  const popupPoint = new THREE.Vector3();
+  const popupAt = { x: 0, y: 0 };
+  const popups = createScorePopups({
+    events: manifest.events,
+    project(x, y) {
+      rig.toWorld(x, y, popupPoint).project(rig.camera);
+      popupAt.x = ((popupPoint.x + 1) / 2) * canvas.clientWidth;
+      popupAt.y = ((1 - popupPoint.y) / 2) * canvas.clientHeight;
+      return popupAt;
+    },
+  });
+  fx.add(popups);
   // Python picks the sound for each event; this plays it on the gate's AudioContext (null = silent).
   const sfxPlayer = createSfxPlayer({
     audio,
@@ -378,26 +515,46 @@ async function main() {
   let sampler = null;
   // The bomb button is a touch-mode control: it shows with touch mode and hides in keyboard mode.
   const bombButton = createBombButton(document.getElementById('bomb-button'));
+  let hudFrame = null; // the last projection the HUD was laid out from
+  let bombShown = false;
+  // The HUD frames the playfield (D-23); on a phone its bottom-right block moves above the bomb button
+  // when the button overlays that corner, and returns to the corner in keyboard mode.
+  const layOutHud = () => {
+    if (!hudFrame) return;
+    const layout = layoutHud({ ...hudFrame, bombRect: bombShown ? bombRectNow() : null });
+    readout.place(layout);
+    document.documentElement.style.setProperty('--hud-top', `${layout.top.top}px`);
+  };
   const setTouchMode = (on) => {
     sampler?.setTouchMode(on);
     bombButton.setVisible(on);
+    if (on !== bombShown) {
+      bombShown = on;
+      layOutHud();
+    }
   };
   // Placed in the letterbox margin when there is room, else over the playfield's bottom-right corner.
   // The rig refits the camera on a CSS size change; asking it to resize first makes the projected
   // corners current whichever of the two handlers runs first. Re-laid out on every resize and
   // orientation change (a coalesced rAF, like the rig's own).
   let bombLayout = null;
+  const bombRectNow = () => ({
+    left: bombLayout.left,
+    top: bombLayout.top,
+    width: bombLayout.size,
+    height: bombLayout.size,
+  });
   const layOutBombButton = () => {
     rig.resize();
     const viewportW = canvas.clientWidth;
     const viewportH = canvas.clientHeight;
-    bombLayout = layoutBombButton({
-      corners: projectCorners(rig.camera, viewportW, viewportH, PLAYFIELD_W / 2, PLAYFIELD_H / 2),
-      viewportW,
-      viewportH,
-      insets: readSafeInsets(),
-    });
+    const corners = projectCorners(rig.camera, viewportW, viewportH, PLAYFIELD_W / 2, PLAYFIELD_H / 2);
+    const insets = readSafeInsets();
+    bombLayout = layoutBombButton({ corners, viewportW, viewportH, insets });
     bombButton.place(bombLayout);
+    // The HUD follows, with the button's fresh rectangle.
+    hudFrame = { corners, viewportW, viewportH, insets };
+    layOutHud();
   };
   let bombLayoutQueued = false;
   const queueBombLayout = () => {
@@ -446,6 +603,7 @@ async function main() {
         applyModelDetail(q.tier);
         applyDecalLimit(q.tier);
         applyLights(q.tier);
+        applyAtmosphere(q.tier);
         tierLog.push({ atMs: ts, from: currentTier, to: q.tier, reason: q.reason });
         currentTier = q.tier;
       }
@@ -465,19 +623,26 @@ async function main() {
       sfxPlayer.setLaser(header[slots.BEAM_W] > 0 && !paused);
       if (hitstop) hitstopFrames += 1;
       const alpha = hitstop ? 0 : header[slots.ALPHA];
-      // Constant-speed extrapolation by the step alpha keeps the ground smooth at 120/144 Hz
-      // while the simulation stays at 60 Hz. One value drives the terrain and the wrecks.
-      scrollNow = header[slots.SCROLL_Y] + alpha * manifest.tuning.scroll_speed;
+      // Extrapolation by the step alpha keeps the ground smooth at 120/144 Hz while the simulation
+      // stays at 60 Hz. It uses the live scroll rate, so a crawl or a stop never stutters. One value
+      // drives the terrain and the wrecks.
+      scrollNow = header[slots.SCROLL_Y] + alpha * header[slots.SCROLL_RATE];
       fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
       readout.tick(ts);
+      banner.tick(ts);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
       pause.sync(header[slots.FLAGS]);
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
       ship.position.copy(world);
       ebullets.update(header[slots.EBULLET_N]);
       pbullets.update(header[slots.PBULLET_N]);
-      readout.update(header[slots.WEAPON], header[slots.LEVEL], header[slots.BOMBS]);
+      readout.update(header, slots);
+      gameOver.update(header, slots, ts);
+      banner.update(header, slots);
+      bossBar.update(header, slots);
+      tallyPanel.update(header, slots, ts);
       beam.update(header[slots.BEAM_W], header[slots.SHIP_X], header[slots.SHIP_Y], fxTime);
+      rain.update(fxTime);
       missiles.update(header[slots.MISSILE_N], fxTime);
       pickups.update(header[slots.PICKUP_N], fxTime);
       bombFx.update(
@@ -493,18 +658,26 @@ async function main() {
       enemies.update(
         header[slots.ENEMY_N],
         fxTime,
-        alpha * manifest.tuning.scroll_speed * manifest.tuning.ground_scroll_ratio,
+        alpha * header[slots.SCROLL_RATE] * manifest.tuning.ground_scroll_ratio,
       );
-      // A dying ship is gone: its model, hitbox marker and shadow all hide. Otherwise only the hull
-      // blinks while invulnerable (hitbox marker always shown, Pitfall 9) and control is untouched.
-      const shipVisible = header[slots.PLAYER_PHASE] !== manifest.phases.DYING;
+      // A dying ship is gone: its model, hitbox marker and shadow all hide, and so does the last
+      // one after game over (OUT). Otherwise only the hull blinks while invulnerable (hitbox marker
+      // always shown, Pitfall 9) and control is untouched.
+      const shipVisible =
+        header[slots.PLAYER_PHASE] !== manifest.phases.DYING &&
+        header[slots.PLAYER_PHASE] !== manifest.phases.OUT;
       ship.visible = shipVisible;
       if (shipVisible) ship.userData.setHullVisible(hullVisibleFor(header[slots.INVULN]));
       shadows.update(header[slots.ENEMY_N], header[slots.SHIP_X], header[slots.SHIP_Y], shipVisible);
-      rig.terrain.update(scrollNow);
+      bossSweep.update(header[slots.FLOW], header[slots.FLOW_T]);
+      cityGround.update(scrollNow);
+      city.update(scrollNow, fxTime);
       wrecks.update(scrollNow, fxTime);
       decals.update(scrollNow);
-      fxTime += effectClockDelta(dt, clockState);
+      const effectDt = effectClockDelta(dt, clockState);
+      fxTime += effectDt;
+      stumpFx.update(header[slots.ENEMY_N], effectDt);
+      plumes.update(city.firePositions, city.fireCount, effectDt);
       lightPool.update(dt / 1000);
       fxLayers.additive.update(fxTime);
       fxLayers.normal.update(fxTime);
@@ -613,20 +786,48 @@ async function main() {
         },
       },
       fx: {
+        // Feeds one event through the production dispatcher, like a frame's events channel would (e2e).
+        inject(type, a = 0, b = 0) {
+          fx.dispatch(Float32Array.of(type, 0, 0, a, b, 0), 1);
+        },
         get particlesSpawned() {
           return fxLayers.additive.spawned + fxLayers.normal.spawned;
+        },
+        // City placements drawn this frame (e2e checks the city is on screen).
+        get cityDrawn() {
+          return city.drawn;
+        },
+        // City target bursts played so far (e2e checks a destroyed building sparks).
+        get cityBursts() {
+          return explosionFx.cityBursts;
         },
         get wrecksSpawned() {
           return wrecks.spawned;
         },
+        // Particles the stumps of shot-off boss parts have emitted so far (e2e checks they smoulder).
+        get stumpPuffs() {
+          return stumpFx.emitted;
+        },
         get decals() {
           return decals.live;
+        },
+        // Rain streaks drawn this frame: the tier's count, 0 on the low tier (e2e).
+        get rainCount() {
+          return rain.count;
+        },
+        // Fire and smoke particles the burning ruins have emitted so far; 0 on the low tier (e2e).
+        get plumes() {
+          return plumes.emitted;
         },
         get lightsFlashed() {
           return lightPool.flashes;
         },
         get shadows() {
           return shadows.mesh.count;
+        },
+        // The boss shadow is up exactly while the WARNING runs (e2e).
+        get bossSweepVisible() {
+          return bossSweep.mesh.visible;
         },
         get beamVisible() {
           return beam.group.visible;
@@ -636,6 +837,13 @@ async function main() {
         },
         get pickupsDrawn() {
           return pickups.mesh.count;
+        },
+        // Medal chips drawn this frame, and medal popups started so far (e2e).
+        get medalsDrawn() {
+          return pickups.medalMesh.count;
+        },
+        get popupsShown() {
+          return popups.shown;
         },
         get bombsShown() {
           return bombFx.shown;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { NIGHT_SKY } from './night_rig.js';
 
 // World-space dimming mask (D-07): one large square with a rectangular hole exactly the size of
 // the playfield, laid flat just below the gameplay plane and drawn after the terrain. Seen
@@ -33,7 +34,7 @@ export function createPlayfieldMask({
   const mask = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({
-      color: 0x0b0a09,
+      color: NIGHT_SKY,
       transparent: true,
       opacity,
       depthWrite: false,
@@ -45,7 +46,7 @@ export function createPlayfieldMask({
   mask.renderOrder = 5;
   group.add(mask);
 
-  // The outline sits below the bloom threshold (dim brown): it marks the edge without glowing.
+  // The outline sits below the bloom threshold (a cool violet-grey): it marks the edge without glowing.
   const outline = new THREE.LineLoop(
     new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-halfW, 0, -halfH),
@@ -53,7 +54,7 @@ export function createPlayfieldMask({
       new THREE.Vector3(halfW, 0, halfH),
       new THREE.Vector3(-halfW, 0, halfH),
     ]),
-    new THREE.LineBasicMaterial({ color: 0x6b5a3a }),
+    new THREE.LineBasicMaterial({ color: 0x3a3f6b }),
   );
   outline.name = 'playfield-outline';
   outline.position.y = 0.05;

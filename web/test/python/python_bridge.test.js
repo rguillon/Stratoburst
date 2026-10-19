@@ -162,8 +162,8 @@ describe('installSources', () => {
 
 describe('startGame', () => {
   const GAME_MANIFEST = {
-    protocol: 2,
-    header: { len: 48, slots: { STEPS: 0, ALPHA: 2, EVENT_N: 12 } },
+    protocol: 3,
+    header: { len: 64, slots: { STEPS: 0, ALPHA: 2, EVENT_N: 12 } },
     channels: {
       pbullets: { stride: 4, cap: 64 },
       ebullets: { stride: 4, cap: 600 },
@@ -174,10 +174,12 @@ describe('startGame', () => {
   function fakeGamePyodide(manifest = GAME_MANIFEST) {
     const calls = { attached: [], destroyed: [], writes: 0 };
     const tick = () => {};
+    const restart = () => {};
     const game = {
       manifest: () => ({ destroy: () => calls.destroyed.push('manifest'), toJs: () => manifest }),
       attach: (name, array) => calls.attached.push([name, array]),
       tick,
+      restart,
     };
     const pyodide = {
       FS: { mkdirTree() {}, writeFile: () => (calls.writes += 1) },
@@ -185,7 +187,7 @@ describe('startGame', () => {
         name === 'sys' ? { path: { insert() {} } } : { create_game: () => game },
       toPy: (options) => options,
     };
-    return { pyodide, calls, game, tick };
+    return { pyodide, calls, game, tick, restart };
   }
 
   it('installs the sources, then allocates one Float32Array per channel sized stride * cap', async () => {
@@ -195,7 +197,7 @@ describe('startGame', () => {
 
     expect(calls.writes).toBe(Object.keys(PY_SOURCES).length);
     expect(started.header).toBeInstanceOf(Float32Array);
-    expect(started.header.length).toBe(48);
+    expect(started.header.length).toBe(64);
     expect(started.channels.pbullets.length).toBe(4 * 64);
     expect(started.channels.ebullets.length).toBe(4 * 600);
     expect(started.channels.events.length).toBe(6 * 128);
@@ -229,6 +231,15 @@ describe('startGame', () => {
     expect(started.tick).toBe(tick);
   });
 
+  it('holds the restart function once, next to tick, so no proxy is looked up per call', async () => {
+    const { pyodide, game, restart } = fakeGamePyodide();
+
+    const started = await startGame(pyodide, { seed: 1 });
+
+    expect(started.restart).toBe(restart);
+    expect(started.restart).toBe(game.restart);
+  });
+
   it('destroys the manifest proxy once it has been converted', async () => {
     const { pyodide, calls } = fakeGamePyodide();
 
@@ -237,13 +248,13 @@ describe('startGame', () => {
     expect(calls.destroyed).toEqual(['manifest']);
   });
 
-  it.each([1, 3])(
+  it.each([1, 2, 4])(
     'rejects protocol version %i before allocating or attaching anything',
     async (protocol) => {
       const { pyodide, calls } = fakeGamePyodide({ ...GAME_MANIFEST, protocol });
 
       await expect(startGame(pyodide, { seed: 1 })).rejects.toThrow(
-        `Unsupported protocol version ${protocol} (expected 2)`,
+        `Unsupported protocol version ${protocol} (expected 3)`,
       );
       expect(calls.attached).toEqual([]);
     },

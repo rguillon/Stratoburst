@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ROTOR_RATE, basicEnemyGeometry, createEnemyInstances } from '../../src/render/enemy_instances.js';
+import { saturationOf } from '../../src/fx/palette.js';
+import {
+  BASE_COLORS,
+  FALLBACK_COLOR,
+  ROTOR_RATE,
+  basicEnemyGeometry,
+  createEnemyInstances,
+} from '../../src/render/enemy_instances.js';
 import { enemyModel } from '../../src/render/models/enemy_models.js';
 
 const STRIDE = 8;
@@ -20,8 +27,8 @@ function build(capacity = 8, extra = {}) {
   return { data, enemies, byName };
 }
 
-function setEnemy(data, i, { x, y, angle = 0, flash = 0, kind = 0 }) {
-  data.set([x, y, angle, flash, 1, kind, 0, 0], i * STRIDE);
+function setEnemy(data, i, { x, y, angle = 0, flash = 0, kind = 0, hp = 1 }) {
+  data.set([x, y, angle, flash, hp, kind, 0, 0], i * STRIDE);
 }
 
 function positionOf(mesh, i) {
@@ -167,7 +174,7 @@ function colourOf(mesh, i) {
 }
 
 describe('createEnemyInstances hit flash and bad data', () => {
-  it('colours a resting enemy (1, 1, 1) and a flashing one (6, 6, 6)', () => {
+  it('colours a resting enemy (1, 1, 1) and a flashing one (10, 10, 10)', () => {
     const { data, enemies, byName } = build();
     setEnemy(data, 0, { x: 10, y: 10, flash: 0, kind: KINDS.TANK });
     setEnemy(data, 1, { x: 20, y: 20, flash: 1, kind: KINDS.TANK });
@@ -175,8 +182,8 @@ describe('createEnemyInstances hit flash and bad data', () => {
     enemies.update(3);
     const tank = byName['enemy-tank'];
     expect(colourOf(tank, 0)).toEqual([1, 1, 1]);
-    expect(colourOf(tank, 1)).toEqual([6, 6, 6]);
-    expect(colourOf(tank, 2)).toEqual([6, 6, 6]);
+    expect(colourOf(tank, 1)).toEqual([10, 10, 10]);
+    expect(colourOf(tank, 2)).toEqual([10, 10, 10]);
   });
 
   it('keeps every body vertex colour below 1.0 so only the flash crosses the bloom threshold', () => {
@@ -198,7 +205,7 @@ describe('createEnemyInstances hit flash and bad data', () => {
       playfieldH: 320,
     });
     const colours = Array.from(enemies.meshes[0].geometry.getAttribute('color').array.slice(0, 3));
-    expect(colours).toEqual([expect.closeTo(0.45), expect.closeTo(0.45), expect.closeTo(0.4)]);
+    expect(colours).toEqual([expect.closeTo(0.2), expect.closeTo(0.21), expect.closeTo(0.24)]);
   });
 
   it('an enemy that stops flashing goes back to the base colour', () => {
@@ -406,7 +413,7 @@ describe('createEnemyInstances tops', () => {
     expect(top.count).toBe(2);
     expect(positionOf(top, 0).toArray()).toEqual(positionOf(byName['enemy-heli'], 0).toArray());
     expect(colourOf(top, 0)).toEqual([1, 1, 1]);
-    expect(colourOf(top, 1)).toEqual([6, 6, 6]);
+    expect(colourOf(top, 1)).toEqual([10, 10, 10]);
   });
 
   it('draws no tops once the last helicopter has left', () => {
@@ -538,5 +545,116 @@ describe('createEnemyInstances ground layer', () => {
     setEnemy(data, 0, { x: 100, y: 50, kind: KINDS.TANK });
     enemies.update(1);
     expect(positionOf(byName['enemy-tank'], 0).toArray()).toEqual([-20, 0, -110]);
+  });
+});
+
+describe('createEnemyInstances fallback primitives (D-38)', () => {
+  it('are dark gunmetal for every kind and for an unknown one', () => {
+    expect(Object.keys(BASE_COLORS).sort()).toEqual(['CARRIER', 'HELI', 'JET', 'TANK', 'TURRET']);
+    for (const [name, rgb] of [...Object.entries(BASE_COLORS), ['fallback', FALLBACK_COLOR]]) {
+      expect(Math.max(...rgb), name).toBeLessThanOrEqual(0.3);
+      expect(saturationOf(rgb), name).toBeLessThan(0.3);
+    }
+  });
+});
+
+describe('createEnemyInstances flicker of damaged city targets (D-33)', () => {
+  const HOUSE = 8;
+  const FLICKER_KINDS = { ...KINDS, HOUSE };
+
+  function buildFlicker(extra = {}) {
+    return build(8, {
+      kinds: FLICKER_KINDS,
+      groundKinds: new Set([HOUSE]),
+      groundGroup: new THREE.Group(),
+      flickerKinds: new Set([HOUSE]),
+      ...extra,
+    });
+  }
+
+  function glowAt(built, timeS, slot = 0) {
+    built.enemies.update(slot + 1, timeS);
+    const c = new THREE.Color();
+    built.byName['enemy-house-glow'].getColorAt(slot, c);
+    return c.r;
+  }
+
+  const sample = (built, hp, flash = 0) => {
+    setEnemy(built.data, 0, { x: 100, y: 50, kind: HOUSE, hp, flash });
+    return Array.from({ length: 40 }, (_, k) => glowAt(built, k * 0.037));
+  };
+
+  it('keeps a building at 0.6 hp or more steady at the rest colour', () => {
+    const built = buildFlicker();
+    expect(new Set(sample(built, 0.6))).toEqual(new Set([1]));
+    expect(new Set(sample(built, 1))).toEqual(new Set([1]));
+  });
+
+  it('alternates the glow between dim and full over the effect clock below half hp', () => {
+    const values = sample(buildFlicker(), 0.4);
+    expect(values.some((v) => v < 0.5)).toBe(true);
+    expect(values.some((v) => v === 1)).toBe(true);
+    expect(Math.min(...values)).toBeGreaterThan(0);
+  });
+
+  it('flickers at about 6 Hz: the colour changes between 6 and 24 times a second', () => {
+    const built = buildFlicker();
+    setEnemy(built.data, 0, { x: 100, y: 50, kind: HOUSE, hp: 0.4 });
+    const values = Array.from({ length: 1000 }, (_, k) => glowAt(built, k / 1000));
+    let changes = 0;
+    for (let k = 1; k < values.length; k++) if (values[k] !== values[k - 1]) changes += 1;
+    expect(changes).toBeGreaterThanOrEqual(6);
+    expect(changes).toBeLessThanOrEqual(24);
+  });
+
+  it('is deterministic for the same clock and slot, and differs between slots', () => {
+    const a = buildFlicker();
+    const b = buildFlicker();
+    for (const built of [a, b]) {
+      setEnemy(built.data, 0, { x: 10, y: 10, kind: HOUSE, hp: 0.3 });
+      setEnemy(built.data, 1, { x: 40, y: 10, kind: HOUSE, hp: 0.3 });
+    }
+    const read = (built, t) => [glowAt(built, t, 1), glowAt(built, t, 0)];
+    const times = Array.from({ length: 30 }, (_, k) => k * 0.041);
+    expect(times.map((t) => read(a, t))).toEqual(times.map((t) => read(b, t)));
+    expect(times.some((t) => read(a, t)[0] !== read(a, t)[1])).toBe(true);
+  });
+
+  it('lets the hit flash win: a flashing building holds its full glow', () => {
+    const values = sample(buildFlicker(), 0.4, 1);
+    expect(new Set(values)).toEqual(new Set([1]));
+  });
+
+  it('leaves the body colour to the flash alone, whatever the flicker', () => {
+    const built = buildFlicker();
+    setEnemy(built.data, 0, { x: 100, y: 50, kind: HOUSE, hp: 0.4 });
+    built.enemies.update(1, 0.05);
+    const c = new THREE.Color();
+    built.byName['enemy-house'].getColorAt(0, c);
+    expect([c.r, c.g, c.b]).toEqual([1, 1, 1]);
+  });
+
+  it('does not flicker kinds that are not in flickerKinds', () => {
+    const built = buildFlicker({ flickerKinds: new Set() });
+    expect(built.byName['enemy-house-glow'].instanceColor).toBeNull();
+    setEnemy(built.data, 0, { x: 100, y: 50, kind: HOUSE, hp: 0.2 });
+    built.enemies.update(1, 0.05);
+    expect(built.byName['enemy-house-glow'].instanceColor).toBeNull();
+  });
+
+  it('does not touch the glow of the other kinds', () => {
+    const built = buildFlicker();
+    expect(built.byName['enemy-tank-glow'].instanceColor).toBeNull();
+  });
+
+  it('uploads the glow colours only when a flicker kind was written', () => {
+    const built = buildFlicker();
+    const glow = built.byName['enemy-house-glow'];
+    const before = glow.instanceColor.version;
+    built.enemies.update(0, 0.1);
+    expect(glow.instanceColor.version).toBe(before);
+    setEnemy(built.data, 0, { x: 100, y: 50, kind: HOUSE, hp: 0.2 });
+    built.enemies.update(1, 0.1);
+    expect(glow.instanceColor.version).toBeGreaterThan(before);
   });
 });

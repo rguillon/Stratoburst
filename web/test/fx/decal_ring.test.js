@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { createDecalRing } from '../../src/fx/decal_ring.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2 };
-const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, STAGE_START: 20 };
+const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2, HUGE: 3 };
 const W = 240;
 const H = 320;
 const RATIO = 0.94;
@@ -75,6 +75,14 @@ describe('createDecalRing', () => {
       [60, 80, 24],
       [100, 50, 16],
     ]);
+  });
+
+  it('scorches a ground HUGE kill at 40, and an air HUGE explosion leaves nothing', () => {
+    const { ring } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.HUGE, 1, 3);
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.HUGE, 0, 3);
+    ring.update(100);
+    expect(drawn(ring)).toEqual([[100, 50, 40]]);
   });
 
   it('adds nothing for an air explosion, a SMALL blast, or another event', () => {
@@ -238,5 +246,48 @@ describe('setLimit', () => {
     ring.setLimit(32);
     ring.update(100);
     expect(ring.live).toBe(5);
+  });
+});
+
+describe('a stage start (D-26, RESEARCH Pattern 1)', () => {
+  it('clears every stored mark, even when the scroll jumped back to 0', () => {
+    const { ring } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.MEDIUM, 1, 3);
+    ring.handle(EVENTS.EXPLOSION, 60, 80, BLAST.LARGE, 1, 4);
+    ring.update(100);
+    expect(ring.live).toBe(2);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(0);
+    expect(ring.live).toBe(0);
+    expect(drawn(ring)).toEqual([]);
+  });
+
+  it('draws marks made afterwards from the first slot again', () => {
+    const { ring, state } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.MEDIUM, 1, 3);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    state.scroll = 0;
+    ring.handle(EVENTS.EXPLOSION, 40, 30, BLAST.LARGE, 1, 3);
+    ring.update(0);
+    expect(drawn(ring)).toEqual([[40, 30, 24]]);
+  });
+
+  it('stays cleared when the tier limit is raised again', () => {
+    const { ring } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.MEDIUM, 1, 3);
+    ring.setLimit(0);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.setLimit(48);
+    ring.update(0);
+    expect(ring.live).toBe(0);
+  });
+
+  it('keeps the previous behaviour when the events table has no STAGE_START', () => {
+    const { ring } = build({ events: { EXPLOSION: 1, HIT: 2 } });
+    ring.handle(EVENTS.EXPLOSION, 100, 50, BLAST.MEDIUM, 1, 3);
+    ring.handle(undefined, 0, 0, 0, 0, 0);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(100);
+    expect(ring.live).toBe(1);
   });
 });

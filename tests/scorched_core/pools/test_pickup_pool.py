@@ -5,7 +5,12 @@ import pytest
 from scorched_core.entities.pickup_kind import PickupKind
 from scorched_core.pools.pickup_pool import PickupPool
 from scorched_core.protocol import PICKUP_CAP, PICKUP_STRIDE, PLAYFIELD_H, PLAYFIELD_W
-from scorched_core.tuning import PICKUP_EXIT_SPEED, PICKUP_LIFE_TICKS, PICKUP_RADIUS
+from scorched_core.tuning import (
+    MEDAL_RESERVE,
+    PICKUP_EXIT_SPEED,
+    PICKUP_LIFE_TICKS,
+    PICKUP_RADIUS,
+)
 
 
 def test_a_new_pool_is_empty_and_preallocated_to_the_cap() -> None:
@@ -246,3 +251,168 @@ def test_removing_a_drifted_pickup_mid_step_keeps_the_others_stepping() -> None:
     pool.step()
     assert pool.n == 1
     assert (pool.kind[0], pool.x[0]) == (PickupKind.RED, 100.5)
+
+
+def test_clear_empties_the_pool() -> None:
+    pool = PickupPool()
+    pool.spawn(PickupKind.BOMB, 10.0, 20.0, 0.0, 1.0)
+    pool.spawn_crystal(50.0, 60.0)
+    pool.clear()
+    assert pool.n == 0
+    assert pool.spawn(PickupKind.BOMB, 1.0, 2.0, 0.0, 0.0)
+    assert pool.n == 1
+
+
+# --- medals (plan 03-11) ---------------------------------------------------------------------
+
+
+def test_spawn_medal_adds_a_still_medal_that_the_scroll_carries() -> None:
+    pool = PickupPool()
+    assert pool.spawn_medal(80.0, 120.0)
+    assert (pool.kind[0], pool.x[0], pool.y[0]) == (PickupKind.MEDAL, 80.0, 120.0)
+    assert (pool.vx[0], pool.vy[0], pool.age[0]) == (0.0, 0.0, 0)
+
+
+def test_a_medal_drifts_down_by_exactly_the_ground_speed_each_step() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    for _ in range(10):
+        pool.step(0.752)
+    assert pool.y[0] == pytest.approx(100.0 + 10 * 0.752, abs=1e-3)
+    assert pool.x[0] == 80.0
+
+
+def test_the_medal_ground_speed_has_a_default_of_the_ground_scroll() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    pool.step()
+    assert pool.y[0] == pytest.approx(100.0 + 0.8 * 0.94, abs=1e-4)
+
+
+def test_a_medal_never_bounces_and_never_times_out() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(PICKUP_RADIUS - 5.0, PICKUP_RADIUS - 5.0)
+    for _ in range(PICKUP_LIFE_TICKS - 1):
+        pool.step(0.0)
+    assert (pool.x[0], pool.y[0]) == (PICKUP_RADIUS - 5.0, PICKUP_RADIUS - 5.0)
+    pool.step(0.0)
+    pool.step(0.0)
+    assert pool.n == 1
+    assert pool.y[0] == PICKUP_RADIUS - 5.0  # the exit speed of a drifting crystal never applies
+
+
+def test_a_medal_below_the_playfield_is_removed() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, PLAYFIELD_H + 15.5)
+    pool.step(0.4)
+    assert pool.n == 1
+    pool.step(0.4)
+    assert pool.n == 0
+
+
+def test_crystals_and_bombs_move_as_before_when_a_ground_speed_is_given() -> None:
+    pool = PickupPool()
+    pool.spawn(PickupKind.BOMB, 100.0, 100.0, 0.0, 0.5)
+    pool.spawn(PickupKind.CRYSTAL, 50.0, 50.0, 0.64, -0.48)
+    pool.step(5.0)
+    assert pool.y[0] == pytest.approx(100.5)
+    assert (pool.x[1], pool.y[1]) == (pytest.approx(50.64), pytest.approx(49.52))
+
+
+def test_a_medal_reports_the_chain_tier_as_its_colour() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    assert pool.color_at(0) == 0
+    pool.medal_tier = 4
+    assert pool.color_at(0) == 4
+
+
+def test_pack_into_writes_the_medal_tier_as_the_colour_and_the_kind() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, 100.0)
+    pool.medal_tier = 3
+    out = array("f", [0.0] * (PICKUP_STRIDE * PICKUP_CAP))
+    pool.pack_into(out)
+    assert list(out[:PICKUP_STRIDE]) == [80.0, 100.0, 3.0, float(PickupKind.MEDAL)]
+
+
+def test_medals_cannot_take_the_last_reserved_slots_but_other_pickups_can() -> None:
+    pool = PickupPool()
+    usable = PICKUP_CAP - MEDAL_RESERVE
+    assert all(pool.spawn_medal(80.0, 50.0) for _ in range(usable))
+    assert not pool.spawn_medal(80.0, 50.0)
+    assert pool.n == usable
+    assert pool.spawn_crystal(50.0, 50.0)
+    assert pool.spawn(PickupKind.BOMB, 50.0, 50.0, 0.0, 0.5)
+
+
+def test_a_medal_that_leaves_the_bottom_is_counted_as_missed() -> None:
+    pool = PickupPool()
+    assert pool.medals_missed == 0
+    pool.spawn_medal(80.0, PLAYFIELD_H + 15.5)
+    pool.step(0.4)
+    assert pool.medals_missed == 0
+    pool.step(0.4)
+    assert (pool.n, pool.medals_missed) == (0, 1)
+
+
+def test_only_a_medal_leaving_counts_as_missed() -> None:
+    pool = PickupPool()
+    pool.spawn(PickupKind.BOMB, 80.0, PLAYFIELD_H + 15.9, 0.0, 0.5)
+    pool.age[0] = PICKUP_LIFE_TICKS
+    pool.spawn(PickupKind.CRYSTAL, 120.0, PLAYFIELD_H + 15.9, 0.0, 0.0)
+    pool.age[1] = PICKUP_LIFE_TICKS
+    pool.step(0.8)
+    assert pool.n == 0
+    assert pool.medals_missed == 0
+
+
+def test_a_refused_medal_spawn_is_never_a_miss() -> None:
+    pool = PickupPool()
+    for _ in range(PICKUP_CAP - MEDAL_RESERVE):
+        pool.spawn(PickupKind.CRYSTAL, 50.0, 50.0, 0.0, 0.0)
+    assert not pool.spawn_medal(80.0, 50.0)
+    pool.step()
+    assert pool.medals_missed == 0
+
+
+def test_a_guaranteed_pickup_evicts_the_oldest_medal_before_anything_older() -> None:
+    pool = PickupPool()
+    for i in range(PICKUP_CAP):
+        pool.spawn(PickupKind.CRYSTAL, float(i), 50.0, 0.0, 0.0)
+        pool.age[i] = 1000 + i
+    pool.remove_at(3)
+    pool.spawn(PickupKind.MEDAL, 200.0, 50.0, 0.0, 0.0)  # a young medal in a full pool
+    pool.remove_at(5)
+    pool.spawn(PickupKind.MEDAL, 210.0, 50.0, 0.0, 0.0)
+    medal_slots = [i for i in range(pool.n) if pool.kind[i] == PickupKind.MEDAL]
+    pool.age[medal_slots[0]] = 10
+    pool.age[medal_slots[1]] = 20  # the older medal; every crystal is older still
+    assert pool.n == PICKUP_CAP
+    pool.spawn_guaranteed(PickupKind.BLUE, 7.5, 8.5, 0.0, -0.5)
+    xs = [pool.x[i] for i in range(pool.n)]
+    assert pool.n == PICKUP_CAP
+    assert 210.0 not in xs  # the oldest medal made room
+    assert 200.0 in xs  # the younger medal and every crystal stayed
+    assert sum(1 for i in range(pool.n) if pool.kind[i] == PickupKind.CRYSTAL) == PICKUP_CAP - 2
+    assert pool.medals_missed == 0  # an eviction is not a miss
+
+
+def test_a_guaranteed_pickup_evicts_the_oldest_pickup_when_no_medal_is_live() -> None:
+    pool = PickupPool()
+    for i in range(PICKUP_CAP):
+        pool.spawn(PickupKind.CRYSTAL, float(i), 50.0, 0.0, 0.0)
+        pool.age[i] = i + 1
+    pool.spawn_guaranteed(PickupKind.RED, 99.0, 99.0, 0.0, 0.0)
+    xs = [pool.x[i] for i in range(pool.n)]
+    assert float(PICKUP_CAP - 1) not in xs
+    assert 99.0 in xs
+
+
+def test_clear_forgets_pending_misses() -> None:
+    pool = PickupPool()
+    pool.spawn_medal(80.0, PLAYFIELD_H + 15.9)
+    pool.step(1.0)
+    assert pool.medals_missed == 1
+    pool.clear()
+    assert pool.medals_missed == 0

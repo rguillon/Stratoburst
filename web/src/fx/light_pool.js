@@ -10,8 +10,11 @@ import { PALETTE } from './palette.js';
 // high tier so lit terrain stays under the bloom threshold except near the blast core (Pitfall 5).
 export const LIGHT_PEAK_MEDIUM = 3;
 export const LIGHT_PEAK_LARGE = 6;
+// The boss's death (D-14) is the strongest pulse in the game.
+export const LIGHT_PEAK_HUGE = 10;
 export const LIGHT_DURATION_MEDIUM = 0.15;
 export const LIGHT_DURATION_LARGE = 0.25;
+export const LIGHT_DURATION_HUGE = 0.4;
 export const LIGHT_LIFT = 20;
 const LIGHT_DISTANCE = 140;
 
@@ -85,10 +88,11 @@ export function createLightPool({ count = 3, events, blast, toWorld }) {
     flash(scratch.x, scratch.y + LIGHT_LIFT, scratch.z, peakIntensity, PALETTE.LIGHT_EXPLOSION.rgb, durationS);
   }
 
-  // Only MEDIUM and LARGE explosions light the scene; small ones and hits do not.
+  // Only MEDIUM, LARGE and HUGE explosions light the scene; small ones and hits do not.
   function handle(type, x, y, a, b) {
     if (type !== events.EXPLOSION) return;
-    if (a === blast.LARGE) pulse(x, y, b, LIGHT_PEAK_LARGE, LIGHT_DURATION_LARGE);
+    if (a === blast.HUGE) pulse(x, y, b, LIGHT_PEAK_HUGE, LIGHT_DURATION_HUGE);
+    else if (a === blast.LARGE) pulse(x, y, b, LIGHT_PEAK_LARGE, LIGHT_DURATION_LARGE);
     else if (a === blast.MEDIUM) pulse(x, y, b, LIGHT_PEAK_MEDIUM, LIGHT_DURATION_MEDIUM);
   }
 

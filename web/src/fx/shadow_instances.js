@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
-import { TERRAIN_DEPTH } from '../render/terrain_ring.js';
+import { TERRAIN_DEPTH } from '../render/ground_layer.js';
 
 // Blob shadows for everything that flies (VISL-06, RESEARCH Pattern 13): one InstancedMesh of soft
 // dark quads on the terrain, one per air enemy plus one for the ship. A shadow is displaced from
@@ -49,7 +49,9 @@ const quaternion = new THREE.Quaternion();
 // `data` is the enemies channel (stride 8) Python assigns into. `kinds` is the manifest's name ->
 // kind value map, `radii` the manifest's unit radius per kind value and `groundKinds` the Set of
 // kind values that cast no shadow. `sunPosition` is the sun's position (only its direction
-// matters). `altitude` is how high every aircraft flies above the terrain.
+// matters). `altitude` is how high every aircraft flies above the terrain. `sizeScale` maps a kind
+// value to a multiplier on its shadow, for the kinds whose airframe is far wider than their collider
+// (the giant bomber, D-09): its shadow is sized to the airframe, not to the 28-unit hit circle.
 export function createShadowInstances({
   data,
   capacity,
@@ -58,6 +60,7 @@ export function createShadowInstances({
   radii,
   sunPosition,
   altitude = 40,
+  sizeScale = {},
   terrainDepth = TERRAIN_DEPTH,
   playfieldW,
   playfieldH,
@@ -65,7 +68,7 @@ export function createShadowInstances({
   // Shadow size per kind value; 0 for ground kinds and for values that are not a kind.
   const sizeOf = new Float32Array(Math.max(0, ...Object.values(kinds)) + 1);
   for (const value of Object.values(kinds)) {
-    if (!groundKinds.has(value)) sizeOf[value] = radii[value] * SHADOW_SCALE;
+    if (!groundKinds.has(value)) sizeOf[value] = radii[value] * SHADOW_SCALE * (sizeScale[value] ?? 1);
   }
   const shipSize = SHIP_RADIUS * SHADOW_SCALE;
 

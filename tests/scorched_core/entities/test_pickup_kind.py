@@ -9,6 +9,7 @@ def test_the_pickup_values_are_the_wire_values() -> None:
         "PURPLE": 2,
         "CRYSTAL": 3,
         "BOMB": 4,
+        "MEDAL": 5,
     }
 
 

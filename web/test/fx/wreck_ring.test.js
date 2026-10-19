@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { createWreckRing } from '../../src/fx/wreck_ring.js';
-import { enemyModel } from '../../src/render/models/enemy_models.js';
+import { PALETTE } from '../../src/fx/palette.js';
+import { createWreckRing, wreckKindsFor } from '../../src/fx/wreck_ring.js';
+import { enemyModel, hasModel } from '../../src/render/models/enemy_models.js';
+import { buildRubble } from '../../src/render/models/city_targets.js';
 
-const EVENTS = { EXPLOSION: 1, HIT: 2 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, STAGE_START: 20 };
 const KINDS = { TANK: 3, TURRET: 4 };
 const W = 240;
 const H = 320;
@@ -225,18 +227,6 @@ function run(ring, from, seconds, scroll = 100) {
   return from + frames / 60;
 }
 
-function hueOf([r, g, b]) {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  if (max === min) return 0;
-  const d = max - min;
-  let h;
-  if (max === r) h = ((g - b) / d) % 6;
-  else if (max === g) h = (b - r) / d + 2;
-  else h = (r - g) / d + 4;
-  return (h * 60 + 360) % 360;
-}
-
 describe('the smouldering trickle', () => {
   it('puffs dark smoke on the normal layer about every 0.18 s at particleScale 1', () => {
     const { ring, emitted } = smouldering();
@@ -271,16 +261,13 @@ describe('the smouldering trickle', () => {
     expect(emitted.normal.length - before).toBeGreaterThanOrEqual(9);
   });
 
-  it('paints the flames orange and never pink', () => {
+  it('paints the flames with PALETTE.FIRE: red, never orange-yellow', () => {
     const { ring, emitted } = smouldering();
     ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
     run(ring, 0, 3);
     expect(emitted.additive.length).toBeGreaterThan(0);
     for (const p of emitted.additive) {
-      const rgb = [p[9], p[10], p[11]];
-      const hue = hueOf(rgb);
-      expect(hue).toBeGreaterThanOrEqual(15);
-      expect(hue).toBeLessThanOrEqual(45);
+      expect([p[9], p[10], p[11]].map((v) => Math.fround(v))).toEqual(PALETTE.FIRE.rgb.map(Math.fround));
       expect(p[7]).toBeLessThan(6); // small
     }
   });
@@ -379,3 +366,132 @@ describe('the smouldering trickle', () => {
   });
 });
 
+
+describe('a stage start (D-26, RESEARCH Pattern 1)', () => {
+  it('clears every stored wreck, even when the scroll jumped back to 0', () => {
+    const { ring, byName } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.handle(EVENTS.EXPLOSION, 60, 80, 2, 1, KINDS.TURRET);
+    ring.update(100);
+    expect(ring.live).toBe(2);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(0);
+    expect(ring.live).toBe(0);
+    expect(byName['wreck-tank'].count).toBe(0);
+    expect(byName['wreck-turret'].count).toBe(0);
+  });
+
+  it('adds wrecks normally afterwards, in the first slot again', () => {
+    const { ring, state, byName } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    state.scroll = 0;
+    ring.handle(EVENTS.EXPLOSION, 40, 30, 2, 1, KINDS.TANK);
+    ring.update(0);
+    expect(ring.live).toBe(1);
+    const p = positionOf(byName['wreck-tank'], 0);
+    expect(Array.from(p.toArray()).every(Number.isFinite)).toBe(true);
+    expect(p.toArray()).toEqual([40 - W / 2, 0, 30 - H / 2]);
+  });
+
+  it('stops the smoulder of a cleared wreck at once', () => {
+    const { ring, emitted } = smouldering();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    const t = run(ring, 0, 1);
+    expect(emitted.normal.length).toBeGreaterThan(0);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    const before = { normal: emitted.normal.length, additive: emitted.additive.length };
+    run(ring, t, 2, 0);
+    expect(emitted.normal.length).toBe(before.normal);
+    expect(emitted.additive.length).toBe(before.additive);
+  });
+
+  it('leaves a finite matrix behind in the cleared meshes', () => {
+    const { ring, byName } = build();
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.update(100);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(0);
+    const m = byName['wreck-tank'].instanceMatrix.array.slice(0, 16);
+    expect(Array.from(m).every(Number.isFinite)).toBe(true);
+  });
+
+  it('keeps the previous behaviour when the events table has no STAGE_START', () => {
+    const { ring } = build({ events: { EXPLOSION: 1, HIT: 2 } });
+    ring.handle(EVENTS.EXPLOSION, 100, 50, 2, 1, KINDS.TANK);
+    ring.handle(undefined, 0, 0, 0, 0, 0);
+    ring.handle(EVENTS.STAGE_START, 0, 0, 1, 0, 0);
+    ring.update(100);
+    expect(ring.live).toBe(1);
+  });
+});
+
+describe('rubble for destroyed city targets (D-33)', () => {
+  const CITY = { HOUSE: 8, FUEL_TANK: 9 };
+
+  function withRubble(extra = {}) {
+    const geometry = buildRubble();
+    const built = build({
+      kinds: { ...KINDS, ...CITY },
+      rubble: { kinds: new Set(Object.values(CITY)), geometry },
+      ...extra,
+    });
+    return { ...built, geometry };
+  }
+
+  it('draws a city kind with the rubble geometry, not its intact building', () => {
+    const { byName, geometry } = withRubble();
+    expect(byName['wreck-house'].geometry).toBe(geometry);
+    expect(byName['wreck-fuel_tank'].geometry).toBe(geometry);
+    expect(byName['wreck-house'].geometry).not.toBe(enemyModel('HOUSE', 'low').body);
+  });
+
+  it('keeps the low-detail body for the kinds that are not rubble kinds', () => {
+    const { byName } = withRubble();
+    expect(byName['wreck-tank'].geometry).toBe(enemyModel('TANK', 'low').body);
+  });
+
+  it('places and scrolls a rubble wreck like any other wreck', () => {
+    const { ring, byName } = withRubble();
+    ring.handle(EVENTS.EXPLOSION, 60, 40, 2, 1, CITY.HOUSE);
+    expect(ring.spawned).toBe(1);
+    ring.update(100 + 50);
+    expect(byName['wreck-house'].count).toBe(1);
+    const p = positionOf(byName['wreck-house'], 0);
+    expect(p.x).toBeCloseTo(60 - W / 2, 4);
+    expect(p.z).toBeCloseTo(40 + RATIO * 50 - H / 2, 3);
+  });
+
+  it('does nothing different when no rubble option is given', () => {
+    const { byName } = build({ kinds: { ...KINDS, ...CITY } });
+    expect(byName['wreck-house'].geometry).toBe(enemyModel('HOUSE', 'low').body);
+  });
+});
+
+describe('wreckKindsFor (data-driven wreck kinds)', () => {
+  const NAMES = { TANK: 3, TURRET: 4, TRAIN: 5, TRAIN_TURRET: 6, TRAIN_STUMP: 7, HOUSE: 8 };
+  const WRECK = [0, 0, 0, 1, 1, 1, 0, 0, 1];
+
+  it('keeps ground kinds whose wreck entry is 1 and that have a model: the train hull burns out in place', () => {
+    expect(wreckKindsFor(NAMES, WRECK, hasModel)).toEqual({ TANK: 3, TURRET: 4, TRAIN: 5, HOUSE: 8 });
+  });
+
+  it('drops a wreck kind without a model, so the ring never builds a hull for it', () => {
+    const withoutTrain = (name) => name !== 'TRAIN' && hasModel(name);
+    expect(wreckKindsFor(NAMES, WRECK, withoutTrain)).toEqual({ TANK: 3, TURRET: 4, HOUSE: 8 });
+  });
+
+  it('never leaves a second wreck for a gun car or a stump, which have models but no wreck entry', () => {
+    const kinds = wreckKindsFor(NAMES, WRECK, hasModel);
+    expect(kinds).not.toHaveProperty('TRAIN_TURRET');
+    expect(kinds).not.toHaveProperty('TRAIN_STUMP');
+  });
+
+  it('drops a model kind whose wreck entry is 0 (train turrets and stumps)', () => {
+    expect(wreckKindsFor(NAMES, WRECK, () => true)).toEqual({ TANK: 3, TURRET: 4, TRAIN: 5, HOUSE: 8 });
+  });
+
+  it('treats a missing table entry as no wreck', () => {
+    expect(wreckKindsFor({ TANK: 3 }, [], hasModel)).toEqual({});
+  });
+});

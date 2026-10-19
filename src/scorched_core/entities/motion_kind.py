@@ -10,3 +10,5 @@ class MotionKind(IntEnum):
     DIVE = 1
     HOVER = 2
     GROUND = 3
+    PATH = 4
+    SCRIPTED = 5

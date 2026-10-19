@@ -8,7 +8,8 @@ class SfxId(IntEnum):
 
     JS maps each name (published in the manifest) to a pre-rendered buffer. LASER_HUM is the
     looped beam sound that JS drives from the beam half-width in the header: it exists so the
-    sound table covers it, and the router never emits it.
+    sound table covers it, and the router never emits it. Values are only ever appended: 18-27 are
+    the stage-event sounds (the boss alarm, the extend chime, the tally tick and the rest).
     """
 
     EXPLODE_SMALL = 0
@@ -29,3 +30,13 @@ class SfxId(IntEnum):
     DEATHBOMB = 15
     ENEMY_FIRE = 16
     LASER_HUM = 17
+    EXPLODE_HUGE = 18
+    WARNING = 19
+    EXTEND = 20
+    MEDAL = 21
+    PART_DESTROY = 22
+    BOSS_PHASE = 23
+    BOSS_DEFEAT = 24
+    TALLY_TICK = 25
+    STAGE_CLEAR = 26
+    GAME_OVER = 27

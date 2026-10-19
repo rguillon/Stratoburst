@@ -1,0 +1,19 @@
+/* Press Start 2P (CodeMan38), the arcade pixel font of the HUD and the overlays (D-24).
+   Self-hosted: the woff2 is vendored from the @fontsource/press-start-2p 5.3.0 npm tarball (latin subset,
+   weight 400), never fetched from a CDN at runtime. The SIL Open Font License 1.1 text ships with the build
+   as fonts/OFL-press-start-2p.txt (public/fonts/OFL-press-start-2p.txt). Vite hashes the woff2 into
+   dist/assets and rewrites the url() with the relative base.
+   font-display: block keeps the text invisible for a moment instead of flashing a fallback face that would
+   swap mid-play; the loading screen uses the font from the first paint, so it is ready before the start gate. */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../assets/fonts/press-start-2p-latin-400-normal.woff2') format('woff2');
+}
+
+/* The HUD font stack: the pixel font, then a monospace fallback so text is never invisible. */
+:root {
+  --hud-font: 'Press Start 2P', ui-monospace, Menlo, Consolas, monospace;
+}

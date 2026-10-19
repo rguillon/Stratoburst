@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
+  LIGHT_DURATION_HUGE,
   LIGHT_DURATION_LARGE,
   LIGHT_DURATION_MEDIUM,
   LIGHT_LIFT,
+  LIGHT_PEAK_HUGE,
   LIGHT_PEAK_LARGE,
   LIGHT_PEAK_MEDIUM,
   createLightPool,
@@ -11,7 +13,7 @@ import {
 import { PALETTE } from '../../src/fx/palette.js';
 
 const EVENTS = { EXPLOSION: 1, HIT: 2 };
-const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2 };
+const BLAST = { SMALL: 0, MEDIUM: 1, LARGE: 2, HUGE: 3 };
 
 function build(options = {}) {
   return createLightPool({
@@ -97,6 +99,20 @@ describe('createLightPool', () => {
     pool.update(0.24);
     expect(light.intensity).toBeGreaterThan(0);
     pool.update(0.01);
+    expect(light.intensity).toBe(0);
+  });
+
+  it('flashes a HUGE explosion harder and longer than any other class (D-14)', () => {
+    const pool = build();
+    pool.handle(EVENTS.EXPLOSION, 130, 170, BLAST.HUGE, 0, 0);
+    const [light] = pool.lights;
+    expect(LIGHT_PEAK_HUGE).toBeGreaterThan(LIGHT_PEAK_LARGE);
+    expect(LIGHT_DURATION_HUGE).toBeGreaterThan(LIGHT_DURATION_LARGE);
+    expect(light.intensity).toBe(LIGHT_PEAK_HUGE);
+    expect(light.position.toArray()).toEqual([10, LIGHT_LIFT, 10]);
+    pool.update(LIGHT_DURATION_HUGE * 0.9);
+    expect(light.intensity).toBeGreaterThan(0);
+    pool.update(LIGHT_DURATION_HUGE * 0.2);
     expect(light.intensity).toBe(0);
   });
 

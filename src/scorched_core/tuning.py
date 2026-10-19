@@ -5,7 +5,6 @@ from typing import Final
 from scorched_core.entities.enemy_kind import EnemyKind
 from scorched_core.entities.motion_kind import MotionKind
 from scorched_core.entities.pickup_kind import PickupKind
-from scorched_core.patterns.fire_pattern import FirePattern
 from scorched_core.protocol import BLAST_LARGE, BLAST_MEDIUM, BLAST_SMALL, PLAYFIELD_H, PLAYFIELD_W
 
 # About 1.2 s to cross the playfield width at 60 steps per second (D-10).
@@ -28,10 +27,21 @@ DYING_TICKS: Final = 50  # no control and no fire while the wreck burns
 RESPAWN_START_Y: Final = PLAYFIELD_H + 24.0  # D-14: the fly-in starts below the playfield
 RESPAWN_SPEED: Final = 2.5  # units per step while flying in
 INVULN_RESPAWN_TICKS: Final = 150  # 2.5 s, inside D-14's 2-3 s
+INTRO_TICKS: Final = 120  # D-26: the stage intro, about 2 s of fly-in under the STAGE banner
 ENEMY_BULLET_RADIUS: Final = 2.5
 
 # Terrain scroll in terrain units per 60 Hz step (about 48 units per second); STGE-02.
 SCROLL_SPEED: Final = 0.8
+SCROLL_ACCEL: Final = 0.01  # most the scroll speed may change per step toward its target
+MIDBOSS_CRAWL_SPEED: Final = 0.2  # D-06: the terrain slows to a crawl for the mid-boss
+MIDBOSS_TRIGGER_WINDOW: Final = 80.0  # the mid-boss starts only this close past its marker
+BOSS_CRAWL_SPEED: Final = 0.12  # D-06: and slower still for the boss
+BOSS_TRIGGER_WINDOW: Final = 80.0  # the boss WARNING starts only this close past its marker
+WARNING_TICKS: Final = 180  # D-13: the flashing WARNING lasts about 3 s before the boss arrives
+BOSS_PHASE_SHIELD_TICKS: Final = 45  # a boss is invulnerable this long when its phase changes
+BOSS_RETREAT_SPEED: Final = 1.2  # units per step a timed-out boss rises off screen (ENMY-09)
+BOSS_TIMER_SHOW_S: Final = 20  # the boss countdown is published only inside the last 20 s
+AT_LEAD: Final = 320.0  # distance before a marker that ``?at=`` starts at: about one screen
 
 # Touch drag catch-up: the most finger movement (in units) the ship may still owe (INPT-02).
 TOUCH_LAG_CAP: Final = 40.0
@@ -108,36 +118,101 @@ BOMB_MIN_Y: Final = 90.0
 # and when the ship is destroyed. Nothing else freezes it: ordinary hits and kills stay smooth.
 HITSTOP_BOMB_TICKS: Final = 4
 HITSTOP_DEATH_TICKS: Final = 6
+HITSTOP_PART_TICKS: Final = 4  # D-14: a boss part blowing off is a big event
+HITSTOP_BOSS_TICKS: Final = 8  # D-14: and the boss's final explosion is the biggest
 
 # Gallery enemies (D-17, D-20): typed targets that sway down the screen. Per-kind tuples are
-# indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET).
+# indexed by ``EnemyKind`` value (JET, HELI, CARRIER, TANK, TURRET, TRAIN, TRAIN_TURRET,
+# TRAIN_STUMP, HOUSE, FUEL_TANK, DEPOT, BILLBOARD, BOMBER, BOMBER_TURRET, BOMBER_ENGINE,
+# BOMBER_STUMP, BOMBER_OPEN). The three train kinds are the mid-boss's rows (plan 03-14): the hull
+# is the largest collider in the game and still fits one grid cell with the larger shot radius.
+# The next four are the city's destructible targets (plan 03-15, D-05) and the last five are the
+# giant bomber's rows (plan 03-19, D-09): air units, so they are not ground and leave no wreck.
 ENEMY_FLASH_TICKS: Final = 4  # D-28: the hit flash lasts a couple of frames
-ENEMY_MAX_ALIVE: Final = 40  # spawns beyond this are refused; the columns hold ENEMY_CAP
+ENEMY_MAX_ALIVE: Final = 56  # spawns beyond this are refused; a boss and its parts share the pool
 ENEMY_EXIT_MARGIN: Final = 24.0  # an enemy this far outside the playfield is gone
 ENEMY_SWAY: Final = 30.0  # sinusoidal sway amplitude in units
 ENEMY_SWAY_PERIOD: Final = 120  # steps per full sway cycle
-ENEMY_RADIUS: Final = (9.0, 10.0, 14.0, 11.0, 10.0)
-ENEMY_HP: Final = (3, 6, 12, 8, 6)
-ENEMY_BLAST: Final = (BLAST_SMALL, BLAST_MEDIUM, BLAST_MEDIUM, BLAST_LARGE, BLAST_MEDIUM)
-ENEMY_GROUND: Final = (False, False, False, True, True)
+ENEMY_RADIUS: Final = (
+    *(9.0, 10.0, 14.0, 11.0, 10.0, 28.0, 11.0, 6.0, 12.0, 11.0, 14.0, 12.0),
+    *(28.0, 10.0, 12.0, 6.0, 28.0),
+)
+ENEMY_HP: Final = (3, 6, 12, 8, 6, 500, 120, 1, 8, 6, 16, 10, 1400, 200, 220, 1, 1400)
+ENEMY_BLAST: Final = (
+    BLAST_SMALL,
+    BLAST_MEDIUM,
+    BLAST_MEDIUM,
+    BLAST_LARGE,
+    BLAST_MEDIUM,
+    BLAST_LARGE,
+    BLAST_MEDIUM,
+    BLAST_SMALL,
+    BLAST_MEDIUM,
+    BLAST_LARGE,
+    BLAST_LARGE,
+    BLAST_MEDIUM,
+    BLAST_LARGE,
+    BLAST_MEDIUM,
+    BLAST_MEDIUM,
+    BLAST_MEDIUM,
+    BLAST_LARGE,
+)
+ENEMY_GROUND: Final = (
+    *(False, False, False, True, True, True, True, True, True, True, True, True),
+    *(False, False, False, False, False),
+)
+# Which kinds leave a wreck behind when destroyed (1) and which do not (0): ground vehicles, the
+# train hull and the city targets burn out in place, aircraft, gun cars and stumps vanish. The
+# renderer reads this from the manifest (``tuning.enemy_wreck``), so the choice stays data.
+ENEMY_WRECK: Final = (0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0)
 
-# Enemy fire (D-17), Raiden pacing and not bullet hell. Indexed by EnemyKind (JET, HELI, CARRIER,
-# TANK, TURRET): the pattern, the steps between volleys and the bullet speed in units per step.
-# Nothing fires until ENEMY_FIRE_DELAY steps after it spawned, nor above the top edge or below
-# ENEMY_FIRE_MAX_Y, so nothing shoots point-blank from under the ship. A ring has ENEMY_RING_COUNT
-# bullets and consecutive rings are rotated by half a ring step so they interleave.
+# Enemy fire (D-17), Raiden pacing and not bullet hell. Fire is data (ENMY-04): each kind names
+# its default pattern from the PATTERNS registry (patterns/pattern_library.py), indexed by
+# EnemyKind (JET, HELI, CARRIER, TANK, TURRET, TRAIN, TRAIN_TURRET, TRAIN_STUMP, the four city
+# targets and the five bomber rows); None means the kind never fires (a boss's own guns are
+# emitters in its BossSpec, not the pool's). A stage wave can name another pattern. Nothing fires
+# until a pattern's delay (ENEMY_FIRE_DELAY steps by default) after it spawned, nor above the top
+# edge or below ENEMY_FIRE_MAX_Y, so nothing shoots point-blank from under the ship.
 ENEMY_FIRE_DELAY: Final = 45
 ENEMY_FIRE_MAX_Y: Final = PLAYFIELD_H * 0.7
-ENEMY_FIRE_PATTERN: Final = (
-    FirePattern.AIMED,
-    FirePattern.RING,
-    FirePattern.NONE,
-    FirePattern.AIMED,
-    FirePattern.AIMED,
+ENEMY_PATTERN: Final = (
+    "jet_aimed",
+    "heli_ring",
+    None,
+    "tank_aimed",
+    "turret_aimed",
+    *(None,) * 12,  # the carrier, the train and bomber rows, the city targets: no default fire
 )
-ENEMY_FIRE_INTERVAL: Final = (140, 150, 0, 120, 90)
-ENEMY_BULLET_SPEED: Final = (2.0, 1.3, 0.0, 1.6, 1.8)
-ENEMY_RING_COUNT: Final = 8
+
+# Scoring (SCOR-01, SCOR-04, D-17, D-19), all tunable. A kill pays a fixed amount by kind, indexed
+# by EnemyKind (JET, HELI, CARRIER, TANK, TURRET; the train kinds pay 0 because the boss
+# controller pays its parts and its hull; HOUSE, FUEL_TANK, DEPOT and BILLBOARD pay 500, 1500,
+# 2000 and 1000, SCOR-01): no multiplier and no point-blank bonus. The
+# deferred Lv5 MAX catch pays a flat MAX_BONUS_POINTS. The score is a Python int clamped at
+# SCORE_CAP, seven digits, so the float32 header slot always holds it exactly. The player starts
+# with LIVES_START ships (never more than LIVES_CAP) and earns an extend at EXTEND_FIRST and then
+# every EXTEND_EVERY.
+ENEMY_POINTS: Final = (300, 800, 2000, 1000, 1200, 0, 0, 0, 500, 1500, 2000, 1000, 0, 0, 0, 0, 0)
+SCORE_CAP: Final = 9_999_999
+MAX_BONUS_POINTS: Final = 10_000
+LIVES_START: Final = 3
+LIVES_CAP: Final = 9
+EXTEND_FIRST: Final = 200_000
+EXTEND_EVERY: Final = 500_000
+
+# The stage-clear tally (SCOR-03, D-18, D-27), all tunable. The boss's end holds CLEAR_TICKS, then
+# the four bonus lines are counted up one every TALLY_LINE_TICKS and held TALLY_HOLD_TICKS after
+# the last; STAGE CLEAR shows for STAGE_CLEAR_TICKS before stage 1 starts again. Lines: the boss
+# (nothing if it retreated), each medal caught this stage, a flawless stage (no ship lost) and each
+# bomb still in stock.
+CLEAR_TICKS: Final = 120
+TALLY_LINE_TICKS: Final = 60
+TALLY_HOLD_TICKS: Final = 120
+STAGE_CLEAR_TICKS: Final = 150
+TALLY_BOSS_BONUS: Final = 100_000
+TALLY_MEDAL_BONUS: Final = 1_000
+TALLY_NO_MISS_BONUS: Final = 50_000
+TALLY_BOMB_BONUS: Final = 10_000
 
 # Helicopters (D-17): descend to HOVER_STOP_Y, hold there drifting side to side, then leave.
 HOVER_STOP_Y: Final = 96.0
@@ -150,6 +225,17 @@ HOVER_EXIT_SPEED: Final = 1.4  # units per step, straight down
 # keeps the residual slide against the ray-compensated JS ground layer within about 2% across
 # aspect ratios (RESEARCH Pattern 14, about 1 / 1.065); it is exported in the manifest.
 GROUND_SCROLL_RATIO: Final = 0.94
+
+# The authored city (D-34): roads run down the screen at logical x = CITY_PITCH * c and across it
+# every CITY_PITCH distance units; the blocks between them fill the middle CITY_BLOCK of each
+# cell. GROUND_Y0 is the logical y of a ground placement when the scroll equals its distance, and
+# CITY_MAX_HEIGHT keeps every building top below the gameplay plane once the ground layer scales
+# it (the terrain sits 40 units under the plane).
+CITY_PITCH: Final = 80.0
+CITY_BLOCK: Final = 64.0
+GROUND_Y0: Final = -40.0
+CITY_MAX_HEIGHT: Final = 34.0
+CITY_CORRIDOR_HALF: Final = 6.0  # no lot is built this close to a maglev or runway line
 
 # The shooting gallery's looping spawn script (D-17), the stand-in for the Phase 3 stage
 # timeline. Entries are ``(tick, kind, x, y, motion, vx, vy, drop)`` sorted by tick: jets dive
@@ -206,6 +292,14 @@ PICKUP_EXIT_SPEED: Final = 0.8
 # A bomb pickup (PLYR-09, D-19) is dropped by a killed AA turret and falls slowly straight down.
 BOMB_DROP_VY: Final = 0.5
 
+# Medals (SCOR-02, D-15, D-16): a destroyed ground target may drop a medal that drifts down with
+# the scroll at the ground speed and never bounces or times out. Catching one pays the chain value,
+# which climbs the ladder on every catch and stays at its last entry; a medal that scrolls off, or
+# a death, restarts the ladder. Medals may not take the last MEDAL_RESERVE pickup slots, so a flood
+# of medals never blocks a weapon or bomb pickup (RESEARCH Pitfall 14).
+MEDAL_LADDER: Final = (100, 200, 500, 1000, 2000, 5000, 10000)
+MEDAL_RESERVE: Final = 4
+
 # Death (PLYR-06, D-04, D-05): a death costs DEATH_LEVEL_PENALTY weapon levels (a reversible
 # tuning constant, floor 1) and leaves one fixed-colour recovery pickup at the death spot, drifting
 # up at RECOVERY_VY. The spot is clamped RECOVERY_MARGIN inside the pickup radius at the sides and
@@ -218,3 +312,6 @@ RECOVERY_BOTTOM_MARGIN: Final = 40.0
 # Broadphase cell edge; the largest ENEMY_RADIUS plus PBULLET_RADIUS or MISSILE_RADIUS must stay
 # at or below it so a 3x3 query suffices.
 GRID_CELL: Final = 32.0
+# The largest radius a boss or part row may have: the 3x3 broadphase stays exact only while a
+# collider plus the larger player shot (bolt or missile) fits inside one cell (RESEARCH Pitfall 2).
+BOSS_MAX_RADIUS: Final = GRID_CELL - max(PBULLET_RADIUS, MISSILE_RADIUS)

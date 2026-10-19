@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../../src/fx/palette.js';
 import { buildCarrier } from '../../../src/render/models/carrier.js';
+import {
+  expectGunmetal,
+  expectNoBulletHue,
+  expectRedNeon,
+  hasColour,
+} from '../../helpers/vertex_colours.js';
 import { buildJet } from '../../../src/render/models/jet.js';
 
 const vertexCount = (geometry) => geometry.getAttribute('position').count;
@@ -33,24 +40,18 @@ describe('buildCarrier', () => {
     }
   });
 
-  it('has a bright cargo stripe: some vertex colours above 0.7', () => {
-    expect(channels(buildCarrier('high').body).some((v) => v > 0.7)).toBe(true);
+  it('has a lighter gunmetal cargo stripe: some channel above 0.25, still at most 0.3', () => {
+    const body = buildCarrier('high').body;
+    expect(channels(body).some((v) => v > 0.25)).toBe(true);
+    expectGunmetal(body, 'carrier body');
   });
 
-  it('has an amber HDR beacon near (3.2, 2.0, 0.3) in the glow', () => {
-    const glow = buildCarrier('mid').glow;
-    const color = glow.getAttribute('color');
-    let found = false;
-    for (let i = 0; i < color.count; i++) {
-      if (
-        Math.abs(color.getX(i) - 3.2) < 0.05 &&
-        Math.abs(color.getY(i) - 2.0) < 0.05 &&
-        Math.abs(color.getZ(i) - 0.3) < 0.05
-      ) {
-        found = true;
-      }
-    }
-    expect(found).toBe(true);
+  it('has a red HDR beacon (BEACON_RED) and red engine discs in the glow, no orange-yellow', () => {
+    const { glow } = buildCarrier('mid');
+    expect(hasColour(glow, PALETTE.BEACON_RED.rgb)).toBe(true);
+    expect(hasColour(glow, PALETTE.ENGINE.rgb)).toBe(true);
+    expectRedNeon(glow, 'carrier glow');
+    expectNoBulletHue(glow, 'carrier glow');
   });
 
   it('matches the CARRIER hitbox: half-extent between 0.8x and 1.6x the radius of 14', () => {

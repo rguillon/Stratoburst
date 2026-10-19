@@ -8,7 +8,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
     "e2e": "playwright test",
-    "perf": "node tools/perf_node.mjs --stress 500 --ticks 600 --budget-ms 3 --fire 1 --weapon all --level 5 --bomb 300"
+    "perf:stage": "node tools/perf_node.mjs --stage 1 --at boss --ticks 1800 --budget-ms 3 --fire 1 --weapon all --level 5 --bomb 600 && node tools/perf_node.mjs --stage 1 --mortal 1 --ticks 3600 --budget-ms 3 --fire 1 --weapon vulcan --level 3",
+    "perf": "node tools/perf_node.mjs --stress 500 --ticks 600 --budget-ms 3 --fire 1 --weapon all --level 5 --bomb 300 && npm run perf:stage"
   },
   "dependencies": {
     "pyodide": "314.0.7",

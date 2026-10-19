@@ -8,7 +8,7 @@ import { bake, lathe, tint } from '../render/models/model_kit.js';
 // missile rises from the ship (LAUNCH), then an expanding HDR fireball fills the screen (BLAST) at
 // the radius Python's blast uses. The detonation event adds one big particle burst (its COUNT scales
 // with the quality tier, never its size), one large light flash, one scorch mark on the terrain and a
-// single bloom pulse. Nothing here is pink and nothing strobes: a detonation is exactly one rising,
+// single bloom pulse. Nothing here is orange-yellow and nothing strobes: a detonation is exactly one rising,
 // then decaying, pulse (photosensitivity, WCAG 2.3.1).
 
 // One detonation burst at tier scale 1: [fire, smoke, sparks].
@@ -148,7 +148,6 @@ export function createBombFx({
   fireball.visible = false;
   group.add(fireball);
 
-  const baseStrength = bloomPass.strength;
   const radiusMin = tuning.bomb_radius_min;
   const radiusSpan = tuning.bomb_radius_max - tuning.bomb_radius_min;
   const growShare = tuning.bomb_grow_ticks / tuning.bomb_blast_ticks;
@@ -190,6 +189,14 @@ export function createBombFx({
     }
   }
 
+  // The strength the pulse starts from and returns to. The pipeline publishes it per tier as
+  // `baseStrength`, so a tier change mid-game is honoured; a pass that never published one is
+  // seeded once from its current (unpulsed) strength.
+  function liveBase() {
+    bloomPass.baseStrength ??= bloomPass.strength;
+    return bloomPass.baseStrength;
+  }
+
   function detonate(x, y) {
     toWorld(x, y, world);
     emit(layers.additive, BURST_FIRE, [0.8, 1.5], [30, 130], [12, 26], PALETTE.BOMB_FIRE.rgb, 0, 0.35);
@@ -198,7 +205,7 @@ export function createBombFx({
     decals.add(x, y, SCORCH_SIZE);
     lights.flash(world.x, world.y + FLASH_LIFT, world.z, FLASH_PEAK, PALETTE.LIGHT_EXPLOSION.rgb, FLASH_DURATION_S);
     pulseAge = 0;
-    bloomPass.strength = baseStrength * BLOOM_PEAK;
+    bloomPass.strength = liveBase() * BLOOM_PEAK;
   }
 
   function handle(type, x, y) {
@@ -222,10 +229,10 @@ export function createBombFx({
     if (pulseAge >= BLOOM_PULSE_S) return;
     pulseAge += dt;
     if (pulseAge >= BLOOM_PULSE_S) {
-      bloomPass.strength = baseStrength;
+      bloomPass.strength = liveBase();
       return;
     }
-    bloomPass.strength = baseStrength * (1 + (BLOOM_PEAK - 1) * (1 - pulseAge / BLOOM_PULSE_S));
+    bloomPass.strength = liveBase() * (1 + (BLOOM_PEAK - 1) * (1 - pulseAge / BLOOM_PULSE_S));
   }
 
   // `phase`, `x`, `y` and `t` come straight from the header (BOMB_PHASE, BOMB_X, BOMB_Y, BOMB_T);

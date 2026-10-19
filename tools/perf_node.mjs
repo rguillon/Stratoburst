@@ -2,15 +2,23 @@
 // scorched_web sources, runs the stress storm headlessly and fails above the budget.
 // Usage: node tools/perf_node.mjs [--stress 500] [--ticks 600] [--budget-ms 3] [--fire 1]
 //                                 [--weapon vulcan|laser|homing|all] [--level 1..5] [--bomb N]
+//                                 [--stage 0|1] [--at midboss|boss] [--mortal 0|1]
 // --fire 1 holds the fire button and sweeps the ship, so the player's shots, the gallery enemies
 // and the grid broadphase are exercised on top of the stress storm.
 // --bomb N presses BOMB on one sample every N ticks (0 = never) with a 7-bomb stock; the bit is clear
 // on the next sample, so Python sees a press edge each time.
 // --weapon picks the starting weapon; `all` runs vulcan, laser and homing in turn, each on a fresh
 // game, and prints one JSON line per run with its `weapon`. --level sets the starting level.
+// --stage 1 runs the real stage 1 instead of the shooting gallery (the default, --stage 0). A stage
+// run has no stress storm unless --stress is given: it measures the stage's own content.
+// --at midboss|boss starts the stage one screen before that marker (stage runs only) and the run
+// must see the boss up (BOSS_ACTIVE above 0) during the measured ticks.
+// --mortal 1 plays the stage from its start without god mode and parks the ship (stage 1 only), so
+// the death, respawn, hitstop, lives and game-over path is measured; the run must see a death. The
+// game-over ticks that follow the last life stay in the average, which only makes it smaller.
 // Exit code 1: a run averaged above the budget, fire was held and the weapon never produced
-// anything, or bombs were pressed and none ever flew (a gate that measured nothing must not
-// pass). Exit code 2: bad usage.
+// anything, bombs were pressed and none ever flew, a stage run never reached its boss, or a mortal
+// run never died (a gate that measured nothing must not pass). Exit code 2: bad usage.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,10 +35,23 @@ const OUTPUT_SLOT = { vulcan: 'PBULLET_N', laser: 'BEAM_W', homing: 'MISSILE_N' 
 
 const USAGE =
   'usage: perf_node.mjs [--stress N] [--ticks N] [--budget-ms N] [--fire 0|1] ' +
-  '[--weapon vulcan|laser|homing|all] [--level N] [--bomb N]';
+  '[--weapon vulcan|laser|homing|all] [--level N] [--bomb N] ' +
+  '[--stage 0|1] [--at midboss|boss] [--mortal 0|1]';
+const AT_MARKERS = ['midboss', 'boss'];
 
 function parseArgs(argv) {
-  const options = { stress: 500, ticks: 600, budgetMs: 3, fire: 0, weapon: null, level: null, bomb: 0 };
+  const options = {
+    stress: null,
+    ticks: 600,
+    budgetMs: 3,
+    fire: 0,
+    weapon: null,
+    level: null,
+    bomb: 0,
+    stage: 0,
+    at: null,
+    mortal: 0,
+  };
   const numeric = {
     '--stress': 'stress',
     '--ticks': 'ticks',
@@ -38,6 +59,8 @@ function parseArgs(argv) {
     '--fire': 'fire',
     '--level': 'level',
     '--bomb': 'bomb',
+    '--stage': 'stage',
+    '--mortal': 'mortal',
   };
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
@@ -47,11 +70,25 @@ function parseArgs(argv) {
       options.weapon = raw;
       continue;
     }
+    if (flag === '--at') {
+      if (!AT_MARKERS.includes(raw)) throw new Error(`${USAGE} (got ${flag} ${raw})`);
+      options.at = raw;
+      continue;
+    }
     const key = numeric[flag];
     const value = Number(raw);
     if (!key || raw === undefined || !Number.isFinite(value)) throw new Error(`${USAGE} (got ${flag} ${raw})`);
     options[key] = value;
   }
+  if (![0, 1].includes(options.stage)) throw new Error(`${USAGE} (got --stage ${options.stage})`);
+  if (![0, 1].includes(options.mortal)) throw new Error(`${USAGE} (got --mortal ${options.mortal})`);
+  if (options.stage === 0 && options.at !== null) throw new Error(`${USAGE} (--at needs --stage 1)`);
+  if (options.stage === 0 && options.mortal === 1) throw new Error(`${USAGE} (--mortal needs --stage 1)`);
+  if (options.mortal === 1 && options.at !== null) {
+    throw new Error(`${USAGE} (--mortal plays from the stage start, so it takes no --at)`);
+  }
+  // The gallery keeps its Phase 2 storm; a stage run measures the stage's own content.
+  options.stress ??= options.stage === 1 ? 0 : 500;
   return options;
 }
 
@@ -93,7 +130,16 @@ const round = (v) => Math.round(v * 10000) / 10000;
 
 // One measured run on a fresh game, so one weapon's state never skews another's numbers.
 function measure(weapon) {
-  const gameOptions = { seed: 1, stress: options.stress, god: true, bombs: BOMB_STOCK };
+  // --stage 0 keeps the Phase 2 gallery workload; --stage 1 plays the real stage (no gallery flag),
+  // god except for a mortal run, which has to be able to die.
+  const gameOptions = {
+    seed: 1,
+    stress: options.stress,
+    god: !options.mortal,
+    bombs: BOMB_STOCK,
+  };
+  if (options.stage === 0) gameOptions.gallery = true;
+  if (options.at !== null) gameOptions.at = options.at;
   if (weapon !== null) gameOptions.weapon = weapon;
   if (options.level !== null) gameOptions.level = options.level;
   const game = entry.create_game(pyodide.toPy(gameOptions));
@@ -112,12 +158,18 @@ function measure(weapon) {
   // A press lasts one sample; the next sample clears the bit so Python derives a fresh edge.
   const buttons = (i) =>
     options.bomb > 0 && i > 0 && i % options.bomb === 0 ? held | manifest.buttons.BOMB : held;
-  // Sweeping left and right 90 ticks at a time lets the shots cross the enemies' path.
-  const sweep = (i) => (options.fire ? (Math.floor(i / 90) % 2 === 0 ? 1 : -1) : 0);
+  // Sweeping left and right 90 ticks at a time lets the shots cross the enemies' path. A mortal run
+  // holds still instead: the sweep dodges the whole opening, a ship parked in the line of fire dies.
+  const sweep = (i) =>
+    options.fire && !options.mortal ? (Math.floor(i / 90) % 2 === 0 ? 1 : -1) : 0;
   const outputSlot = weapon === null ? null : manifest.header.slots[OUTPUT_SLOT[weapon]];
   const phaseSlot = manifest.header.slots.BOMB_PHASE;
+  const bossSlot = manifest.header.slots.BOSS_ACTIVE;
+  const deathsSlot = manifest.header.slots.DEATHS;
   let peakOutput = 0;
   let peakBombPhase = 0;
+  let peakBoss = 0;
+  let peakDeaths = 0;
 
   for (let i = 0; i < WARMUP_TICKS; i++) tick(FRAME_MS, buttons(i), sweep(i), 0, 0, 0);
 
@@ -127,12 +179,17 @@ function measure(weapon) {
     tick(FRAME_MS, buttons(WARMUP_TICKS + i), sweep(WARMUP_TICKS + i), 0, 0, 0);
     samples[i] = performance.now() - start;
     peakBombPhase = Math.max(peakBombPhase, header[phaseSlot]);
+    peakBoss = Math.max(peakBoss, header[bossSlot]);
+    peakDeaths = Math.max(peakDeaths, header[deathsSlot]);
     if (outputSlot !== null) peakOutput = Math.max(peakOutput, header[outputSlot]);
   }
 
   const sorted = Array.from(samples).sort((a, b) => a - b);
   const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
   const result = { stress: options.stress, fire: options.fire };
+  if (options.stage > 0) result.stage = options.stage;
+  if (options.at !== null) result.at = options.at;
+  if (options.mortal) result.mortal = options.mortal;
   if (weapon !== null) result.weapon = weapon;
   if (options.level !== null) result.level = options.level;
   if (options.bomb > 0) result.bomb = options.bomb;
@@ -148,7 +205,14 @@ function measure(weapon) {
   // Likewise, pressing bombs must have put one in the air during the measured ticks.
   const noBomb = options.bomb > 0 && peakBombPhase === 0;
   if (options.bomb > 0) result.peak_bomb_phase = peakBombPhase;
-  return { result, failed: avg > options.budgetMs || idle || noBomb, idle, noBomb };
+  // A run aimed at a boss must have had it up, or it measured the approach and nothing else.
+  const noBoss = options.at !== null && peakBoss === 0;
+  if (options.at !== null) result.peak_boss_active = peakBoss;
+  // A mortal run exists to measure the death path, so at least one death has to happen.
+  const noDeath = Boolean(options.mortal) && peakDeaths === 0;
+  if (options.mortal) result.peak_deaths = peakDeaths;
+  const failed = avg > options.budgetMs || idle || noBomb || noBoss || noDeath;
+  return { result, failed, idle, noBomb, noBoss, noDeath };
 }
 
 const runs = options.weapon === 'all' ? WEAPONS : [options.weapon];
@@ -158,6 +222,8 @@ for (const weapon of runs) {
   console.log(JSON.stringify(run.result));
   if (run.idle) console.error(`perf: ${weapon} produced no output with fire held, so nothing was measured`);
   if (run.noBomb) console.error(`perf: ${weapon} never launched a bomb, so no bomb tick was measured`);
+  if (run.noBoss) console.error(`perf: ${weapon} never reached the boss, so no boss tick was measured`);
+  if (run.noDeath) console.error(`perf: ${weapon} had no death, so the death path was not measured`);
   failed ||= run.failed;
 }
 process.exit(failed ? 1 : 0);

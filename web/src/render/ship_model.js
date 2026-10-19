@@ -5,22 +5,25 @@ import {
   beveledExtrude,
   capsule,
   lathe,
+  neonStrip,
   normalizeDetail,
   place,
   segmentsFor,
   tint,
 } from './models/model_kit.js';
+import { PALETTE } from '../fx/palette.js';
 
 const BODY_DEPTH = 2.5;
 const MARKER_CORE_SCALE = 1.25;
 const MARKER_RING_SCALE = 1.65;
 const MARKER_LIFT = 0.6;
 
-// Steel greys. Every channel stays below 1.0 so the hull never crosses the bloom threshold.
-const HULL = [0.52, 0.55, 0.6];
-const WING = [0.46, 0.49, 0.54];
-const NACELLE = [0.36, 0.38, 0.43];
-const FIN = [0.42, 0.45, 0.5];
+// The player's white hull family (D-38). Every channel stays below 1.0 so the hull never crosses
+// the bloom threshold; the cyan neon trim and engine are the only things that bloom.
+const HULL = [0.82, 0.85, 0.9];
+const WING = [0.76, 0.79, 0.84];
+const NACELLE = [0.6, 0.63, 0.68];
+const FIN = [0.7, 0.73, 0.78];
 const CANOPY = [0.07, 0.1, 0.17];
 
 // Fuselage profile, [radius, y] from the tail (y = -9) to the nose (y = +11).
@@ -113,6 +116,28 @@ function canopyGeometry(detail) {
   return bake([tint(dome, CANOPY)], 'player-canopy');
 }
 
+// Cyan neon trim along the wing leading edges and the spine behind the canopy, in the ship's
+// own coordinates (nose toward -Z). Built once at the cheapest detail: the strips are thin.
+const TRIM_RADIUS = 0.22;
+const TRIM_STRIPS = Object.freeze([
+  [[2.2, 0.5, -2.1], [7.8, 0.5, 3.8]],
+  [[-2.2, 0.5, -2.1], [-7.8, 0.5, 3.8]],
+  [[0, 1.75, 0.5], [0, 1.75, 6.5]],
+]);
+
+function trimGeometry() {
+  return bake(
+    TRIM_STRIPS.map(([from, to]) => neonStrip(from, to, TRIM_RADIUS, PALETTE.NEON_CYAN.rgb, 'low')),
+    'player-trim',
+  );
+}
+
+function trimMesh() {
+  const mesh = new THREE.Mesh(trimGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+  mesh.name = 'cyan-trim';
+  return mesh;
+}
+
 const hullMaterial = () =>
   new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, metalness: 0.35, roughness: 0.5 });
 const canopyMaterial = () =>
@@ -121,7 +146,7 @@ const canopyMaterial = () =>
 // An HDR emitter: a channel above 1.0 crosses the bloom threshold, so only the engine blooms.
 function engineGlowMesh() {
   const material = new THREE.MeshBasicMaterial();
-  material.color.setRGB(3.0, 1.2, 0.4);
+  material.color.setRGB(...PALETTE.NEON_CYAN.rgb);
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 8), material);
   mesh.name = 'engine-glow';
   mesh.scale.set(1, 0.8, 1.6);
@@ -186,7 +211,8 @@ export function createShipModel({ hitboxRadius = 2, detail = 'high' } = {}) {
   const group = new THREE.Group();
   group.name = 'ship';
   const engineGlow = engineGlowMesh();
-  group.add(fuselage, canopy, engineGlow, hitboxMarker(hitboxRadius));
+  const trim = trimMesh();
+  group.add(fuselage, canopy, engineGlow, trim, hitboxMarker(hitboxRadius));
   group.userData.detail = normalizeDetail(detail);
   group.userData.setDetail = (next) => {
     const level = normalizeDetail(next);
@@ -195,12 +221,13 @@ export function createShipModel({ hitboxRadius = 2, detail = 'high' } = {}) {
     canopy.geometry = geometries.canopy;
     group.userData.detail = level;
   };
-  // The blink hides the hull, the canopy and the engine glow, never the hitbox marker: the
+  // The blink hides the hull, the canopy, the engine glow and the trim, never the hitbox marker: the
   // player must always see the one spot that can hurt (Pitfall 9).
   group.userData.setHullVisible = (visible) => {
     fuselage.visible = visible;
     canopy.visible = visible;
     engineGlow.visible = visible;
+    trim.visible = visible;
   };
   return group;
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../../src/fx/palette.js';
 import { buildTank } from '../../../src/render/models/tank.js';
+import {
+  expectGunmetal,
+  expectNoBulletHue,
+  hasColour,
+  zOfColour,
+} from '../../helpers/vertex_colours.js';
 
 const vertexCount = (geometry) => geometry.getAttribute('position').count;
 const channels = (geometry) => Array.from(geometry.getAttribute('color').array);
@@ -43,16 +50,26 @@ describe('buildTank', () => {
     }
   });
 
-  it('has HDR exhaust embers in the glow, and never pink', () => {
-    const embers = colours(buildTank('high').glow);
-    expect(embers.some(([r, g, b]) => r > 1 && g > 0.5 && b < r)).toBe(true);
+  it('has red HDR exhaust embers in the glow, no orange-yellow, and never pink', () => {
+    const { glow } = buildTank('high');
+    const embers = colours(glow);
+    expect(hasColour(glow, PALETTE.ENGINE.rgb)).toBe(true);
+    expect(hasColour(glow, PALETTE.NEON_RED.rgb)).toBe(true);
+    expect(embers.some(([r, g, b]) => r > 1 && g < r * 0.3 && b < r * 0.3)).toBe(true);
     expect(embers.every(([r, g, b]) => !(r > 1 && b > 1 && g < r * 0.5))).toBe(true);
+    expectNoBulletHue(glow, 'tank glow');
+  });
+
+  it('is dark gunmetal in the hull and the turret', () => {
+    const { body, top } = buildTank('high');
+    expectGunmetal(body, 'tank body');
+    expectGunmetal(top, 'tank turret');
   });
 
   it('puts the embers at the rear, behind the turret ring', () => {
-    const { glow } = buildTank('high');
-    glow.computeBoundingBox();
-    expect(glow.boundingBox.max.z).toBeLessThan(0);
+    const zs = zOfColour(buildTank('high').glow, PALETTE.ENGINE.rgb);
+    expect(zs.length).toBeGreaterThan(0);
+    expect(Math.max(...zs)).toBeLessThan(0);
   });
 
   it('centres the turret on the ring so it can turn about Y, with the barrel toward +Z', () => {

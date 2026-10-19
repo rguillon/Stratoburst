@@ -3,8 +3,8 @@ import { createPostPipeline } from './post_pipeline.js';
 import { TIERS, effectiveDpr, renderSize } from '../quality/tiers.js';
 import { CAMERA_FOV_DEG, CAMERA_TILT_DEG, applyCameraFit, fitCamera } from './camera_fit.js';
 import { createPlayfieldMask } from './playfield_mask.js';
-import { createTerrainRing } from './terrain_ring.js';
 import { createGroundLayer } from './ground_layer.js';
+import { createNightRig } from './night_rig.js';
 
 export { CAMERA_FOV_DEG, CAMERA_TILT_DEG };
 
@@ -18,19 +18,13 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0b0a09);
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x3a2a1a, 1.2));
-  const sun = new THREE.DirectionalLight(0xfff0d8, 2.2);
-  sun.position.set(-120, 300, 160);
-  scene.add(sun);
+  // Neon night (D-32): three fixed lights and light fog. The moon sits where the sun used to, so
+  // rig.sun (read by the air shadows) keeps its position.
+  const night = createNightRig(scene);
 
-  // Procedural terrain below the gameplay plane; Python's scroll drives it from main.js.
-  // Albedo stays far below 1.0 so only HDR emitters (bullets) cross the bloom threshold.
-  const terrain = createTerrainRing({ seed: 1 });
-  scene.add(terrain.group);
-
-  // Terrain-anchored visuals (ground units, wrecks) live in this ray-compensating group so they
-  // are drawn where the bolts on the gameplay plane visibly hit them (D-21).
+  // Everything anchored to the terrain (the city and its roads, ground units, wrecks, scorch marks)
+  // lives in this one ray-compensating group so it is drawn where the bolts on the gameplay plane
+  // visibly hit it (D-21, RESEARCH Pattern 5). Python's scroll drives it from main.js.
   const groundLayer = createGroundLayer({ playfieldW, playfieldH });
   scene.add(groundLayer.group);
 
@@ -53,10 +47,10 @@ export function createRendererRig(canvas, { playfieldW, playfieldH }) {
     renderer,
     scene,
     bulletScene,
-    sun,
+    sun: night.moon,
+    night,
     camera,
     pipeline,
-    terrain,
     groundLayer,
     toWorld,
     bloomAvailable: true,

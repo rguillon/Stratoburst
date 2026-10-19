@@ -4,12 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Scorched</title>
+    <link rel="stylesheet" href="/web/src/ui/fonts.css" />
     <style>
       html,
       body {
         margin: 0;
         height: 100%;
-        background: #0b0a09;
+        background: #07061a;
         overflow: hidden;
       }
       #app {
@@ -35,8 +36,8 @@
         align-items: center;
         justify-content: center;
         gap: 20px;
-        background: #0b0a09;
-        color: #f2e8d5;
+        background: #07061a;
+        color: #e6ebff;
         font-family: system-ui, sans-serif;
         text-align: center;
         padding: 16px;
@@ -46,24 +47,26 @@
         display: none;
       }
       #loading .title {
-        font-size: clamp(40px, 12vmin, 112px);
-        font-weight: 800;
-        letter-spacing: 0.22em;
-        color: #ff8a3d;
-        text-indent: 0.22em;
+        font-family: var(--hud-font);
+        font-size: clamp(22px, 7.5vmin, 72px);
+        font-weight: 400;
+        letter-spacing: 0.12em;
+        color: rgb(27, 215, 255);
+        text-shadow: 0 0 14px rgba(27, 215, 255, 0.55);
+        text-indent: 0.12em;
       }
       #progress {
         position: relative;
         width: min(70vw, 360px);
         height: 10px;
-        border: 1px solid #ff8a3d;
+        border: 1px solid rgb(27, 215, 255);
         border-radius: 2px;
         overflow: hidden;
       }
       #progress-fill {
         height: 100%;
         width: 0%;
-        background: #ffb347;
+        background: rgb(255, 30, 225);
         transition: width 0.15s linear;
       }
       #progress.indeterminate #progress-fill {
@@ -94,10 +97,10 @@
       #start-gate {
         min-height: 56px;
         padding: 14px 28px;
-        border: 2px solid #ff8a3d;
+        border: 2px solid rgb(27, 215, 255);
         border-radius: 4px;
         background: transparent;
-        color: #ffb347;
+        color: rgb(27, 215, 255);
         font: 700 clamp(18px, 4.5vmin, 30px) system-ui, sans-serif;
         letter-spacing: 0.12em;
         cursor: pointer;
@@ -108,28 +111,104 @@
       }
       #start-gate:hover,
       #start-gate:focus-visible {
-        background: #ff8a3d;
-        color: #0b0a09;
+        background: rgb(255, 30, 225);
+        border-color: rgb(255, 30, 225);
+        color: #07061a;
         outline: none;
       }
+      /* The HUD root: it fills the app and lets every touch through. The three blocks (.hud-top, .hud-bl,
+         .hud-br) are placed by status_readout.place() from hud_layout.js: over the projected playfield
+         edges, inside the safe area, and clear of the touch bomb button. Until the first placement they
+         wait at the origin. */
       #status-readout {
         position: absolute;
-        left: calc(env(safe-area-inset-left, 0px) + 10px);
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+        inset: 0;
         z-index: 4;
         pointer-events: none;
-        font: 700 13px/1.2 ui-monospace, Menlo, Consolas, monospace;
-        letter-spacing: 0.08em;
-        color: #f2e8d5;
-        text-shadow: 0 0 3px #000, 0 0 6px #000;
+        font: 400 11px/1.4 var(--hud-font);
+        letter-spacing: 0.04em;
+        color: #e6ebff;
+        text-shadow: 0 0 3px #000, 0 0 6px #000, 0 0 10px rgba(27, 215, 255, 0.35);
         user-select: none;
+      }
+      #status-readout .hud-top,
+      #status-readout .hud-bl,
+      #status-readout .hud-br {
+        position: absolute;
+        left: 0;
+        top: 0;
+        white-space: nowrap;
+        font-size: clamp(10px, 2.6vmin, 18px);
+        line-height: 1.3;
+      }
+      #status-readout .hud-top {
+        display: flex;
+        justify-content: center;
+        align-items: baseline;
+        gap: 1.6em;
+      }
+      #status-readout .hud-bl,
+      #status-readout .hud-br {
+        display: flex;
+        flex-direction: column;
+      }
+      #status-readout .hud-bl {
+        align-items: flex-start;
+      }
+      #status-readout .hud-br {
+        align-items: flex-end;
+        text-align: right;
+      }
+      #status-readout .score {
+        color: #ffffff;
+        font-variant-numeric: tabular-nums;
+      }
+      #status-readout .hi-label {
+        font-size: 0.7em;
+        color: rgb(150, 160, 200);
+      }
+      #status-readout .hiscore {
+        color: rgb(150, 160, 200);
+        font-variant-numeric: tabular-nums;
       }
       #status-readout[hidden] {
         display: none;
       }
-      /* The bomb pickup's amber (PALETTE.BOMB_PICKUP 3.2, 2.4, 0.4 scaled so its largest channel is 255). */
+      /* The lives are the player ship's trim cyan, never orange-yellow (D-39). */
+      #status-readout .lives {
+        color: rgb(27, 215, 255);
+        letter-spacing: 0.2em;
+      }
+      /* An extend (D-21) pulses the lives icons once: a single 0.6 s scale-up with a brighter glow, never repeating
+         and off under prefers-reduced-motion. status_readout.js toggles the class for PULSE_MS. */
+      #status-readout .lives.pulse {
+        display: inline-block;
+        transform-origin: 0 50%;
+        animation: lives-pulse 0.6s ease-out 1;
+      }
+      @keyframes lives-pulse {
+        0% {
+          transform: scale(1);
+          text-shadow: 0 0 3px #000;
+        }
+        35% {
+          transform: scale(1.5);
+          text-shadow: 0 0 6px #fff, 0 0 14px rgb(27, 215, 255), 0 0 24px rgb(27, 215, 255);
+        }
+        100% {
+          transform: scale(1);
+          text-shadow: 0 0 3px #000;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #status-readout .lives.pulse {
+          animation: none;
+        }
+      }
+      /* The bomb pickup's acid green (PALETTE.BOMB_PICKUP 0.8, 3.6, 0.5 scaled so its largest channel
+         is 255). Orange-yellow belongs to enemy bullets alone (D-39). */
       #status-readout .bombs {
-        color: rgb(255, 191, 32);
+        color: rgb(57, 255, 35);
         letter-spacing: 0.25em;
       }
       #max-flash {
@@ -140,21 +219,233 @@
         z-index: 4;
         pointer-events: none;
         text-align: center;
-        font: 900 clamp(48px, 14vmin, 128px) / 1 system-ui, sans-serif;
-        letter-spacing: 0.18em;
-        text-indent: 0.18em;
-        color: #ffd27a;
+        font: 400 clamp(32px, 10vmin, 96px) / 1 var(--hud-font);
+        letter-spacing: 0.1em;
+        text-indent: 0.1em;
+        color: #ffffff;
         text-shadow:
-          0 0 10px #ff9a2e,
-          0 0 28px #ff7a14,
-          0 0 56px rgba(255, 122, 20, 0.7),
-          0 2px 0 #7a3a08;
+          0 0 10px rgb(27, 215, 255),
+          0 0 28px rgb(27, 215, 255),
+          0 0 56px rgba(27, 215, 255, 0.7),
+          0 2px 0 #06303a;
         user-select: none;
       }
       #max-flash[hidden] {
         display: none;
       }
-      /* The touch bomb button (INPT-03): the bomb pickup's amber, never pink. data-no-steer keeps
+      /* The EXTEND banner (D-21): a short cyan neon line over the playfield for about 1.2 s, never
+         orange-yellow. It lets every touch through. */
+      #extend {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 44%;
+        z-index: 4;
+        pointer-events: none;
+        text-align: center;
+        font: 400 clamp(16px, 4.6vmin, 44px) / 1 var(--hud-font);
+        letter-spacing: 0.12em;
+        text-indent: 0.12em;
+        color: #ffffff;
+        text-shadow:
+          0 0 8px rgb(27, 215, 255),
+          0 0 22px rgba(27, 215, 255, 0.8),
+          0 0 44px rgba(27, 215, 255, 0.5),
+          0 2px 0 #06303a;
+        user-select: none;
+      }
+      #extend[hidden] {
+        display: none;
+      }
+      /* World score popups (D-20): a medal catch shows its value where the medal was, white with a cyan
+         glow like the HUD, rising and fading. Never orange-yellow (D-39). main.js positions each span with
+         left and top; the animation only moves it up. */
+      #popups {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      #popups .popup {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translate(-50%, -50%);
+        font: 400 clamp(9px, 2.4vmin, 16px) / 1 var(--hud-font);
+        letter-spacing: 0.04em;
+        color: #ffffff;
+        text-shadow:
+          0 0 6px rgba(27, 215, 255, 0.95),
+          0 0 14px rgba(27, 215, 255, 0.6),
+          0 1px 0 #06303a;
+        user-select: none;
+        animation: popup-rise 0.8s ease-out forwards;
+      }
+      #popups .popup[hidden] {
+        display: none;
+      }
+      @keyframes popup-rise {
+        from {
+          opacity: 1;
+          transform: translate(-50%, -50%);
+        }
+        70% {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+          transform: translate(-50%, calc(-50% - 44px));
+        }
+      }
+      /* The boss HP bar (D-25): a thin bar under the score band while a boss is up, driven by the header
+         BOSS_ACTIVE, BOSS_HP and BOSS_TIMER_S. Magenta fill with cyan phase ticks and a cyan countdown,
+         never orange-yellow (D-39). It lets every touch through. */
+      #boss-bar {
+        position: absolute;
+        /* --hud-top is the top band's y, set by main.js after each HUD layout. */
+        top: calc(var(--hud-top, calc(env(safe-area-inset-top, 0px) + 8px)) + 6px + clamp(10px, 2.6vmin, 18px) * 1.3);
+        left: calc(env(safe-area-inset-left, 0px) + 14%);
+        right: calc(env(safe-area-inset-right, 0px) + 14%);
+        height: 8px;
+        z-index: 4;
+        pointer-events: none;
+        border: 1px solid rgb(27, 215, 255);
+        border-radius: 2px;
+        background: rgba(7, 6, 26, 0.6);
+        box-shadow: 0 0 6px rgba(27, 215, 255, 0.5);
+        user-select: none;
+      }
+      #boss-bar[hidden] {
+        display: none;
+      }
+      #boss-bar .fill {
+        height: 100%;
+        background: rgb(255, 30, 225);
+        box-shadow: 0 0 8px rgba(255, 30, 225, 0.8);
+        transform-origin: left center;
+      }
+      #boss-bar .ticks {
+        position: absolute;
+        inset: 0;
+      }
+      #boss-bar .tick {
+        position: absolute;
+        top: -2px;
+        bottom: -2px;
+        width: 2px;
+        margin-left: -1px;
+        background: rgb(27, 215, 255);
+      }
+      #boss-bar .tick[hidden] {
+        display: none;
+      }
+      #boss-bar .timer {
+        position: absolute;
+        right: 0;
+        top: 12px;
+        font: 400 clamp(10px, 2.6vmin, 18px) / 1 var(--hud-font);
+        letter-spacing: 0.04em;
+        color: rgb(27, 215, 255);
+        text-shadow: 0 0 6px rgba(27, 215, 255, 0.8), 0 0 3px #000;
+      }
+      #boss-bar .timer[hidden] {
+        display: none;
+      }
+      /* The stage banner (D-26): STAGE n over the playfield during the intro, driven by the header FLOW. Neon
+         cyan like the HUD, never orange-yellow. */
+      #banner {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 36%;
+        z-index: 4;
+        pointer-events: none;
+        text-align: center;
+        font: 400 clamp(22px, 7vmin, 72px) / 1 var(--hud-font);
+        letter-spacing: 0.12em;
+        text-indent: 0.12em;
+        color: rgb(27, 215, 255);
+        text-shadow:
+          0 0 10px rgba(27, 215, 255, 0.9),
+          0 0 28px rgba(27, 215, 255, 0.6),
+          0 0 56px rgba(27, 215, 255, 0.35),
+          0 2px 0 #06303a;
+        user-select: none;
+      }
+      #banner[hidden] {
+        display: none;
+      }
+      /* The boss WARNING (D-13): the same banner in red neon, pulsing at 2 Hz (a 0.5 s period, so never more
+         than 3 flashes per second, the photosensitivity guideline). The pulse dips to a dim level instead of
+         switching fully off, and prefers-reduced-motion turns it off and holds the text steady. */
+      #banner.warning {
+        color: rgb(255, 40, 70);
+        text-shadow:
+          0 0 10px rgba(255, 40, 70, 0.9),
+          0 0 28px rgba(255, 40, 70, 0.6),
+          0 0 56px rgba(255, 40, 70, 0.35),
+          0 2px 0 #3a0610;
+        animation: banner-warning-flash 0.5s ease-in-out infinite;
+      }
+      @keyframes banner-warning-flash {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.2;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #banner.warning {
+          animation: none;
+        }
+      }
+      /* The stage-clear tally (SCOR-03, D-18), shown while FLOW is TALLY: four bonus lines that appear one by one,
+         each amount counting up. Night palette only (cyan labels, white numbers, magenta title), never
+         orange-yellow. It lets every touch through. */
+      #tally {
+        position: absolute;
+        left: 50%;
+        top: 30%;
+        z-index: 5;
+        transform: translateX(-50%);
+        width: min(86%, 560px);
+        padding: 14px 18px;
+        box-sizing: border-box;
+        pointer-events: none;
+        border: 1px solid rgb(27, 215, 255);
+        border-radius: 3px;
+        background: rgba(7, 6, 26, 0.72);
+        box-shadow: 0 0 14px rgba(27, 215, 255, 0.45);
+        color: rgb(27, 215, 255);
+        font: 400 clamp(9px, 2.4vmin, 16px) / 1.8 var(--hud-font);
+        letter-spacing: 0.04em;
+        text-shadow: 0 0 6px rgba(27, 215, 255, 0.6), 0 0 3px #000;
+        user-select: none;
+      }
+      #tally[hidden] {
+        display: none;
+      }
+      #tally .title {
+        margin-bottom: 6px;
+        text-align: center;
+        color: rgb(255, 30, 225);
+        text-shadow: 0 0 10px rgba(255, 30, 225, 0.8);
+      }
+      #tally .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      #tally .row[hidden] {
+        display: none;
+      }
+      #tally .amount {
+        color: #ffffff;
+      }
+      /* The touch bomb button (INPT-03): the bomb pickup's acid green, never orange-yellow. data-no-steer keeps
          touch_input from treating a press on it as a drag. */
       #bomb-button {
         position: fixed;
@@ -167,10 +458,10 @@
         width: clamp(72px, 15vmin, 112px);
         height: clamp(72px, 15vmin, 112px);
         padding: 0;
-        border: 3px solid rgba(255, 191, 32, 0.85);
+        border: 3px solid rgba(57, 255, 35, 0.85);
         border-radius: 50%;
-        background: rgba(255, 191, 32, 0.28);
-        color: rgba(255, 220, 140, 0.95);
+        background: rgba(57, 255, 35, 0.28);
+        color: rgba(190, 255, 180, 0.95);
         font: 900 clamp(28px, 6vmin, 44px) / 1 system-ui, sans-serif;
         text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
         touch-action: none;
@@ -183,7 +474,59 @@
         display: none;
       }
       #bomb-button:active {
-        background: rgba(255, 191, 32, 0.55);
+        background: rgba(57, 255, 35, 0.55);
+      }
+      /* The game-over screen (D-28), shown while FLOW is GAME_OVER: above the HUD, below #paused. The night
+         palette only (magenta title, cyan text), never orange-yellow. data-no-steer keeps a tap on it from
+         ever becoming a ship drag. */
+      #game-over {
+        position: fixed;
+        inset: 0;
+        z-index: 8;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: rgba(7, 6, 26, 0.6);
+        color: rgb(27, 215, 255);
+        font: 400 clamp(10px, 2.6vmin, 20px) / 1.4 var(--hud-font);
+        letter-spacing: 0.06em;
+        text-align: center;
+        text-shadow: 0 0 6px #000, 0 0 12px rgba(27, 215, 255, 0.4);
+        user-select: none;
+        touch-action: none;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      #game-over[hidden] {
+        display: none;
+      }
+      #game-over .title {
+        font: 400 clamp(22px, 7vmin, 64px) / 1 var(--hud-font);
+        letter-spacing: 0.1em;
+        text-indent: 0.1em;
+        color: rgb(255, 30, 225);
+        text-shadow:
+          0 0 10px rgba(255, 30, 225, 0.8),
+          0 0 28px rgba(255, 30, 225, 0.5);
+      }
+      #game-over .final {
+        font-size: clamp(18px, 5vmin, 44px);
+        color: #ffffff;
+      }
+      #game-over .record {
+        color: rgb(255, 30, 225);
+        letter-spacing: 0.2em;
+        text-shadow: 0 0 10px rgba(255, 30, 225, 0.8);
+      }
+      #game-over .record[hidden] {
+        display: none;
+      }
+      #game-over .hint {
+        margin-top: 12px;
+        font-size: clamp(8px, 2vmin, 14px);
+        opacity: 0.85;
       }
       #paused {
         position: fixed;
@@ -194,8 +537,8 @@
         align-items: center;
         justify-content: center;
         gap: 12px;
-        background: rgba(11, 10, 9, 0.72);
-        color: #f2e8d5;
+        background: rgba(7, 6, 26, 0.72);
+        color: #e6ebff;
         font-family: system-ui, sans-serif;
         text-align: center;
         user-select: none;
@@ -209,7 +552,7 @@
         font-size: clamp(36px, 10vmin, 96px);
         font-weight: 800;
         letter-spacing: 0.2em;
-        color: #ff8a3d;
+        color: rgb(255, 30, 225);
       }
       #paused .hint {
         font-size: clamp(14px, 3.2vmin, 24px);
@@ -228,9 +571,31 @@
         <p id="loading-status" role="status">Loading Python runtime…</p>
         <button id="start-gate" type="button" hidden>TAP / CLICK TO START</button>
       </div>
-      <div id="status-readout" hidden><span class="weapon"></span> <span class="level"></span> <span class="bombs"></span></div>
+      <div id="status-readout" hidden>
+        <div class="hud-top"><span class="score"></span><span class="hi"><span class="hi-label">HI</span> <span class="hiscore"></span></span></div>
+        <div class="hud-bl"><span class="lives"></span><span class="bombs"></span></div>
+        <div class="hud-br"><span class="weapon"></span><span class="level"></span></div>
+      </div>
+      <div id="popups"></div>
+      <div id="boss-bar" hidden><div class="fill"></div><div class="ticks"></div><span class="timer" hidden></span></div>
       <div id="max-flash" hidden>MAX</div>
+      <div id="banner" hidden></div>
+      <div id="extend" hidden>EXTEND</div>
+      <div id="tally" hidden>
+        <div class="title">STAGE BONUS</div>
+        <div class="row" id="tally-boss" hidden><span class="label">BOSS DESTROYED</span><span class="amount"></span></div>
+        <div class="row" id="tally-medals" hidden><span class="label">MEDALS</span><span class="amount"></span></div>
+        <div class="row" id="tally-no-miss" hidden><span class="label">NO MISS</span><span class="amount"></span></div>
+        <div class="row" id="tally-bombs" hidden><span class="label">BOMBS LEFT</span><span class="amount"></span></div>
+      </div>
       <button id="bomb-button" type="button" aria-label="Bomb" data-no-steer hidden>B</button>
+    </div>
+    <div id="game-over" role="dialog" aria-label="Game over" data-no-steer hidden>
+      <div class="title">GAME OVER</div>
+      <div class="final"></div>
+      <div class="best-line">BEST <span class="best"></span></div>
+      <div class="record" hidden>NEW RECORD</div>
+      <div class="hint">PRESS FIRE OR TAP</div>
     </div>
     <div id="paused" role="dialog" aria-label="Game paused" hidden>
       <div class="title">PAUSED</div>

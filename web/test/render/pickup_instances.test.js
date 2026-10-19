@@ -1,18 +1,27 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE } from '../../src/fx/palette.js';
+import {
+  BULLET_EXCLUSION_DEGREES,
+  BULLET_MIN_SATURATION,
+  PALETTE,
+  hueDistance,
+  hueOf,
+  saturationOf,
+} from '../../src/fx/palette.js';
 import {
   BOB_AMPLITUDE,
   BOB_RATE,
   LIFT,
+  MEDAL_TIER_MAX,
   SPIN_RATE,
   createPickupInstances,
+  medalRgb,
 } from '../../src/render/pickup_instances.js';
 
 const STRIDE = 4;
 const W = 240;
 const H = 320;
-const KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4 };
+const KINDS = { RED: 0, BLUE: 1, PURPLE: 2, CRYSTAL: 3, BOMB: 4, MEDAL: 5 };
 
 function build({ capacity = 6 } = {}) {
   const data = new Float32Array(STRIDE * capacity);
@@ -198,5 +207,108 @@ describe('createPickupInstances', () => {
     for (let t = 0; t < 10; t++) pickups.update(1, t / 60);
     expect(pickups.mesh.instanceMatrix.array).toBe(matrices);
     expect(pickups.mesh.instanceColor.array).toBe(colors);
+  });
+
+  it('draws a medal in its own chip mesh, in the medal palette colour, and gems as before', () => {
+    const { data, pickups } = build();
+    setPickup(data, 0, 100, 100, 0);
+    setPickup(data, 1, 60, 80, 0, KINDS.MEDAL);
+    setPickup(data, 2, 140, 120, 1);
+    pickups.update(3, 0);
+    expect(pickups.mesh.count).toBe(2);
+    expect(pickups.medalMesh.count).toBe(1);
+    expect(colorOf(pickups.medalMesh, 0)).toEqual(PALETTE.MEDAL.rgb.map((v) => expect.closeTo(v, 5)));
+    expect(colorOf(pickups.mesh, 0)).toEqual(PALETTE.CRYSTAL_RED.rgb.map((v) => expect.closeTo(v, 5)));
+    expect(colorOf(pickups.mesh, 1)).toEqual(PALETTE.CRYSTAL_BLUE.rgb.map((v) => expect.closeTo(v, 5)));
+    const medal = new THREE.Vector3().setFromMatrixPosition(matrixOf(pickups.medalMesh, 0));
+    expect(medal.x).toBe(60 - 120);
+    expect(medal.z).toBe(80 - 160);
+    const second = new THREE.Vector3().setFromMatrixPosition(matrixOf(pickups.mesh, 1));
+    expect(second.x).toBe(140 - 120);
+  });
+
+  it('builds the chip as a named, flat hexagon standing on its edge with instance colours', () => {
+    const { pickups } = build();
+    expect(pickups.medalMesh.isInstancedMesh).toBe(true);
+    expect(pickups.medalMesh.name).toBe('medals');
+    expect(pickups.medalMesh.frustumCulled).toBe(false);
+    expect(pickups.medalMesh.count).toBe(0);
+    expect(pickups.medalMesh.instanceColor).not.toBeNull();
+    expect(pickups.medalMesh.material.vertexColors).toBe(true);
+    const geometry = pickups.medalMesh.geometry;
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    // Standing on its edge: about 7.6 across in x and y, 1.4 thick in z.
+    expect(box.max.z - box.min.z).toBeCloseTo(1.4, 5);
+    expect(box.max.x - box.min.x).toBeGreaterThan(6.5);
+    expect(box.max.y - box.min.y).toBeGreaterThan(6.5);
+    expect(box.max.y).toBeLessThan(4);
+  });
+
+  it('with only gems the medal mesh stays empty and untouched', () => {
+    const { data, pickups } = build();
+    setPickup(data, 0, 100, 100, 0);
+    const before = pickups.medalMesh.instanceMatrix.version;
+    pickups.update(1, 0);
+    expect(pickups.medalMesh.count).toBe(0);
+    expect(pickups.medalMesh.instanceMatrix.version).toBe(before);
+  });
+
+  it('with only medals the gem mesh stays empty and untouched', () => {
+    const { data, pickups } = build();
+    setPickup(data, 0, 100, 100, 0, KINDS.MEDAL);
+    const before = pickups.mesh.instanceMatrix.version;
+    pickups.update(1, 0);
+    expect(pickups.mesh.count).toBe(0);
+    expect(pickups.mesh.instanceMatrix.version).toBe(before);
+  });
+});
+
+describe('medal tier colours', () => {
+  const rgbOf = (tier) => medalRgb(tier, [0, 0, 0]);
+  const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  it('starts at the medal palette colour and ends at the palette white', () => {
+    expect(MEDAL_TIER_MAX).toBe(6);
+    expect(rgbOf(0)).toEqual(PALETTE.MEDAL.rgb);
+    expect(rgbOf(MEDAL_TIER_MAX)).toEqual(PALETTE.MEDAL_WHITE.rgb);
+    const white = rgbOf(MEDAL_TIER_MAX);
+    expect(saturationOf(white)).toBe(0);
+  });
+
+  it('brightens with every tier', () => {
+    for (let tier = 1; tier <= MEDAL_TIER_MAX; tier++) {
+      expect(luma(rgbOf(tier))).toBeGreaterThan(luma(rgbOf(tier - 1)));
+    }
+  });
+
+  it('never leaves the allowed band: no tier is near the reserved enemy bullet hue', () => {
+    const halo = PALETTE.ENEMY_BULLET_HALO.rgb;
+    for (let tier = 0; tier <= MEDAL_TIER_MAX; tier++) {
+      const rgb = rgbOf(tier);
+      const offender =
+        saturationOf(rgb) >= BULLET_MIN_SATURATION &&
+        hueDistance(hueOf(rgb), hueOf(halo)) < BULLET_EXCLUSION_DEGREES;
+      expect(offender, `tier ${tier}`).toBe(false);
+      // Never gold: the red channel never leads the blue one.
+      expect(rgb[0]).toBeLessThanOrEqual(rgb[2] + 1e-9);
+    }
+  });
+
+  it('clamps an out-of-range or non-numeric tier to the nearest valid one', () => {
+    expect(rgbOf(-3)).toEqual(rgbOf(0));
+    expect(rgbOf(99)).toEqual(rgbOf(MEDAL_TIER_MAX));
+    expect(rgbOf(Number.NaN)).toEqual(rgbOf(0));
+  });
+
+  it('draws each chip in the colour of the tier Python packed for it', () => {
+    const { data, pickups } = build();
+    setPickup(data, 0, 60, 80, 0, KINDS.MEDAL);
+    setPickup(data, 1, 100, 80, 3, KINDS.MEDAL);
+    setPickup(data, 2, 140, 80, 6, KINDS.MEDAL);
+    pickups.update(3, 0);
+    for (const [i, tier] of [[0, 0], [1, 3], [2, 6]]) {
+      expect(colorOf(pickups.medalMesh, i)).toEqual(rgbOf(tier).map((v) => expect.closeTo(v, 5)));
+    }
   });
 });

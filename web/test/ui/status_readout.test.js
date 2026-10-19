@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest';
+import { hueDistance, hueOf } from '../../src/fx/palette.js';
 import { BOMB_PIP, BOMB_PIPS_MAX, WEAPON_CSS, createStatusReadout } from '../../src/ui/status_readout.js';
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
 const WEAPONS = { VULCAN: 0, LASER: 1, HOMING: 2 };
-const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, EXTEND: 14 };
 const OUTCOME = { RAISED: 0, SWITCHED: 1, MAXED: 2, STOCKED: 3 };
 const OPTIONS = { weapons: WEAPONS, events: EVENTS, maxed: OUTCOME.MAXED };
 const FLASH_MS = 900;
+const SLOTS = { WEAPON: 0, LEVEL: 1, BOMBS: 2, SCORE: 3, HIGH_SCORE: 4, LIVES: 5 };
+
+// One frame's header and the slot map, as main.js passes them: update(...frame({ score: 300 })).
+function frame(values = {}) {
+  const v = { weapon: 0, level: 1, bombs: 3, score: 0, hiscore: 0, lives: 3, ...values };
+  const header = new Float32Array(8);
+  header[SLOTS.WEAPON] = v.weapon;
+  header[SLOTS.LEVEL] = v.level;
+  header[SLOTS.BOMBS] = v.bombs;
+  header[SLOTS.SCORE] = v.score;
+  header[SLOTS.HIGH_SCORE] = v.hiscore;
+  header[SLOTS.LIVES] = v.lives;
+  return [header, SLOTS];
+}
 
 // A document holding the same markup as index.html, with writes to textContent counted.
 function build() {
@@ -14,22 +29,40 @@ function build() {
   const el = doc.createElement('div');
   el.id = 'status-readout';
   el.hidden = true;
+  const top = doc.createElement('div');
+  top.className = 'hud-top';
+  const score = doc.createElement('span');
+  score.className = 'score';
+  const hiscore = doc.createElement('span');
+  hiscore.className = 'hiscore';
+  top.append(score, hiscore);
+  const bl = doc.createElement('div');
+  bl.className = 'hud-bl';
   const weapon = doc.createElement('span');
   weapon.className = 'weapon';
   const level = doc.createElement('span');
   level.className = 'level';
   const bombs = doc.createElement('span');
   bombs.className = 'bombs';
-  el.append(weapon, level, bombs);
+  const lives = doc.createElement('span');
+  lives.className = 'lives';
+  bl.append(lives, bombs);
+  const br = doc.createElement('div');
+  br.className = 'hud-br';
+  br.append(weapon, level);
+  el.append(top, bl, br);
   const flash = doc.createElement('div');
   flash.id = 'max-flash';
   flash.hidden = true;
   doc.body.append(el, flash);
-  const writes = { weapon: 0, level: 0, bombs: 0 };
+  const writes = { weapon: 0, level: 0, bombs: 0, score: 0, hiscore: 0, lives: 0 };
   for (const [key, node] of [
     ['weapon', weapon],
     ['level', level],
     ['bombs', bombs],
+    ['score', score],
+    ['hiscore', hiscore],
+    ['lives', lives],
   ]) {
     let text = '';
     Object.defineProperty(node, 'textContent', {
@@ -40,22 +73,71 @@ function build() {
       },
     });
   }
-  return { doc, el, weapon, level, bombs, flash, writes };
+  return { doc, el, top, bl, br, weapon, level, bombs, score, hiscore, lives, flash, writes };
 }
 
 describe('createStatusReadout', () => {
+  describe('place', () => {
+    const LAYOUT = {
+      top: { left: 10, top: 20, width: 300 },
+      bottomLeft: { left: 12, top: 600 },
+      bottomRight: { right: 380, top: 600 },
+    };
+
+    it('positions the three blocks from the layout', () => {
+      const { doc, top, bl, br } = build();
+      createStatusReadout({ doc, ...OPTIONS }).place(LAYOUT);
+      expect(top.style.transform).toBe('translate(10px, 20px)');
+      expect(top.style.width).toBe('300px');
+      expect(bl.style.transform).toBe('translate(12px, 600px)');
+      expect(br.style.transform).toBe('translate(380px, 600px) translateX(-100%)');
+    });
+
+    it('writes only the styles that changed', () => {
+      const { doc, br, bl, top } = build();
+      const readout = createStatusReadout({ doc, ...OPTIONS });
+      const counts = { top: 0, bl: 0, br: 0 };
+      for (const [key, node] of [
+        ['top', top],
+        ['bl', bl],
+        ['br', br],
+      ]) {
+        let value = '';
+        Object.defineProperty(node.style, 'transform', {
+          get: () => value,
+          set(v) {
+            counts[key] += 1;
+            value = v;
+          },
+        });
+      }
+      readout.place(LAYOUT);
+      readout.place({ ...LAYOUT });
+      expect(counts).toEqual({ top: 1, bl: 1, br: 1 });
+      const raised = { ...LAYOUT, bottomRight: { right: 380, top: 500 } };
+      readout.place(raised);
+      expect(counts).toEqual({ top: 1, bl: 1, br: 2 });
+      readout.place({ ...raised, top: { left: 10, top: 20, width: 280 } });
+      expect(counts).toEqual({ top: 2, bl: 1, br: 2 });
+      readout.place({ ...raised, top: { left: 10, top: 20, width: 280 }, bottomLeft: { left: 14, top: 600 } });
+      expect(counts).toEqual({ top: 2, bl: 2, br: 2 });
+    });
+  });
+
   it('shows the weapon name in its colour and the level', () => {
     const { doc, weapon, level } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(1, 3);
+    readout.update(...frame({ weapon: 1, level: 3 }));
     expect(weapon.textContent).toBe('LASER');
     expect(weapon.style.color).toBe(WEAPON_CSS.LASER);
     expect(level.textContent).toBe('Lv 3');
   });
 
-  it('colours every weapon differently and none pink', () => {
+  it('colours every weapon differently and none orange-yellow', () => {
     expect(new Set(Object.values(WEAPON_CSS)).size).toBe(3);
-    expect(WEAPON_CSS.VULCAN).toBe('rgb(255, 90, 60)');
+    expect(WEAPON_CSS.VULCAN).toBe('rgb(255, 28, 64)');
+    const [r, g, b] = WEAPON_CSS.VULCAN.match(/\d+/g).map(Number);
+    expect(hueDistance(hueOf([r, g, b]), 350)).toBeLessThanOrEqual(15);
     expect(WEAPON_CSS.LASER).toBe('rgb(80, 168, 255)');
     expect(WEAPON_CSS.HOMING).toBe('rgb(170, 110, 255)');
     expect(Object.isFrozen(WEAPON_CSS)).toBe(true);
@@ -64,30 +146,30 @@ describe('createStatusReadout', () => {
   it('writes only when a value changes', () => {
     const { doc, writes } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(0, 1, 3);
-    readout.update(0, 1, 3);
-    readout.update(0, 1, 3);
-    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1 });
-    readout.update(0, 2, 3);
-    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1 });
-    readout.update(2, 2, 3);
-    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1 });
-    readout.update(2, 2, 2);
-    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2 });
+    readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
+    readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
+    readout.update(...frame({ weapon: 0, level: 1, bombs: 3 }));
+    expect(writes).toEqual({ weapon: 1, level: 1, bombs: 1, score: 1, hiscore: 1, lives: 1 });
+    readout.update(...frame({ weapon: 0, level: 2, bombs: 3 }));
+    expect(writes).toEqual({ weapon: 1, level: 2, bombs: 1, score: 1, hiscore: 1, lives: 1 });
+    readout.update(...frame({ weapon: 2, level: 2, bombs: 3 }));
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 1, score: 1, hiscore: 1, lives: 1 });
+    readout.update(...frame({ weapon: 2, level: 2, bombs: 2 }));
+    expect(writes).toEqual({ weapon: 2, level: 2, bombs: 2, score: 1, hiscore: 1, lives: 1 });
   });
 
   it.each([0, 1, 3, 7])('shows %i bombs as that many pips', (stock) => {
     const { doc, bombs } = build();
-    createStatusReadout({ doc, ...OPTIONS }).update(0, 1, stock);
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ bombs: stock }));
     expect(bombs.textContent).toBe(BOMB_PIP.repeat(stock));
   });
 
   it('shows no pips for a stock of zero and seven for the full stock', () => {
     const { doc, bombs } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
-    readout.update(0, 1, 0);
+    readout.update(...frame({ bombs: 0 }));
     expect(bombs.textContent).toBe('');
-    readout.update(0, 1, BOMB_PIPS_MAX);
+    readout.update(...frame({ bombs: BOMB_PIPS_MAX }));
     expect(bombs.textContent).toHaveLength(7);
   });
 
@@ -100,7 +182,7 @@ describe('createStatusReadout', () => {
     [Number.POSITIVE_INFINITY, 0],
   ])('treats a stock of %s as %i pips', (stock, pips) => {
     const { doc, bombs } = build();
-    createStatusReadout({ doc, ...OPTIONS }).update(0, 1, stock);
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ bombs: stock }));
     expect(bombs.textContent).toBe(BOMB_PIP.repeat(pips));
   });
 
@@ -112,7 +194,7 @@ describe('createStatusReadout', () => {
 
   it('shows a placeholder, uncoloured, for an unknown weapon value', () => {
     const { doc, weapon } = build();
-    createStatusReadout({ doc, ...OPTIONS }).update(9, 1);
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ weapon: 9 }));
     expect(weapon.textContent).toBe('?');
     expect(weapon.style.color).toBe('');
   });
@@ -134,8 +216,86 @@ describe('createStatusReadout', () => {
 
   it('accepts a colour override', () => {
     const { doc, weapon } = build();
-    createStatusReadout({ doc, ...OPTIONS, colors: { VULCAN: 'red' } }).update(0, 1);
+    createStatusReadout({ doc, ...OPTIONS, colors: { VULCAN: 'red' } }).update(...frame());
     expect(weapon.style.color).toBe('red');
+  });
+});
+
+describe('the score and high score', () => {
+  it('shows both as plain decimal integers', () => {
+    const { doc, score, hiscore } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 12300, hiscore: 45600 }));
+    expect(score.textContent).toBe('12300');
+    expect(hiscore.textContent).toBe('45600');
+  });
+
+  it('shows the largest score exactly (seven digits survive the float32 header)', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 9_999_999 }));
+    expect(score.textContent).toBe('9999999');
+  });
+
+  it('rounds a fractional header value instead of printing decimals', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 299.6 }));
+    expect(score.textContent).toBe('300');
+  });
+
+  it('writes the score and the high score only when they change', () => {
+    const { doc, writes } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    for (let i = 0; i < 5; i++) readout.update(...frame({ score: 300, hiscore: 300 }));
+    expect(writes.score).toBe(1);
+    expect(writes.hiscore).toBe(1);
+    readout.update(...frame({ score: 600, hiscore: 600 }));
+    expect(writes.score).toBe(2);
+    expect(writes.hiscore).toBe(2);
+    readout.update(...frame({ score: 600, hiscore: 900 }));
+    expect(writes.score).toBe(2);
+    expect(writes.hiscore).toBe(3);
+  });
+
+  it('shows 0 for a header value that is not a finite number', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: Number.NaN }));
+    expect(score.textContent).toBe('0');
+  });
+});
+
+describe('the lives', () => {
+  const SHIP = '\u25b2';
+
+  it.each([1, 3, 5, 9])('shows %i lives as that many ship icons', (lives) => {
+    const { doc, lives: el } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ lives }));
+    expect(el.textContent).toBe(SHIP.repeat(lives));
+  });
+
+  it.each([
+    [12, 9],
+    [0, 0],
+    [-3, 0],
+    [2.9, 2],
+    [Number.NaN, 0],
+  ])('treats %s lives as %i icons', (lives, icons) => {
+    const { doc, lives: el } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ lives }));
+    expect(el.textContent).toBe(SHIP.repeat(icons));
+  });
+
+  it('writes the lives only when they change', () => {
+    const { doc, writes } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    for (let i = 0; i < 5; i++) readout.update(...frame({ lives: 3 }));
+    expect(writes.lives).toBe(1);
+    readout.update(...frame({ lives: 4 }));
+    expect(writes.lives).toBe(2);
+  });
+
+  it('keeps the icon in the player trim colour set by the stylesheet, never inline', () => {
+    const { doc, lives } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ lives: 3 }));
+    expect(lives.style.color).toBeUndefined();
   });
 });
 
@@ -228,5 +388,87 @@ describe('the MAX flash', () => {
     const { doc, flash } = build();
     flash.remove();
     expect(() => createStatusReadout({ doc, ...OPTIONS })).toThrow(/max-flash/);
+  });
+});
+
+describe('the extend pulse', () => {
+  const PULSE_MS = 600;
+
+  it('adds the pulse class to the lives on an EXTEND and removes it after 0.6 s of frame clock', () => {
+    const { doc, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    expect(lives.className).toBe('lives');
+    readout.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(1000);
+    readout.tick(1000 + PULSE_MS - 1);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(1000 + PULSE_MS);
+    expect(lives.className).toBe('lives');
+    readout.tick(5000);
+    expect(lives.className).toBe('lives');
+  });
+
+  it('ignores other events', () => {
+    const { doc, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.EXPLOSION, 0, 0, 0, 0, 0);
+    readout.handle(EVENTS.PICKUP, 0, 0, 0, OUTCOME.RAISED, 0);
+    expect(lives.className).toBe('lives');
+  });
+
+  it('restarts on a second extend and re-triggers cleanly after it ended', () => {
+    const { doc, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+    readout.tick(0);
+    readout.tick(500);
+    readout.handle(EVENTS.EXTEND, 0, 0, 5, 0, 0);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(600);
+    readout.tick(600 + PULSE_MS - 1);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(600 + PULSE_MS);
+    expect(lives.className).toBe('lives');
+    readout.handle(EVENTS.EXTEND, 0, 0, 6, 0, 0);
+    expect(lives.className).toBe('lives pulse');
+  });
+
+  it('does not disturb the MAX flash', () => {
+    const { doc, flash, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.PICKUP, 0, 0, 0, OUTCOME.MAXED, 0);
+    readout.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+    readout.tick(0);
+    readout.tick(PULSE_MS);
+    expect(flash.hidden).toBe(false);
+    expect(lives.className).toBe('lives');
+    readout.tick(FLASH_MS);
+    expect(flash.hidden).toBe(true);
+  });
+});
+
+describe('the HUD at its limits', () => {
+  it('shows a 7-digit score, 9 lives, 7 pips and Lv 5 at the maximum values', () => {
+    const { doc, score, lives, bombs, level } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(
+      ...frame({ score: 9999999, hiscore: 9999999, lives: 12, bombs: 7, level: 5 }),
+    );
+    expect(score.textContent).toBe('9999999');
+    expect(lives.textContent).toHaveLength(9);
+    expect(bombs.textContent).toHaveLength(7);
+    expect(level.textContent).toBe('Lv 5');
+  });
+
+  it('shows no pips for 0 bombs', () => {
+    const { doc, bombs } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ bombs: 0 }));
+    expect(bombs.textContent).toBe('');
+  });
+
+  it('rounds the score to the nearest integer', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 1234.6 }));
+    expect(score.textContent).toBe('1235');
   });
 });

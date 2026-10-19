@@ -30,8 +30,8 @@ export async function startGame(pyodide, options) {
     create_pyproxies: false,
   });
   manifestProxy.destroy();
-  if (manifest.protocol !== 2) {
-    throw new Error(`Unsupported protocol version ${manifest.protocol} (expected 2)`);
+  if (manifest.protocol !== 3) {
+    throw new Error(`Unsupported protocol version ${manifest.protocol} (expected 3)`);
   }
 
   const header = new Float32Array(manifest.header.len);
@@ -43,7 +43,8 @@ export async function startGame(pyodide, options) {
   }
 
   const tick = game.tick; // held once; called once per animation frame
-  return { tick, game, manifest, header, slots: manifest.header.slots, channels };
+  const restart = game.restart; // held once as well: a restart is a DOM handler's call, not a Python edge
+  return { tick, restart, game, manifest, header, slots: manifest.header.slots, channels };
 }
 
 // Runs `ticks` simulation steps on a throwaway game, so pool and heap growth happen before play
