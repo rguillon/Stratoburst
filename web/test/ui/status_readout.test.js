@@ -46,8 +46,11 @@ function build() {
   bombs.className = 'bombs';
   const lives = doc.createElement('span');
   lives.className = 'lives';
-  bl.append(lives, weapon, level, bombs);
-  el.append(top, bl);
+  bl.append(lives, bombs);
+  const br = doc.createElement('div');
+  br.className = 'hud-br';
+  br.append(weapon, level);
+  el.append(top, bl, br);
   const flash = doc.createElement('div');
   flash.id = 'max-flash';
   flash.hidden = true;
@@ -70,10 +73,56 @@ function build() {
       },
     });
   }
-  return { doc, el, weapon, level, bombs, score, hiscore, lives, flash, writes };
+  return { doc, el, top, bl, br, weapon, level, bombs, score, hiscore, lives, flash, writes };
 }
 
 describe('createStatusReadout', () => {
+  describe('place', () => {
+    const LAYOUT = {
+      top: { left: 10, top: 20, width: 300 },
+      bottomLeft: { left: 12, top: 600 },
+      bottomRight: { right: 380, top: 600 },
+    };
+
+    it('positions the three blocks from the layout', () => {
+      const { doc, top, bl, br } = build();
+      createStatusReadout({ doc, ...OPTIONS }).place(LAYOUT);
+      expect(top.style.transform).toBe('translate(10px, 20px)');
+      expect(top.style.width).toBe('300px');
+      expect(bl.style.transform).toBe('translate(12px, 600px)');
+      expect(br.style.transform).toBe('translate(380px, 600px) translateX(-100%)');
+    });
+
+    it('writes only the styles that changed', () => {
+      const { doc, br, bl, top } = build();
+      const readout = createStatusReadout({ doc, ...OPTIONS });
+      const counts = { top: 0, bl: 0, br: 0 };
+      for (const [key, node] of [
+        ['top', top],
+        ['bl', bl],
+        ['br', br],
+      ]) {
+        let value = '';
+        Object.defineProperty(node.style, 'transform', {
+          get: () => value,
+          set(v) {
+            counts[key] += 1;
+            value = v;
+          },
+        });
+      }
+      readout.place(LAYOUT);
+      readout.place({ ...LAYOUT });
+      expect(counts).toEqual({ top: 1, bl: 1, br: 1 });
+      readout.place({ ...LAYOUT, bottomRight: { right: 380, top: 500 } });
+      expect(counts).toEqual({ top: 1, bl: 1, br: 2 });
+      readout.place({ ...LAYOUT, top: { left: 10, top: 20, width: 280 } });
+      expect(counts).toEqual({ top: 2, bl: 1, br: 2 });
+      readout.place({ ...LAYOUT, bottomLeft: { left: 14, top: 600 } });
+      expect(counts).toEqual({ top: 2, bl: 2, br: 2 });
+    });
+  });
+
   it('shows the weapon name in its colour and the level', () => {
     const { doc, weapon, level } = build();
     const readout = createStatusReadout({ doc, ...OPTIONS });
