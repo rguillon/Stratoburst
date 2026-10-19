@@ -6,6 +6,8 @@ import { createFakeDocument } from '../helpers/fake_dom.js';
 
 const FLOW_STATES = { INTRO: 0, PLAY: 1, WARNING: 3, TALLY: 6, STAGE_CLEAR: 7 };
 const SLOTS = { FLOW: 0, FLOW_T: 1, STAGE: 2 };
+const EVENTS = { EXPLOSION: 1, PICKUP: 4, EXTEND: 14 };
+const EXTEND_MS = 1200;
 
 // One frame's header and the slot map, as main.js passes them: update(...frame({ t: 0.5 })).
 function frame(values = {}) {
@@ -18,11 +20,15 @@ function frame(values = {}) {
 }
 
 // A document holding the same markup as index.html. Writes to textContent are counted.
-function build({ withMarkup = true } = {}) {
+function build({ withMarkup = true, withExtend = true } = {}) {
   const doc = createFakeDocument();
   const el = doc.createElement('div');
   el.id = 'banner';
   el.hidden = true;
+  const extend = doc.createElement('div');
+  extend.id = 'extend';
+  extend.hidden = true;
+  if (withMarkup && withExtend) doc.body.append(extend);
   const writes = { text: 0 };
   let text = '';
   Object.defineProperty(el, 'textContent', {
@@ -33,13 +39,24 @@ function build({ withMarkup = true } = {}) {
     },
   });
   if (withMarkup) doc.body.append(el);
-  return { doc, el, writes, make: () => createBannerOverlay({ doc, flowStates: FLOW_STATES }) };
+  return {
+    doc,
+    el,
+    extend,
+    writes,
+    make: () => createBannerOverlay({ doc, flowStates: FLOW_STATES, events: EVENTS }),
+  };
 }
 
 describe('createBannerOverlay', () => {
   it('throws when #banner is missing from the page', () => {
     const { make } = build({ withMarkup: false });
     expect(make).toThrow('#banner is missing from the page');
+  });
+
+  it('throws when #extend is missing from the page', () => {
+    const { make } = build({ withExtend: false });
+    expect(make).toThrow('#extend is missing from the page');
   });
 
   it('exposes the element it drives', () => {
@@ -245,5 +262,81 @@ describe('STAGE CLEAR', () => {
     banner.update(...frame({ flow: FLOW_STATES.INTRO, t: 0 }));
     expect(el.textContent).toBe('STAGE 1');
     expect(el.hidden).toBe(false);
+  });
+});
+
+describe('the EXTEND banner', () => {
+  const extendEvent = (banner) => banner.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+
+  it('starts hidden and keeps its static text', () => {
+    const { extend, writes, make } = build();
+    make();
+    expect(extend.hidden).toBe(true);
+    expect(writes.text).toBe(0);
+  });
+
+  it('shows on an EXTEND event and ignores every other event', () => {
+    const { extend, make } = build();
+    const banner = make();
+    banner.handle(EVENTS.EXPLOSION, 0, 0, 0, 0, 0);
+    banner.handle(EVENTS.PICKUP, 0, 0, 0, 2, 0);
+    expect(extend.hidden).toBe(true);
+    extendEvent(banner);
+    expect(extend.hidden).toBe(false);
+  });
+
+  it('stays up for 1.2 s counted on the frame clock from the next tick, then hides', () => {
+    const { extend, make } = build();
+    const banner = make();
+    extendEvent(banner);
+    banner.tick(5000);
+    banner.tick(5000 + EXTEND_MS - 1);
+    expect(extend.hidden).toBe(false);
+    banner.tick(5000 + EXTEND_MS);
+    expect(extend.hidden).toBe(true);
+    banner.tick(9000);
+    expect(extend.hidden).toBe(true);
+  });
+
+  it('does nothing on a tick when no extend is showing', () => {
+    const { extend, make } = build();
+    make().tick(100);
+    expect(extend.hidden).toBe(true);
+  });
+
+  it('restarts the timer on a second extend instead of stacking', () => {
+    const { extend, make } = build();
+    const banner = make();
+    extendEvent(banner);
+    banner.tick(1000);
+    banner.tick(1800);
+    extendEvent(banner);
+    banner.tick(2000);
+    banner.tick(2000 + EXTEND_MS - 1);
+    expect(extend.hidden).toBe(false);
+    banner.tick(2000 + EXTEND_MS);
+    expect(extend.hidden).toBe(true);
+    // Still a single element: the page holds one #extend.
+    expect(extend.parent.children.filter((c) => c.id === 'extend')).toHaveLength(1);
+  });
+
+  it('never touches the stage banner and the stage banner never touches it', () => {
+    const { el, extend, make } = build();
+    const banner = make();
+    extendEvent(banner);
+    banner.update(...frame({ flow: FLOW_STATES.PLAY }));
+    expect(el.hidden).toBe(true);
+    expect(extend.hidden).toBe(false);
+  });
+
+  it('shows again for a later extend', () => {
+    const { extend, make } = build();
+    const banner = make();
+    extendEvent(banner);
+    banner.tick(0);
+    banner.tick(EXTEND_MS);
+    expect(extend.hidden).toBe(true);
+    extendEvent(banner);
+    expect(extend.hidden).toBe(false);
   });
 });

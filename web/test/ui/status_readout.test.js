@@ -4,7 +4,7 @@ import { BOMB_PIP, BOMB_PIPS_MAX, WEAPON_CSS, createStatusReadout } from '../../
 import { createFakeDocument } from '../helpers/fake_dom.js';
 
 const WEAPONS = { VULCAN: 0, LASER: 1, HOMING: 2 };
-const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4 };
+const EVENTS = { EXPLOSION: 1, HIT: 2, PICKUP: 4, EXTEND: 14 };
 const OUTCOME = { RAISED: 0, SWITCHED: 1, MAXED: 2, STOCKED: 3 };
 const OPTIONS = { weapons: WEAPONS, events: EVENTS, maxed: OUTCOME.MAXED };
 const FLASH_MS = 900;
@@ -388,5 +388,87 @@ describe('the MAX flash', () => {
     const { doc, flash } = build();
     flash.remove();
     expect(() => createStatusReadout({ doc, ...OPTIONS })).toThrow(/max-flash/);
+  });
+});
+
+describe('the extend pulse', () => {
+  const PULSE_MS = 600;
+
+  it('adds the pulse class to the lives on an EXTEND and removes it after 0.6 s of frame clock', () => {
+    const { doc, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    expect(lives.className).toBe('lives');
+    readout.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(1000);
+    readout.tick(1000 + PULSE_MS - 1);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(1000 + PULSE_MS);
+    expect(lives.className).toBe('lives');
+    readout.tick(5000);
+    expect(lives.className).toBe('lives');
+  });
+
+  it('ignores other events', () => {
+    const { doc, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.EXPLOSION, 0, 0, 0, 0, 0);
+    readout.handle(EVENTS.PICKUP, 0, 0, 0, OUTCOME.RAISED, 0);
+    expect(lives.className).toBe('lives');
+  });
+
+  it('restarts on a second extend and re-triggers cleanly after it ended', () => {
+    const { doc, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+    readout.tick(0);
+    readout.tick(500);
+    readout.handle(EVENTS.EXTEND, 0, 0, 5, 0, 0);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(600);
+    readout.tick(600 + PULSE_MS - 1);
+    expect(lives.className).toBe('lives pulse');
+    readout.tick(600 + PULSE_MS);
+    expect(lives.className).toBe('lives');
+    readout.handle(EVENTS.EXTEND, 0, 0, 6, 0, 0);
+    expect(lives.className).toBe('lives pulse');
+  });
+
+  it('does not disturb the MAX flash', () => {
+    const { doc, flash, lives } = build();
+    const readout = createStatusReadout({ doc, ...OPTIONS });
+    readout.handle(EVENTS.PICKUP, 0, 0, 0, OUTCOME.MAXED, 0);
+    readout.handle(EVENTS.EXTEND, 0, 0, 4, 0, 0);
+    readout.tick(0);
+    readout.tick(PULSE_MS);
+    expect(flash.hidden).toBe(false);
+    expect(lives.className).toBe('lives');
+    readout.tick(FLASH_MS);
+    expect(flash.hidden).toBe(true);
+  });
+});
+
+describe('the HUD at its limits', () => {
+  it('shows a 7-digit score, 9 lives, 7 pips and Lv 5 at the maximum values', () => {
+    const { doc, score, lives, bombs, level } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(
+      ...frame({ score: 9999999, hiscore: 9999999, lives: 12, bombs: 7, level: 5 }),
+    );
+    expect(score.textContent).toBe('9999999');
+    expect(lives.textContent).toHaveLength(9);
+    expect(bombs.textContent).toHaveLength(7);
+    expect(level.textContent).toBe('Lv 5');
+  });
+
+  it('shows no pips for 0 bombs', () => {
+    const { doc, bombs } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ bombs: 0 }));
+    expect(bombs.textContent).toBe('');
+  });
+
+  it('rounds the score to the nearest integer', () => {
+    const { doc, score } = build();
+    createStatusReadout({ doc, ...OPTIONS }).update(...frame({ score: 1234.6 }));
+    expect(score.textContent).toBe('1235');
   });
 });
