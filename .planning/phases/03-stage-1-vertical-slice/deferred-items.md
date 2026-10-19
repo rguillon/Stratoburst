@@ -35,3 +35,16 @@
   - `tools/e2e/boot.spec.js` ("?crash=js shows the error panel with the injected JS fault"): `#error-panel` not
     found within 30 s; the fault is injected at frame 120 and frames are slow under load (the isolated run took 26 s
     for the whole test, so the budget is tight). Pre-existing load sensitivity; not fixed here.
+
+## From plan 03-26
+
+- Full `make check` e2e run (3 workers, software GL), 101 of 105 specs passed; all four failures passed when the four
+  files were re-run together (20/20 on `boot.spec.js`, `intro.spec.js`, `keyboard.spec.js`, `smoke.spec.js`) and none
+  involves the HUD:
+  - `tools/e2e/boot.spec.js` ("?crash=js shows the error panel") and `tools/e2e/intro.spec.js` ("the banner is visible
+    while the intro runs"): the two known load flakes from the 03-25 and 03-23 entries above.
+  - `tools/e2e/keyboard.spec.js` ("AZERTY: the physical KeyW flies the ship up", received 10 px, wanted more than 15)
+    and `tools/e2e/smoke.spec.js` ("python moves the ship with the arrow keys", received 20, wanted more than 20):
+    new in this run, same family. Both measure how far the ship flew in a fixed wall-clock window, but the sim only
+    advances with rendered frames and three software-GL workers render few. A fix would wait on a frame count (or on
+    the header distance) instead of a timeout. Not fixed here (out of scope).

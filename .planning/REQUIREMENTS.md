@@ -61,7 +61,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SCOR-01**: Player earns points for destroying enemies, parts and scenery
 - [ ] **SCOR-02**: Player can collect medals whose value increases while collected without missing
 - [ ] **SCOR-03**: Player sees a stage-clear bonus tally after each boss
-- [ ] **SCOR-04**: Player earns extra lives at score thresholds
+- [x] **SCOR-04**: Player earns extra lives at score thresholds
 - [ ] **SCOR-05**: Player starts with a set number of lives; game over occurs when all are lost
 - [ ] **SCOR-06**: Player can continue after game over (countdown); continued runs are flagged and score resets
 - [ ] **SCOR-07**: Player can enter initials for a top-10 local high-score table that persists in browser storage
@@ -182,7 +182,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCOR-01 | Phase 3 | Pending |
 | SCOR-02 | Phase 3 | Pending |
 | SCOR-03 | Phase 3 | Pending |
-| SCOR-04 | Phase 3 | Pending |
+| SCOR-04 | Phase 3 | Complete |
 | SCOR-05 | Phase 3 | Pending |
 | SCOR-06 | Phase 4 | Pending |
 | SCOR-07 | Phase 4 | Pending |

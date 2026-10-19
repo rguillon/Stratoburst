@@ -161,7 +161,7 @@ Plans:
   4. Player starts with a set number of lives, earns extra lives at score thresholds, and reaches game over when all lives are lost. Throughout play the HUD shows score, high score, lives, bombs and weapon level.
   5. Adding or changing a wave or a bullet pattern only requires editing stage and pattern data, never engine code. This is what makes stages 2-3 cheap to build.
 
-**Plans:** 26/28 plans executed (19 waves)
+**Plans:** 27/28 plans executed (19 waves)
 
 Plans:
 **Wave 1**
@@ -225,7 +225,7 @@ Plans:
 - [x] 03-27-PLAN.md — (wave 17) Stage perf gate (boss and mortal runs in Pyodide) and a native full-stage play-through test
 
 **Wave 18** *(blocked on Wave 17 completion)*
-- [ ] 03-26-PLAN.md — (wave 18) HUD over the playfield edges, clear of the bomb button; EXTEND banner and lives pulse
+- [x] 03-26-PLAN.md — (wave 18) HUD over the playfield edges, clear of the bomb button; EXTEND banner and lives pulse
 
 **Wave 19** *(blocked on Wave 18 completion)*
 - [ ] 03-28-PLAN.md — (wave 19) Vertical-slice gate: real-device play-through, feel checklist, data tuning, verdict, deploy
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Playable Core on Real Devices | 10/10 | Complete    | 2026-10-17 |
 | 2. Arcade Shooting Feel | 33/33 | Complete    | 2026-10-18 |
-| 3. Stage 1 Vertical Slice | 26/28 | In Progress | - |
+| 3. Stage 1 Vertical Slice | 27/28 | In Progress | - |
 | 4. Full Campaign & Arcade Shell | 0/TBD | Not started | - |
