@@ -65,7 +65,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SCOR-05**: Player starts with a set number of lives; game over occurs when all are lost
 - [ ] **SCOR-06**: Player can continue after game over (countdown); continued runs are flagged and score resets
 - [ ] **SCOR-07**: Player can enter initials for a top-10 local high-score table that persists in browser storage
-- [ ] **SCOR-08**: Player can see the current score, high score, lives, bombs and weapon level on a HUD
+- [x] **SCOR-08**: Player can see the current score, high score, lives, bombs and weapon level on a HUD
 
 ### Visuals & Feel
 
@@ -186,7 +186,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCOR-05 | Phase 3 | Pending |
 | SCOR-06 | Phase 4 | Pending |
 | SCOR-07 | Phase 4 | Pending |
-| SCOR-08 | Phase 3 | Pending |
+| SCOR-08 | Phase 3 | Complete |
 | VISL-01 | Phase 2 | Complete |
 | VISL-02 | Phase 2 | Complete |
 | VISL-03 | Phase 2 | Complete |

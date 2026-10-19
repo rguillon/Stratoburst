@@ -23,3 +23,15 @@
   the rain, reflections and plumes at the high tier (software GL renders fewer frames, and the sim only advances with
   frames). It failed once in the loaded full run. Fixed in 03-25 by widening its waits (popup 100 s, test 160 s); the
   real cost of the atmosphere belongs to the end-of-phase device check (T-03-33).
+
+## From plan 03-23
+
+- Full `make check` e2e run (3 workers, software GL), 99 of 101 specs passed; the two failures both passed in
+  isolation (14/14 on `boot.spec.js` + `intro.spec.js` re-run) and neither involves the font:
+  - `tools/e2e/intro.spec.js` ("the banner is visible while the intro runs"): this time the late assertion
+    `expect.poll(FLOW).toBe('PLAY')` (6 s window) timed out under load; the intro's 2 s only advances with frames
+    and software GL under three workers renders few. Same family as the 03-25 entry above (a wall-clock window
+    against a frame-driven sim). A fix would widen the window or poll the header FLOW with the frame count.
+  - `tools/e2e/boot.spec.js` ("?crash=js shows the error panel with the injected JS fault"): `#error-panel` not
+    found within 30 s; the fault is injected at frame 120 and frames are slow under load (the isolated run took 26 s
+    for the whole test, so the budget is tight). Pre-existing load sensitivity; not fixed here.
