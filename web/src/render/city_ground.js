@@ -11,9 +11,9 @@ import { terrainWindow } from './city_layer.js';
 
 const TILE_PX = 256;
 // The tile is dark: albedo stays far below 1.0 and only the kerb lines are bright (still LDR).
-const GROUND_FILL = '#1b1932';
-const ROAD_FILL = '#0d0d15';
-const DASH_FILL = '#3d3d4f';
+const GROUND_FILL = '#33304f';
+const ROAD_FILL = '#1c1b2b';
+const DASH_FILL = '#464658';
 const KERB_X = '#13a3bd';
 const KERB_Y = '#a1138a';
 const KERB_PX = 2;

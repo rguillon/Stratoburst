@@ -194,7 +194,10 @@ _Empty. If no device is available, restate the Phase 2 waiver here: not measured
 
 ## Tuning requested and applied
 
-_Empty until the playtest._
+1. "Add some moonlight, the world is too dark" (2026-10-19, before the device session). Data-only edits, the light count stays at three:
+   - `web/src/render/night_rig.js`: moon 0xa9b8ff at 0.9 becomes 0xc8d4ff at 1.8; hemisphere 0.55 becomes 0.95, ground bounce 0x0d0a26 becomes 0x1e1a44.
+   - `web/src/render/city_ground.js`: lots #1b1932 become #33304f, roads #0d0d15 become #1c1b2b, lane dashes #3d3d4f become #464658 (still under the 0.35 dark-surface cap; kerbs unchanged).
+   - Re-run: lint clean, vitest 1669 passed, ground/atmosphere/glow/playfield/boss e2e 15/15.
 
 ## Pass/fail table
 

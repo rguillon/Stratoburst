@@ -13,10 +13,10 @@ export const NIGHT_SKY = 0x07061a;
 export const FOG_DENSITY = 0.0006;
 
 const HEMI_SKY = 0x5b6cff;
-const HEMI_GROUND = 0x0d0a26;
-const HEMI_INTENSITY = 0.55;
-const MOON_COLOR = 0xa9b8ff;
-const MOON_INTENSITY = 0.9;
+const HEMI_GROUND = 0x1e1a44;
+const HEMI_INTENSITY = 0.95;
+const MOON_COLOR = 0xc8d4ff;
+const MOON_INTENSITY = 1.8;
 const FILL_COLOR = 0xff3fd2;
 const FILL_INTENSITY = 0.35;
 const FILL_POSITION = [120, 200, -160];
