@@ -35,6 +35,9 @@ const lifeCount = (lives) =>
 // digits); anything that is not a finite number shows 0.
 const wholeNumber = (value) => (Number.isFinite(value) ? Math.round(value) : 0);
 
+// The lives icons pulse for this long after an extend (D-21), counted on the frame clock.
+export const PULSE_MS = 600;
+
 // The MAX flash (D-06) stays up for this long, fading over its last FADE_MS.
 export const FLASH_MS = 900;
 const FADE_MS = 400;
@@ -55,6 +58,7 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   const topEl = el.querySelector('.hud-top');
   const leftEl = el.querySelector('.hud-bl');
   const rightEl = el.querySelector('.hud-br');
+  const livesClass = livesEl.className;
   const nameByValue = new Map(Object.entries(weapons).map(([name, value]) => [value, name]));
 
   let shownWeapon = Number.NaN;
@@ -71,6 +75,9 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   // clock; a catch while it is up resets the count instead of stacking a second flash.
   let flashing = false;
   let deadline = null;
+  // The same for the lives pulse: the class goes on at the extend and off PULSE_MS after the next tick.
+  let pulsing = false;
+  let pulseDeadline = null;
 
   return {
     el,
@@ -132,8 +139,19 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
         rightEl.style.transform = rightKey;
       }
     },
-    // One fx event; only a PICKUP whose outcome is MAXED flashes.
+    // One fx event; a PICKUP whose outcome is MAXED flashes and an EXTEND pulses the lives.
     handle(type, _x, _y, _a, b) {
+      if (type === events.EXTEND) {
+        // Dropping the class first lets the CSS animation start over when an extend lands mid-pulse.
+        if (pulsing) {
+          livesEl.className = livesClass;
+          void livesEl.offsetWidth;
+        }
+        pulsing = true;
+        pulseDeadline = null;
+        livesEl.className = `${livesClass} pulse`;
+        return;
+      }
       if (type !== events.PICKUP || b !== maxed) return;
       flashing = true;
       deadline = null;
@@ -141,6 +159,13 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
     },
     // Called every frame with the frame clock in ms.
     tick(nowMs) {
+      if (pulsing) {
+        pulseDeadline ??= nowMs + PULSE_MS;
+        if (nowMs >= pulseDeadline) {
+          pulsing = false;
+          livesEl.className = livesClass;
+        }
+      }
       if (!flashing) return;
       deadline ??= nowMs + FLASH_MS;
       const remaining = deadline - nowMs;

@@ -6,6 +6,9 @@
 // changes. The WARNING carries the `warning` class: index.html draws it in red neon and flashes it
 // at 2 Hz (never more than 3 flashes per second, and not at all under prefers-reduced-motion).
 
+// The EXTEND banner (D-21) stays up this long, counted on the frame clock.
+export const EXTEND_MS = 1200;
+
 // The banner stays fully opaque for this fraction of the intro, then fades to nothing.
 export const FADE_START = 0.7;
 
@@ -17,15 +20,22 @@ function opacityAt(progress) {
   return t <= FADE_START ? 1 : (1 - t) / (1 - FADE_START);
 }
 
-// `flowStates` is the manifest's flow state name -> id map. `update(header, slots)` runs every frame
-// with the header and the manifest's slot names.
-export function createBannerOverlay({ doc = document, flowStates }) {
+// `flowStates` is the manifest's flow state name -> id map and `events` its event name -> id map.
+// `update(header, slots)` runs every frame with the header and the manifest's slot names. The one
+// event-driven element is #extend (static markup, shown with `hidden`; no text is ever written to it):
+// `handle` shows it on an EXTEND event and `tick(nowMs)` hides it again after EXTEND_MS.
+export function createBannerOverlay({ doc = document, flowStates, events }) {
   const el = doc.getElementById('banner');
   if (!el) throw new Error('#banner is missing from the page');
+  const extendEl = doc.getElementById('extend');
+  if (!extendEl) throw new Error('#extend is missing from the page');
 
   let shownText = '';
   let shownOpacity = '';
   let shownClass = '';
+  // The extend timer starts at the first tick after the event; a second extend while it is up resets it.
+  let extending = false;
+  let extendDeadline = null;
 
   function show(text, className, opacity) {
     if (text !== shownText) {
@@ -45,6 +55,23 @@ export function createBannerOverlay({ doc = document, flowStates }) {
 
   return {
     el,
+    extendEl,
+    // One fx event; only an EXTEND shows the banner.
+    handle(type) {
+      if (type !== events.EXTEND) return;
+      extending = true;
+      extendDeadline = null;
+      extendEl.hidden = false;
+    },
+    // Called every frame with the frame clock in ms.
+    tick(nowMs) {
+      if (!extending) return;
+      extendDeadline ??= nowMs + EXTEND_MS;
+      if (nowMs >= extendDeadline) {
+        extending = false;
+        extendEl.hidden = true;
+      }
+    },
     update(header, slots) {
       const flow = header[slots.FLOW];
       if (flow === flowStates.WARNING) {

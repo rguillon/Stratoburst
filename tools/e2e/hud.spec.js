@@ -101,3 +101,26 @@ test.describe('desktop, keyboard session', () => {
     await expect(page.locator('#error-panel')).toHaveCount(0);
   });
 });
+
+test.describe('extend', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('an EXTEND event flashes the banner and pulses the lives, both for a short while only', async ({
+    page,
+  }) => {
+    await bootGame(page, '?debug');
+    await expect(page.locator('#extend')).toBeHidden();
+    await expect(page.locator('#extend')).toHaveText('EXTEND');
+    await page.evaluate(() => {
+      const { fx, manifest } = globalThis.__scorched;
+      fx.inject(manifest.events.EXTEND, 4);
+    });
+    await expect(page.locator('#extend')).toBeVisible();
+    await expect(page.locator('#status-readout .lives')).toHaveClass(/pulse/);
+    await expectInside(page, 390, 844);
+    // The pulse is shorter than the banner, and both end on their own (the frame clock advances with frames).
+    await expect(page.locator('#status-readout .lives')).not.toHaveClass(/pulse/, { timeout: 15_000 });
+    await expect(page.locator('#extend')).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator('#error-panel')).toHaveCount(0);
+  });
+});

@@ -458,13 +458,14 @@ async function main() {
     onRestart: () => bridge.restart(),
   });
   // Shown while FLOW is INTRO (the stage start, D-26): STAGE n fading as the ship flies in.
-  const banner = createBannerOverlay({ flowStates: manifest.flow_states });
+  const banner = createBannerOverlay({ flowStates: manifest.flow_states, events: manifest.events });
   // The boss HP bar (D-25): state-driven from BOSS_ACTIVE, with a tick at each phase threshold of the
   // stage's bosses, which Python ships in the manifest.
   const bossBar = createBossBar({ bosses: manifest.stage.bosses });
   // The stage-clear tally (SCOR-03): four bonus lines counting up while FLOW is TALLY, state-driven.
   const tallyPanel = createTallyPanel({ flowStates: manifest.flow_states });
-  fx.add(readout); // the MAX flash listens for the MAXED pickup events
+  fx.add(readout); // the MAX flash listens for the MAXED pickup events and the lives pulse for EXTEND
+  fx.add(banner); // the EXTEND banner
   // A medal catch pops its value up where the medal was (D-20). The projection reuses one vector and
   // one result object, so a catch allocates nothing here.
   const popupPoint = new THREE.Vector3();
@@ -628,6 +629,7 @@ async function main() {
       scrollNow = header[slots.SCROLL_Y] + alpha * header[slots.SCROLL_RATE];
       fx.dispatch(bridge.channels.events, header[slots.EVENT_N]);
       readout.tick(ts);
+      banner.tick(ts);
       // Escape/P pause inside Python; mirror the header FLAGS onto the PAUSED overlay.
       pause.sync(header[slots.FLAGS]);
       rig.toWorld(header[slots.SHIP_X], header[slots.SHIP_Y], world);
@@ -784,6 +786,10 @@ async function main() {
         },
       },
       fx: {
+        // Feeds one event through the production dispatcher, like a frame's events channel would (e2e).
+        inject(type, a = 0, b = 0) {
+          fx.dispatch(Float32Array.of(type, 0, 0, a, b, 0), 1);
+        },
         get particlesSpawned() {
           return fxLayers.additive.spawned + fxLayers.normal.spawned;
         },

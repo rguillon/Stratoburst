@@ -179,6 +179,32 @@
         color: rgb(27, 215, 255);
         letter-spacing: 0.2em;
       }
+      /* An extend (D-21) pulses the lives icons once: a single 0.6 s scale-up with a brighter glow, never repeating
+         and off under prefers-reduced-motion. status_readout.js toggles the class for PULSE_MS. */
+      #status-readout .lives.pulse {
+        display: inline-block;
+        transform-origin: 0 50%;
+        animation: lives-pulse 0.6s ease-out 1;
+      }
+      @keyframes lives-pulse {
+        0% {
+          transform: scale(1);
+          text-shadow: 0 0 3px #000;
+        }
+        35% {
+          transform: scale(1.5);
+          text-shadow: 0 0 6px #fff, 0 0 14px rgb(27, 215, 255), 0 0 24px rgb(27, 215, 255);
+        }
+        100% {
+          transform: scale(1);
+          text-shadow: 0 0 3px #000;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #status-readout .lives.pulse {
+          animation: none;
+        }
+      }
       /* The bomb pickup's acid green (PALETTE.BOMB_PICKUP 0.8, 3.6, 0.5 scaled so its largest channel
          is 255). Orange-yellow belongs to enemy bullets alone (D-39). */
       #status-readout .bombs {
@@ -205,6 +231,30 @@
         user-select: none;
       }
       #max-flash[hidden] {
+        display: none;
+      }
+      /* The EXTEND banner (D-21): a short cyan neon line over the playfield for about 1.2 s, never
+         orange-yellow. It lets every touch through. */
+      #extend {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 44%;
+        z-index: 4;
+        pointer-events: none;
+        text-align: center;
+        font: 400 clamp(16px, 4.6vmin, 44px) / 1 var(--hud-font);
+        letter-spacing: 0.12em;
+        text-indent: 0.12em;
+        color: #ffffff;
+        text-shadow:
+          0 0 8px rgb(27, 215, 255),
+          0 0 22px rgba(27, 215, 255, 0.8),
+          0 0 44px rgba(27, 215, 255, 0.5),
+          0 2px 0 #06303a;
+        user-select: none;
+      }
+      #extend[hidden] {
         display: none;
       }
       /* World score popups (D-20): a medal catch shows its value where the medal was, white with a cyan
@@ -530,6 +580,7 @@
       <div id="boss-bar" hidden><div class="fill"></div><div class="ticks"></div><span class="timer" hidden></span></div>
       <div id="max-flash" hidden>MAX</div>
       <div id="banner" hidden></div>
+      <div id="extend" hidden>EXTEND</div>
       <div id="tally" hidden>
         <div class="title">STAGE BONUS</div>
         <div class="row" id="tally-boss" hidden><span class="label">BOSS DESTROYED</span><span class="amount"></span></div>
