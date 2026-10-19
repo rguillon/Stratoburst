@@ -1,5 +1,6 @@
-// The HUD values: score and high score along the top; lives (ship icons), weapon, level and bomb
-// stock at the bottom left, inside the safe area. Text goes in through textContent only, from
+// The HUD values: score and high score along the top; lives (ship icons) and bomb stock at the bottom
+// left; weapon and level at the bottom right. place() puts the three blocks where hud_layout.js says
+// (over the playfield edges, clear of the touch bomb button). Text goes in through textContent only, from
 // manifest weapon names and integers (the bombs as one pip character each), and only when a value
 // changes, so calling update() every frame never touches the DOM.
 
@@ -51,6 +52,9 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   const scoreEl = el.querySelector('.score');
   const hiscoreEl = el.querySelector('.hiscore');
   const livesEl = el.querySelector('.lives');
+  const topEl = el.querySelector('.hud-top');
+  const leftEl = el.querySelector('.hud-bl');
+  const rightEl = el.querySelector('.hud-br');
   const nameByValue = new Map(Object.entries(weapons).map(([name, value]) => [value, name]));
 
   let shownWeapon = Number.NaN;
@@ -59,6 +63,10 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
   let shownScore = -1;
   let shownHiscore = -1;
   let shownLives = -1;
+  // The last placement written per block, as the transform string (the top band adds its width).
+  let placedTop = '';
+  let placedLeft = '';
+  let placedRight = '';
   // The flash starts counting at the first tick after the catch, so the 900 ms follow the frame
   // clock; a catch while it is up resets the count instead of stacking a second flash.
   let flashing = false;
@@ -103,6 +111,26 @@ export function createStatusReadout({ doc = document, weapons, events, maxed, co
     },
     show() {
       el.hidden = false;
+    },
+    // `layout` is layoutHud's result; numbers only go into the styles, and only when they changed.
+    place({ top, bottomLeft, bottomRight }) {
+      const topKey = `translate(${top.left}px, ${top.top}px) ${top.width}`;
+      if (topKey !== placedTop) {
+        placedTop = topKey;
+        topEl.style.transform = `translate(${top.left}px, ${top.top}px)`;
+        topEl.style.width = `${top.width}px`;
+      }
+      const leftKey = `translate(${bottomLeft.left}px, ${bottomLeft.top}px)`;
+      if (leftKey !== placedLeft) {
+        placedLeft = leftKey;
+        leftEl.style.transform = leftKey;
+      }
+      // The block is right-aligned: its right edge is the anchor.
+      const rightKey = `translate(${bottomRight.right}px, ${bottomRight.top}px) translateX(-100%)`;
+      if (rightKey !== placedRight) {
+        placedRight = rightKey;
+        rightEl.style.transform = rightKey;
+      }
     },
     // One fx event; only a PICKUP whose outcome is MAXED flashes.
     handle(type, _x, _y, _a, b) {

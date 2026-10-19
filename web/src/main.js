@@ -44,6 +44,7 @@ import { installAudioKeepalive } from './audio/audio_keepalive.js';
 import { TIERS, initialTier } from './quality/tiers.js';
 import { createQualityController } from './quality/quality_controller.js';
 import { createStatusReadout } from './ui/status_readout.js';
+import { layoutHud } from './ui/hud_layout.js';
 import { createGameOverOverlay } from './ui/game_over_overlay.js';
 import { createScorePopups } from './ui/score_popups.js';
 import { createBannerOverlay } from './ui/banner_overlay.js';
@@ -513,26 +514,46 @@ async function main() {
   let sampler = null;
   // The bomb button is a touch-mode control: it shows with touch mode and hides in keyboard mode.
   const bombButton = createBombButton(document.getElementById('bomb-button'));
+  let hudFrame = null; // the last projection the HUD was laid out from
+  let bombShown = false;
+  // The HUD frames the playfield (D-23); on a phone its bottom-right block moves above the bomb button
+  // when the button overlays that corner, and returns to the corner in keyboard mode.
+  const layOutHud = () => {
+    if (!hudFrame) return;
+    const layout = layoutHud({ ...hudFrame, bombRect: bombShown ? bombRectNow() : null });
+    readout.place(layout);
+    document.documentElement.style.setProperty('--hud-top', `${layout.top.top}px`);
+  };
   const setTouchMode = (on) => {
     sampler?.setTouchMode(on);
     bombButton.setVisible(on);
+    if (on !== bombShown) {
+      bombShown = on;
+      layOutHud();
+    }
   };
   // Placed in the letterbox margin when there is room, else over the playfield's bottom-right corner.
   // The rig refits the camera on a CSS size change; asking it to resize first makes the projected
   // corners current whichever of the two handlers runs first. Re-laid out on every resize and
   // orientation change (a coalesced rAF, like the rig's own).
   let bombLayout = null;
+  const bombRectNow = () => ({
+    left: bombLayout.left,
+    top: bombLayout.top,
+    width: bombLayout.size,
+    height: bombLayout.size,
+  });
   const layOutBombButton = () => {
     rig.resize();
     const viewportW = canvas.clientWidth;
     const viewportH = canvas.clientHeight;
-    bombLayout = layoutBombButton({
-      corners: projectCorners(rig.camera, viewportW, viewportH, PLAYFIELD_W / 2, PLAYFIELD_H / 2),
-      viewportW,
-      viewportH,
-      insets: readSafeInsets(),
-    });
+    const corners = projectCorners(rig.camera, viewportW, viewportH, PLAYFIELD_W / 2, PLAYFIELD_H / 2);
+    const insets = readSafeInsets();
+    bombLayout = layoutBombButton({ corners, viewportW, viewportH, insets });
     bombButton.place(bombLayout);
+    // The HUD follows, with the button's fresh rectangle.
+    hudFrame = { corners, viewportW, viewportH, insets };
+    layOutHud();
   };
   let bombLayoutQueued = false;
   const queueBombLayout = () => {

@@ -114,11 +114,12 @@ describe('createStatusReadout', () => {
       readout.place(LAYOUT);
       readout.place({ ...LAYOUT });
       expect(counts).toEqual({ top: 1, bl: 1, br: 1 });
-      readout.place({ ...LAYOUT, bottomRight: { right: 380, top: 500 } });
+      const raised = { ...LAYOUT, bottomRight: { right: 380, top: 500 } };
+      readout.place(raised);
       expect(counts).toEqual({ top: 1, bl: 1, br: 2 });
-      readout.place({ ...LAYOUT, top: { left: 10, top: 20, width: 280 } });
+      readout.place({ ...raised, top: { left: 10, top: 20, width: 280 } });
       expect(counts).toEqual({ top: 2, bl: 1, br: 2 });
-      readout.place({ ...LAYOUT, bottomLeft: { left: 14, top: 600 } });
+      readout.place({ ...raised, top: { left: 10, top: 20, width: 280 }, bottomLeft: { left: 14, top: 600 } });
       expect(counts).toEqual({ top: 2, bl: 2, br: 2 });
     });
   });
